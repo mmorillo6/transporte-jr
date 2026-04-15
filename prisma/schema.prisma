@@ -1,0 +1,520 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── USUARIOS ────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(CHOFER)
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownerId      String?
+  owner        Owner?         @relation(fields: [ownerId], references: [id])
+  drivenTrucks Truck[]        @relation("TruckDriver")
+  clockEntries ClockEntry[]
+  mechanicWork MechanicWork[]
+  maintenanceLogs MaintenanceLog[]
+}
+
+enum Role {
+  DUENO
+  ENCARGADO
+  AFILIADO
+  MECANICO
+  CHOFER
+}
+
+// ─── DUEÑOS DE FLOTA ─────────────────────────────────────────────────────────
+
+model Owner {
+  id             String    @id @default(cuid())
+  name           String
+  type           OwnerType
+  commissionRate Float     @default(0)
+  nprPercent     Float     @default(5)   // 5% transporte, 10% afiliados
+  isNPROwner     Boolean   @default(false) // true solo para José (su 5% acumula, no se descuenta)
+  phone          String?
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  trucks Truck[]
+  users  User[]
+}
+
+enum OwnerType {
+  PROPIO
+  AFILIADO
+}
+
+// ─── CAMIONES ─────────────────────────────────────────────────────────────────
+
+model Truck {
+  id        String   @id @default(cuid())
+  plate     String   @unique
+  driverId  String?
+  driver    User?    @relation("TruckDriver", fields: [driverId], references: [id])
+  ownerId   String
+  owner     Owner    @relation(fields: [ownerId], references: [id])
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trips           Trip[]
+  expenses        Expense[]
+  maintenanceLogs MaintenanceLog[]
+  mechanicWork    MechanicWork[]
+  clockEntries    ClockEntry[]
+  alerts          MaintenanceAlert[]
+  status          TruckStatus?
+  parts           Part[]
+  dispatches      DispatchEntry[]
+  fuelEntries     FuelEntry[]
+  oilUsages       OilUsage[]
+  tireRepairs     TireRepair[]
+  cashEntries     CashEntry[]
+}
+
+// ─── RUTAS / MINAS ────────────────────────────────────────────────────────────
+
+model Route {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  rateType      RateType @default(PER_TON)
+  rate          Float
+  bidirectional Boolean  @default(false) // si es true: tarifa × 2 por viaje (ida y vuelta cargados)
+  hasViatico    Boolean  @default(false)
+  viaticoSingle Float    @default(0)
+  viaticoDouble Float    @default(0)
+  driverWage        Float    @default(0)
+  fuelLitersPerTrip Float    @default(0)
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  trips      Trip[]
+  dispatches DispatchEntry[]
+}
+
+enum RateType {
+  PER_TON
+  PER_TRIP
+  PER_HOUR
+}
+
+// ─── VIAJES ───────────────────────────────────────────────────────────────────
+
+model Trip {
+  id          String   @id @default(cuid())
+  date        DateTime
+  ticketNo    String?
+  truckId     String
+  truck       Truck    @relation(fields: [truckId], references: [id])
+  routeId     String
+  route       Route    @relation(fields: [routeId], references: [id])
+  netWeightKg Float?
+  material    String?
+  origin      String?
+  viatico     Float    @default(0)
+  amount      Float    @default(0)
+  periodId    String?
+  period      Period?  @relation(fields: [periodId], references: [id])
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── PERÍODOS QUINCENALES ─────────────────────────────────────────────────────
+
+model Period {
+  id        String       @id @default(cuid())
+  startDate DateTime
+  endDate   DateTime
+  status    PeriodStatus @default(OPEN)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  trips    Trip[]
+  payroll  PayrollEntry[]
+  expenses Expense[]
+}
+
+enum PeriodStatus {
+  OPEN
+  CLOSED
+}
+
+// ─── NÓMINA ───────────────────────────────────────────────────────────────────
+
+model PayrollEntry {
+  id            String   @id @default(cuid())
+  periodId      String
+  period        Period   @relation(fields: [periodId], references: [id])
+  truckId       String
+  totalTons     Float    @default(0)
+  grossAmount   Float    @default(0)   // facturación bruta del camión
+  viaticos      Float    @default(0)
+  driverWage    Float    @default(0)   // nómina chofer
+  deductions    Float    @default(0)
+  commissionFee Float    @default(0)
+  nprFee        Float    @default(0)   // 5% o 10% NPR según owner
+  mechanicFee   Float    @default(0)   // nómina mecánicos
+  adminFee      Float    @default(0)   // $50 × total_carros ÷ carros_activos
+  saldoInicial  Float    @default(0)   // deuda pendiente de quincena anterior
+  abono         Float    @default(0)   // pago recibido esta quincena
+  netAmount     Float    @default(0)   // saldo final (puede ser negativo)
+  cashEntryId   String?                // CashEntry auto-creado si netAmount < 0
+  notes         String?
+  paidAt        DateTime?
+  paymentMethod String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ─── GASTOS ───────────────────────────────────────────────────────────────────
+
+model Expense {
+  id          String          @id @default(cuid())
+  date        DateTime
+  category    ExpenseCategory
+  truckId     String?
+  truck       Truck?          @relation(fields: [truckId], references: [id])
+  periodId    String?
+  period      Period?         @relation(fields: [periodId], references: [id])
+  description String
+  amount      Float
+  isCredit    Boolean         @default(false)
+  amountPaid  Float           @default(0)
+  paidDate    DateTime?
+  invoiceUrl  String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+enum ExpenseCategory {
+  MECANICA
+  REPUESTO
+  ACEITE
+  CAUCHO
+  VIATICO
+  NOMINA
+  OPERATIVO
+  ADMINISTRATIVO
+  NPR
+  OTRO
+}
+
+// ─── MANTENIMIENTO ────────────────────────────────────────────────────────────
+
+model MaintenanceLog {
+  id          String          @id @default(cuid())
+  truckId     String
+  truck       Truck           @relation(fields: [truckId], references: [id])
+  type        MaintenanceType
+  date        DateTime
+  nextDueDate DateTime?
+  cost        Float           @default(0)
+  description String?
+  mechanicId  String?
+  mechanic    User?           @relation(fields: [mechanicId], references: [id])
+  createdAt   DateTime        @default(now())
+}
+
+enum MaintenanceType {
+  OIL_CHANGE
+  AIR_FILTER
+  GREASE
+  REPAIR
+  INSPECTION
+  OTHER
+}
+
+// ─── TRABAJO DE MECÁNICOS ─────────────────────────────────────────────────────
+
+model MechanicWork {
+  id           String   @id @default(cuid())
+  truckId      String
+  truck        Truck    @relation(fields: [truckId], references: [id])
+  mechanicId   String
+  mechanic     User     @relation(fields: [mechanicId], references: [id])
+  description  String
+  cost         Float    @default(0)
+  workshopCut  Float    @default(0)
+  mechanicCut  Float    @default(0)
+  date         DateTime
+  createdAt    DateTime @default(now())
+}
+
+// ─── CLOCK IN / CLOCK OUT ─────────────────────────────────────────────────────
+
+model ClockEntry {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  truckId   String?
+  truck     Truck?    @relation(fields: [truckId], references: [id])
+  clockIn   DateTime
+  clockOut  DateTime?
+  notes     String?
+  createdAt DateTime  @default(now())
+}
+
+// ─── PRÉSTAMOS ────────────────────────────────────────────────────────────────
+
+model Loan {
+  id           String     @id @default(cuid())
+  driverName   String
+  amount       Float
+  date         DateTime
+  balance      Float
+  deductType   DeductType @default(QUINCENAL)
+  deductAmount Float      @default(0)
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+enum DeductType {
+  QUINCENAL
+  MENSUAL
+  DICIEMBRE
+}
+
+// ─── ALERTAS DE MANTENIMIENTO ─────────────────────────────────────────────────
+
+model MaintenanceAlert {
+  id        String        @id @default(cuid())
+  truckId   String
+  truck     Truck         @relation(fields: [truckId], references: [id])
+  type      MaintenanceType
+  dueDate   DateTime
+  status    AlertStatus   @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+enum AlertStatus {
+  PENDING
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+// ─── ESTADO OPERATIVO DE CAMIÓN ───────────────────────────────────────────────
+
+model TruckStatus {
+  id          String        @id @default(cuid())
+  truckId     String        @unique
+  truck       Truck         @relation(fields: [truckId], references: [id])
+  status      TruckOpStatus @default(OPERATIONAL)
+  notes       String?
+  updatedById String?
+  updatedAt   DateTime      @updatedAt
+}
+
+enum TruckOpStatus {
+  OPERATIONAL
+  IN_SHOP
+  OUT_OF_SERVICE
+}
+
+// ─── INVENTARIO DE REPUESTOS ──────────────────────────────────────────────────
+
+model Part {
+  id          String     @id @default(cuid())
+  name        String
+  quantity    Int        @default(1)
+  cost        Float
+  truckId     String?
+  truck       Truck?     @relation(fields: [truckId], references: [id])
+  purchasedAt DateTime   @default(now())
+  usedAt      DateTime?
+  status      PartStatus @default(IN_STOCK)
+  notes       String?
+  createdAt   DateTime   @default(now())
+}
+
+enum PartStatus {
+  IN_STOCK
+  USED
+}
+
+// ─── CONSUMO DE ACEITE ───────────────────────────────────────────────────────
+
+model OilBatch {
+  id        String     @id @default(cuid())
+  date      DateTime
+  type      OilType
+  liters    Float
+  cost      Float
+  notes     String?
+  createdAt DateTime   @default(now())
+  usages    OilUsage[]
+}
+
+model OilUsage {
+  id        String   @id @default(cuid())
+  batchId   String
+  batch     OilBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  truckId   String
+  truck     Truck    @relation(fields: [truckId], references: [id])
+  liters    Float
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+}
+
+enum OilType {
+  MOTOR
+  HIDRAULICO
+  TRANSMISION
+  CAJA
+  DIFERENCIAL
+  OTRO
+}
+
+// ─── CAUCHOS / VULCANIZACIONES ───────────────────────────────────────────────
+
+model TireRepair {
+  id        String    @id @default(cuid())
+  date      DateTime
+  truckId   String
+  truck     Truck     @relation(fields: [truckId], references: [id])
+  quantity  Int       @default(1)
+  unitCost  Float     @default(0)
+  notes     String?
+  paidAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// ─── GASOIL ───────────────────────────────────────────────────────────────────
+
+model FuelTank {
+  id        String   @id @default(cuid())
+  name      String
+  capacityL Float
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  intakes FuelIntake[]
+}
+
+model FuelIntake {
+  id        String    @id @default(cuid())
+  date      DateTime
+  tankId    String
+  tank      FuelTank  @relation(fields: [tankId], references: [id], onDelete: Cascade)
+  liters    Float
+  source    String?
+  notes     String?
+  createdAt DateTime  @default(now())
+}
+
+model FuelEntry {
+  id        String   @id @default(cuid())
+  date      DateTime
+  truckId   String
+  truck     Truck    @relation(fields: [truckId], references: [id])
+  liters    Float
+  routeId   String?
+  source    String?
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+// ─── CAJA (EFECTIVO + USDT) ───────────────────────────────────────────────────
+
+model CashEntry {
+  id        String        @id @default(cuid())
+  date      DateTime      @default(now())
+  type      CashEntryType
+  currency  CashCurrency
+  amount    Float
+  concept   String
+  source    String?
+  notes     String?
+  truckId   String?                          // si es préstamo a camión negativo
+  truck     Truck?        @relation(fields: [truckId], references: [id])
+  createdAt DateTime      @default(now())
+}
+
+enum CashEntryType {
+  INGRESO
+  EGRESO
+}
+
+enum CashCurrency {
+  EFECTIVO
+  USDT
+}
+
+// ─── CUENTAS POR COBRAR ───────────────────────────────────────────────────────
+
+model CuentaPorCobrar {
+  id          String    @id @default(cuid())
+  clientName  String
+  concept     String
+  periodLabel String?
+  date        DateTime
+  totalAmount Float
+  amountPaid  Float     @default(0)
+  balance     Float
+  status      CxCStatus @default(PENDING)
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  payments CxCPayment[]
+}
+
+model CxCPayment {
+  id        String          @id @default(cuid())
+  cxcId     String
+  cxc       CuentaPorCobrar @relation(fields: [cxcId], references: [id], onDelete: Cascade)
+  amount    Float
+  date      DateTime
+  method    String?
+  notes     String?
+  createdAt DateTime        @default(now())
+}
+
+enum CxCStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+// ─── DESPACHO DIARIO ─────────────────────────────────────────────────────────
+
+model Dispatch {
+  id        String          @id @default(cuid())
+  date      DateTime
+  notes     String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  entries   DispatchEntry[]
+}
+
+model DispatchEntry {
+  id           String   @id @default(cuid())
+  dispatchId   String
+  dispatch     Dispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  truckId      String
+  truck        Truck    @relation(fields: [truckId], references: [id])
+  routeId      String
+  route        Route    @relation(fields: [routeId], references: [id])
+  plannedTrips Int      @default(0)
+  notes        String?
+  createdAt    DateTime @default(now())
+}

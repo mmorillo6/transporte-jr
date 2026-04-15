@@ -20,7 +20,62 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: #09090b;
+  color: #fafafa;
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ─── Print styles ─────────────────────────────────────────── */
+@media print {
+  /* Hide nav and sidebar when printing */
+  aside, header, nav,
+  [data-print-hide],
+  button {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  /* Make tables readable on paper */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 11px;
+  }
+
+  th, td {
+    border: 1px solid #ccc !important;
+    padding: 4px 8px !important;
+    color: #000 !important;
+    background: #fff !important;
+  }
+
+  thead tr {
+    background: #f0f0f0 !important;
+  }
+
+  tfoot tr {
+    background: #e8e8e8 !important;
+    font-weight: bold;
+  }
+
+  /* Show print-only elements */
+  [data-print-only] {
+    display: block !important;
+  }
+
+  h1, h2 {
+    color: #000 !important;
+  }
+
+  .rounded-2xl, .rounded-xl, .rounded-lg {
+    border-radius: 0 !important;
+  }
 }

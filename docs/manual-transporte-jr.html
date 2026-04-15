@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Manual del Sistema — Transporte JR</title>
+<style>
+  /* ── Reset & base ───────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: #1a1a2e;
+    background: #fff;
+  }
+
+  /* ── Print settings ─────────────────────────────────────────── */
+  @page {
+    size: A4;
+    margin: 18mm 20mm 18mm 20mm;
+  }
+  @media print {
+    .no-print { display: none !important; }
+    h2 { page-break-before: auto; }
+    .section { page-break-inside: avoid; }
+    .cover { page-break-after: always; }
+    .toc { page-break-after: always; }
+    .module { page-break-inside: avoid; margin-bottom: 18pt; }
+  }
+
+  /* ── Cover page ─────────────────────────────────────────────── */
+  .cover {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 96vh;
+    padding: 40pt 20pt;
+    border-left: 6pt solid #D97706;
+    padding-left: 32pt;
+  }
+  .cover-tag {
+    font-size: 8.5pt;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #D97706;
+    margin-bottom: 18pt;
+  }
+  .cover h1 {
+    font-size: 30pt;
+    font-weight: 800;
+    color: #1a1a2e;
+    line-height: 1.15;
+    margin-bottom: 10pt;
+  }
+  .cover-sub {
+    font-size: 13pt;
+    color: #4a5568;
+    margin-bottom: 32pt;
+    font-weight: 400;
+  }
+  .cover-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 5pt;
+    font-size: 9pt;
+    color: #718096;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 18pt;
+    margin-top: auto;
+    width: 100%;
+  }
+  .cover-meta strong { color: #2d3748; }
+
+  /* ── Table of Contents ──────────────────────────────────────── */
+  .toc {
+    padding: 24pt 0;
+  }
+  .toc h2 {
+    font-size: 14pt;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-bottom: 16pt;
+    padding-bottom: 6pt;
+    border-bottom: 2px solid #D97706;
+  }
+  .toc-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6pt;
+    padding: 4pt 0;
+    font-size: 10pt;
+  }
+  .toc-num {
+    font-weight: 700;
+    color: #D97706;
+    min-width: 22pt;
+    font-size: 9pt;
+  }
+  .toc-dots {
+    flex: 1;
+    border-bottom: 1px dotted #cbd5e0;
+    margin: 0 4pt;
+    height: 10pt;
+  }
+  .toc-label { color: #2d3748; }
+  .toc-role {
+    font-size: 7.5pt;
+    color: #a0aec0;
+    font-style: italic;
+    margin-left: 6pt;
+  }
+
+  /* ── Section headers ────────────────────────────────────────── */
+  .section-title {
+    font-size: 11pt;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #D97706;
+    margin-top: 22pt;
+    margin-bottom: 10pt;
+    padding-bottom: 4pt;
+    border-bottom: 1px solid #fde68a;
+  }
+
+  /* ── Module card ────────────────────────────────────────────── */
+  .module {
+    background: #fafafa;
+    border: 1px solid #e2e8f0;
+    border-left: 4pt solid #D97706;
+    border-radius: 4pt;
+    padding: 14pt 16pt;
+    margin-bottom: 14pt;
+  }
+  .module-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10pt;
+    margin-bottom: 8pt;
+  }
+  .module-title {
+    font-size: 12.5pt;
+    font-weight: 700;
+    color: #1a1a2e;
+  }
+  .module-path {
+    font-size: 8pt;
+    font-family: 'Courier New', monospace;
+    color: #718096;
+    background: #edf2f7;
+    padding: 2pt 5pt;
+    border-radius: 3pt;
+    white-space: nowrap;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 7.5pt;
+    font-weight: 600;
+    padding: 1.5pt 6pt;
+    border-radius: 10pt;
+    margin-left: 4pt;
+    vertical-align: middle;
+  }
+  .badge-owner { background: #fef3c7; color: #92400e; }
+  .badge-all { background: #d1fae5; color: #065f46; }
+  .badge-mec { background: #e0e7ff; color: #3730a3; }
+
+  .module-desc {
+    color: #4a5568;
+    margin-bottom: 10pt;
+    font-size: 10pt;
+    line-height: 1.6;
+  }
+
+  /* ── Flow steps ─────────────────────────────────────────────── */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 4pt;
+    margin-bottom: 10pt;
+  }
+  .flow-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 8pt;
+    font-size: 9.5pt;
+    color: #2d3748;
+  }
+  .flow-num {
+    min-width: 16pt;
+    height: 16pt;
+    border-radius: 50%;
+    background: #D97706;
+    color: #fff;
+    font-size: 7.5pt;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1pt;
+  }
+
+  /* ── Two-column blocks ──────────────────────────────────────── */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10pt;
+    margin-top: 8pt;
+  }
+  .info-block {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 3pt;
+    padding: 9pt 11pt;
+  }
+  .info-block-title {
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #D97706;
+    margin-bottom: 5pt;
+  }
+  .info-block ul {
+    padding-left: 12pt;
+    color: #4a5568;
+    font-size: 9pt;
+    line-height: 1.7;
+  }
+
+  /* ── Highlight note ─────────────────────────────────────────── */
+  .note {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 3pt;
+    padding: 8pt 11pt;
+    font-size: 9pt;
+    color: #78350f;
+    margin-top: 8pt;
+  }
+  .note strong { color: #92400e; }
+
+  /* ── Roles table ────────────────────────────────────────────── */
+  .roles-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    margin-top: 10pt;
+  }
+  .roles-table th {
+    background: #1a1a2e;
+    color: #fff;
+    text-align: left;
+    padding: 5pt 8pt;
+    font-weight: 600;
+  }
+  .roles-table td {
+    padding: 5pt 8pt;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+  }
+  .roles-table tr:nth-child(even) td { background: #f7fafc; }
+  .check { color: #059669; font-weight: 700; }
+  .cross { color: #dc2626; }
+  .partial { color: #D97706; font-weight: 700; }
+
+  /* ── Page footer (print) ────────────────────────────────────── */
+  @media print {
+    .footer {
+      position: fixed;
+      bottom: 8mm;
+      left: 20mm;
+      right: 20mm;
+      display: flex;
+      justify-content: space-between;
+      font-size: 7.5pt;
+      color: #a0aec0;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 3pt;
+    }
+  }
+  @media screen {
+    .footer { display: none; }
+    body { max-width: 820px; margin: 0 auto; padding: 40px 30px; }
+    .cover { min-height: auto; padding: 60px 40px; }
+    .no-print {
+      position: fixed; top: 20px; right: 20px;
+      background: #D97706; color: #fff;
+      border: none; padding: 10px 20px;
+      border-radius: 8px; cursor: pointer;
+      font-weight: 700; font-size: 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+  }
+</style>
+</head>
+<body>
+
+<button class="no-print" onclick="window.print()">Imprimir / Guardar PDF</button>
+
+<!-- ══════════════════════════════════════════════════════════
+     PORTADA
+════════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-tag">Documentación del Sistema</div>
+  <h1>Manual de Usuario<br>Transporte JR</h1>
+  <p class="cover-sub">Guía completa de módulos, flujos operativos<br>y roles de acceso — Sistema de gestión interna</p>
+  <div class="cover-meta">
+    <div><strong>Versión:</strong> 1.0 — Abril 2026</div>
+    <div><strong>Plataforma:</strong> Web app interna · Next.js · Prisma ORM</div>
+    <div><strong>Operación:</strong> Aurumin · Luis Peña · Minas La Fe y Nuevo Callao</div>
+    <div><strong>Roles del sistema:</strong> DUENO · ENCARGADO · AFILIADO · MECANICO · CHOFER</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     ÍNDICE
+════════════════════════════════════════════════════════════ -->
+<div class="toc">
+  <h2>Contenido</h2>
+
+  <div class="toc-item">
+    <span class="toc-num">01</span>
+    <span class="toc-label">Dashboard — Vista general y KPIs</span>
+    <span class="toc-role">DUENO · ENCARGADO · AFILIADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">02</span>
+    <span class="toc-label">Romana — Importación de viajes</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">03</span>
+    <span class="toc-label">Viajes — Registro manual de viajes</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">04</span>
+    <span class="toc-label">Camiones — Gestión de la flota</span>
+    <span class="toc-role">DUENO · ENCARGADO · AFILIADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">05</span>
+    <span class="toc-label">Propietarios — Registro de dueños</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">06</span>
+    <span class="toc-label">Nómina — Períodos quincenales</span>
+    <span class="toc-role">DUENO · ENCARGADO · AFILIADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">07</span>
+    <span class="toc-label">Gastos — Control de egresos operativos</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">08</span>
+    <span class="toc-label">Mantenimiento — Flota y mecánicos</span>
+    <span class="toc-role">DUENO · ENCARGADO · MECANICO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">09</span>
+    <span class="toc-label">Despacho — Control diario de salidas</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">10</span>
+    <span class="toc-label">Caja — Efectivo y USDT</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">11</span>
+    <span class="toc-label">Gasoil — Control de combustible</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">12</span>
+    <span class="toc-label">Aceite — Consumo de lubricantes</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">13</span>
+    <span class="toc-label">Cauchos — Inventario de neumáticos</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">14</span>
+    <span class="toc-label">Asistencia — Control de presencia</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">15</span>
+    <span class="toc-label">Relaciones — Exportación quincenal</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">16</span>
+    <span class="toc-label">Por cobrar — Cuentas pendientes</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">17</span>
+    <span class="toc-label">Préstamos — Adelantos a propietarios</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">18</span>
+    <span class="toc-label">Reportes — Análisis y estadísticas</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">19</span>
+    <span class="toc-label">Minas & Rutas — Configuración</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">20</span>
+    <span class="toc-label">Usuarios — Administración de accesos</span>
+    <span class="toc-role">DUENO · ENCARGADO</span>
+    <span class="toc-dots"></span>
+  </div>
+  <div class="toc-item">
+    <span class="toc-num">21</span>
+    <span class="toc-label">Roles y permisos — Resumen general</span>
+    <span class="toc-dots"></span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MÓDULOS
+════════════════════════════════════════════════════════════ -->
+
+<!-- 01 DASHBOARD -->
+<div class="section-title">01 · Dashboard</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Dashboard — Vista general y KPIs</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+      <span class="badge badge-all">AFILIADO</span>
+    </div>
+    <span class="module-path">/dashboard</span>
+  </div>
+  <p class="module-desc">
+    Pantalla principal del sistema. Presenta en tiempo real el estado financiero y operativo de toda la empresa: facturación, nómina, flota, caja y alertas de mantenimiento. Es el punto de partida para detectar problemas y tomar decisiones rápidas sin necesidad de navegar entre módulos.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">¿Qué muestra?</div>
+      <ul>
+        <li>Flota activa (operativa / en taller / fuera de servicio)</li>
+        <li>Número de viajes y toneladas del período abierto</li>
+        <li>Facturación bruta y ganancia neta de la empresa</li>
+        <li>Saldo de caja en efectivo y en USDT</li>
+        <li>Préstamos pendientes por cobrar</li>
+        <li>Alertas de mantenimiento urgentes</li>
+        <li>Desglose de costos del período (choferes, mecánicos, NPR…)</li>
+        <li>Tendencia de facturación de los últimos 6 períodos</li>
+        <li>Toneladas por ruta del período actual</li>
+        <li>Últimos 6 viajes registrados</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">¿Cómo optimiza la operación?</div>
+      <ul>
+        <li>Evita revisar múltiples hojas de cálculo: todo está unificado</li>
+        <li>Detecta de un vistazo si un camión está paralizado</li>
+        <li>Alerta inmediatamente si la caja está en rojo</li>
+        <li>Permite comparar períodos para identificar meses flojos</li>
+        <li>El afiliado ve su flota asignada sin acceder a datos financieros globales</li>
+      </ul>
+    </div>
+  </div>
+  <div class="note">
+    <strong>Nota:</strong> Los afiliados solo ven la flota y viajes asignados a sus camiones. Los datos financieros (facturación, caja, ganancia) son exclusivos de DUENO y ENCARGADO.
+  </div>
+</div>
+
+<!-- 02 ROMANA -->
+<div class="section-title">02 · Romana</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Romana — Importación masiva de viajes</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/romana</span>
+  </div>
+  <p class="module-desc">
+    La romana es el sistema de pesaje en la mina. Al finalizar una quincena, la empresa recibe un archivo Excel generado por la romana (o por Aurumin) que contiene todos los viajes realizados: placa del camión, ruta, fecha, toneladas y monto. Este módulo importa ese archivo automáticamente, distribuyendo cada viaje al camión y período correcto sin necesidad de ingresarlos uno a uno.
+  </p>
+  <div class="flow">
+    <div class="flow-step"><div class="flow-num">1</div><span>Asegurarse de que existe un período <strong>abierto</strong> en Nómina que cubra las fechas del Excel.</span></div>
+    <div class="flow-step"><div class="flow-num">2</div><span>Descargar el Excel de viajes de la romana / Aurumin.</span></div>
+    <div class="flow-step"><div class="flow-num">3</div><span>En <em>/romana</em>, hacer clic en "Subir archivo" y seleccionar el Excel.</span></div>
+    <div class="flow-step"><div class="flow-num">4</div><span>El sistema muestra una vista previa con los viajes detectados y posibles errores (placas no reconocidas, rutas faltantes).</span></div>
+    <div class="flow-step"><div class="flow-num">5</div><span>Confirmar la importación. Los viajes quedan registrados en el período abierto.</span></div>
+    <div class="flow-step"><div class="flow-num">6</div><span>Ir a <em>Nómina</em> para generar el cálculo de pagos a partir de los viajes importados.</span></div>
+  </div>
+  <div class="note">
+    <strong>Ahorro de tiempo:</strong> Una quincena típica tiene 200–500 viajes. La importación por romana toma 2 minutos vs. horas de carga manual. Además elimina errores de tipeo.
+  </div>
+</div>
+
+<!-- 03 VIAJES -->
+<div class="section-title">03 · Viajes</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Viajes — Registro y consulta de viajes</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/viajes</span>
+  </div>
+  <p class="module-desc">
+    Listado completo de todos los viajes registrados en el sistema, con filtros por fecha, camión y ruta. Permite también registrar viajes individuales de forma manual cuando no viene en el archivo de romana (viajes extras, correcciones, etc.).
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Flujo de uso</div>
+      <ul>
+        <li>Consultar historial de viajes por camión o ruta</li>
+        <li>Registrar manualmente un viaje extra no contemplado en la romana</li>
+        <li>Editar o eliminar un viaje con error de datos</li>
+        <li>Ver el peso neto (toneladas) y monto por viaje</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">Datos de cada viaje</div>
+      <ul>
+        <li>Fecha del viaje</li>
+        <li>Placa del camión</li>
+        <li>Ruta / mina destino</li>
+        <li>Peso bruto, tara y peso neto (kg)</li>
+        <li>Monto facturado (USD)</li>
+        <li>Período al que pertenece</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 04 CAMIONES -->
+<div class="section-title">04 · Camiones</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Camiones — Gestión de la flota</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+      <span class="badge badge-all">AFILIADO</span>
+    </div>
+    <span class="module-path">/camiones</span>
+  </div>
+  <p class="module-desc">
+    Registro centralizado de todos los camiones que operan bajo Transporte JR. Incluye su placa, propietario, chofer asignado, estado actual y configuración de tarifas (porcentaje NPR, margen operativo). Es el catálogo maestro del que dependen todos los demás módulos.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Información por camión</div>
+      <ul>
+        <li>Placa y modelo</li>
+        <li>Propietario (dueño afiliado)</li>
+        <li>Chofer asignado</li>
+        <li>Estado: Operativo / En taller / Fuera de servicio</li>
+        <li>Porcentaje NPR (comisión que retiene la empresa)</li>
+        <li>Tarifa administrativa y tarifa mecánica</li>
+        <li>Activo / Inactivo en el sistema</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">¿Por qué es necesario?</div>
+      <ul>
+        <li>Sin camión registrado, no se pueden importar viajes ni generar nómina</li>
+        <li>El porcentaje NPR determina cuánto queda para la empresa por cada viaje</li>
+        <li>Permite a los afiliados ver solo sus vehículos</li>
+        <li>Controla qué camiones están activos en cada período</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 05 PROPIETARIOS -->
+<div class="section-title">05 · Propietarios</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Propietarios — Dueños de camiones afiliados</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/duenos</span>
+  </div>
+  <p class="module-desc">
+    Catálogo de todos los propietarios de camiones que trabajan con Transporte JR. Cada propietario puede tener uno o varios camiones afiliados. Aquí se registran sus datos de contacto y se les vincula con sus vehículos para efectos de pago de nómina y generación de relaciones quincenales.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Datos del propietario</div>
+      <ul>
+        <li>Nombre completo y cédula / RIF</li>
+        <li>Número de contacto</li>
+        <li>Camiones afiliados</li>
+        <li>Historial de pagos quincenales</li>
+        <li>Saldo de préstamos pendientes</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">Relación con otros módulos</div>
+      <ul>
+        <li><strong>Nómina:</strong> calcula el neto a pagar por propietario</li>
+        <li><strong>Relaciones:</strong> genera el documento por propietario</li>
+        <li><strong>Préstamos:</strong> lleva el saldo de adelantos</li>
+        <li><strong>Cuentas por cobrar:</strong> detecta saldos negativos</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 06 NÓMINA -->
+<div class="section-title">06 · Nómina</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Nómina — Períodos quincenales y cálculo de pagos</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+      <span class="badge badge-all">AFILIADO</span>
+    </div>
+    <span class="module-path">/nomina</span>
+  </div>
+  <p class="module-desc">
+    Corazón financiero del sistema. Agrupa los viajes por período quincenal y calcula automáticamente cuánto le corresponde a cada propietario, descontando el NPR de la empresa, el sueldo del chofer, tarifa mecánica, tarifa administrativa y cualquier deducción adicional. Al cerrar un período, el sistema genera los asientos en caja chica y registra si algún camión tiene saldo negativo.
+  </p>
+  <div class="flow">
+    <div class="flow-step"><div class="flow-num">1</div><span><strong>Crear período:</strong> definir fecha de inicio y fin de la quincena (ej. 01/04 al 15/04).</span></div>
+    <div class="flow-step"><div class="flow-num">2</div><span><strong>Importar viajes</strong> desde la romana o registrarlos manualmente en el período abierto.</span></div>
+    <div class="flow-step"><div class="flow-num">3</div><span><strong>Generar nómina:</strong> el sistema calcula por cada camión: bruto, deducciones y neto a pagar al propietario.</span></div>
+    <div class="flow-step"><div class="flow-num">4</div><span><strong>Revisar:</strong> ver el desglose por camión, ajustar deducciones si es necesario.</span></div>
+    <div class="flow-step"><div class="flow-num">5</div><span><strong>Marcar como pagado:</strong> confirmar que se realizó el pago a cada propietario.</span></div>
+    <div class="flow-step"><div class="flow-num">6</div><span><strong>Cerrar período:</strong> el sistema bloquea el período, registra los movimientos en caja y crea egresos por saldos negativos automáticamente.</span></div>
+  </div>
+  <div class="note">
+    <strong>Automatización clave:</strong> Si un camión tiene gastos (mecánica, gasoil) que superan lo que generó en viajes, el saldo queda negativo. Al cerrar el período, el sistema registra ese déficit automáticamente como egreso de caja chica, sin intervención manual.
+  </div>
+</div>
+
+<!-- 07 GASTOS -->
+<div class="section-title">07 · Gastos</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Gastos — Control de egresos operativos</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/gastos</span>
+  </div>
+  <p class="module-desc">
+    Registro de todos los gastos que genera la operación, tanto pagados de contado como a crédito. Cada gasto se categoriza y se puede asociar a un camión específico. Permite filtrar por camión, categoría, rango de fechas o si está pendiente de pago, para tener un cuadro claro de lo que se ha gastado y lo que se debe.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Categorías disponibles</div>
+      <ul>
+        <li>Mecánica</li>
+        <li>Repuesto</li>
+        <li>Aceite</li>
+        <li>Caucho</li>
+        <li>Viático</li>
+        <li>Nómina</li>
+        <li>Operativo</li>
+        <li>Administrativo</li>
+        <li>NPR</li>
+        <li>Otro</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">¿Qué permite controlar?</div>
+      <ul>
+        <li>Total gastado por camión en el período</li>
+        <li>Gastos a crédito pendientes de pago</li>
+        <li>Qué categoría consume más presupuesto</li>
+        <li>Diferencia entre monto gastado y monto abonado</li>
+        <li>Historial completo de egresos con filtros avanzados</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 08 MANTENIMIENTO -->
+<div class="section-title">08 · Mantenimiento</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Mantenimiento — Flota y control mecánico</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+      <span class="badge badge-mec">MECANICO</span>
+    </div>
+    <span class="module-path">/mantenimiento</span>
+  </div>
+  <p class="module-desc">
+    Módulo que centraliza todo lo relacionado con el estado técnico de la flota: alertas de mantenimiento preventivo, historial de reparaciones, registro de repuestos comprados y trabajos realizados por mecánicos. Permite anticipar fallas antes de que paralicen un camión y llevar control del costo de mantenimiento por vehículo.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Funciones principales</div>
+      <ul>
+        <li><strong>Alertas:</strong> fechas de vencimiento de revisiones, cauchos, aceite</li>
+        <li><strong>Bitácora:</strong> historial de cada intervención por camión</li>
+        <li><strong>Repuestos:</strong> registro de partes compradas con costo</li>
+        <li><strong>Trabajos de mecánicos:</strong> horas y labores realizadas</li>
+        <li><strong>Estado de camión:</strong> cambiar a En taller / Fuera de servicio</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">Flujo del mecánico</div>
+      <ul>
+        <li>Recibe alerta de mantenimiento próximo</li>
+        <li>Registra el trabajo realizado con fecha y costo</li>
+        <li>Actualiza el estado del camión al terminar</li>
+        <li>El ENCARGADO verifica y aprueba los costos</li>
+        <li>Los costos se descontarán del propietario en la nómina</li>
+      </ul>
+    </div>
+  </div>
+  <div class="note">
+    <strong>Impacto financiero:</strong> Cada reparación registrada aquí se descuenta automáticamente del pago quincenal del propietario. Sin este registro, los gastos de taller se absorberían sin recuperarlos.
+  </div>
+</div>
+
+<!-- 09 DESPACHO -->
+<div class="section-title">09 · Despacho</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Despacho — Control diario de salidas</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/despacho</span>
+  </div>
+  <p class="module-desc">
+    Registro diario de qué camiones salieron a operación, a qué hora, con qué chofer y hacia qué mina. Sirve como control de turno y permite cruzar información con los viajes registrados para detectar discrepancias (camión que salió pero no tiene viajes registrados, o chofer que no se presentó).
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">¿Para qué sirve?</div>
+      <ul>
+        <li>Saber en tiempo real cuántos camiones están en operación</li>
+        <li>Registrar hora de salida y regreso</li>
+        <li>Detectar ausencias o retrasos temprano</li>
+        <li>Base para calcular viáticos del día</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">Relación con otros módulos</div>
+      <ul>
+        <li><strong>Asistencia:</strong> complementa el control de personal</li>
+        <li><strong>Viajes:</strong> valida que los viajes registrados corresponden a las salidas reales</li>
+        <li><strong>Gastos:</strong> base para registrar viáticos</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 10 CAJA -->
+<div class="section-title">10 · Caja</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Caja — Efectivo y USDT en mano</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/caja</span>
+  </div>
+  <p class="module-desc">
+    Control del dinero físico disponible en la empresa, separado en dos monedas: efectivo (bolívares o dólares físicos) y USDT (criptomoneda estable). Cada ingreso o egreso queda registrado con fecha, concepto y monto. El sistema calcula automáticamente el saldo actual de cada moneda.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Movimientos registrados</div>
+      <ul>
+        <li>Cobros a clientes (INGRESO)</li>
+        <li>Pagos a propietarios (EGRESO)</li>
+        <li>Anticipos y préstamos (EGRESO)</li>
+        <li>Gastos operativos pagados (EGRESO)</li>
+        <li>Saldos negativos de nómina (EGRESO automático)</li>
+        <li>Conversión entre monedas</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">¿Por qué dos monedas?</div>
+      <ul>
+        <li>La empresa cobra en USD (Aurumin paga en dólares)</li>
+        <li>Algunos gastos se pagan en USDT (transferencia cripto)</li>
+        <li>Los viáticos y gastos menores suelen ser en efectivo</li>
+        <li>Mantener separado evita confusión contable</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 11 GASOIL -->
+<div class="section-title">11 · Gasoil</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Gasoil — Control de combustible</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/gasoil</span>
+  </div>
+  <p class="module-desc">
+    Registro detallado de cada carga de combustible: qué camión, cuántos litros, fecha, costo y si fue pagado directamente o descontado de la quincena del propietario. Permite llevar un costo por kilómetro recorrido y detectar consumos anómalos que puedan indicar mal uso o fuga.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Datos por carga</div>
+      <ul>
+        <li>Fecha y camión</li>
+        <li>Litros cargados</li>
+        <li>Costo total (USD)</li>
+        <li>Proveedor / estación</li>
+        <li>¿Se descuenta de nómina?</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">Valor operativo</div>
+      <ul>
+        <li>El combustible es el mayor gasto variable del negocio</li>
+        <li>Identificar camiones con consumo excesivo</li>
+        <li>Proyectar gasto de gasoil para próximas quincenas</li>
+        <li>Recuperar el costo al descontarlo de la nómina del propietario</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 12 ACEITE -->
+<div class="section-title">12 · Aceite</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Aceite — Consumo de lubricantes</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/aceite</span>
+  </div>
+  <p class="module-desc">
+    Control específico del consumo de aceite de motor y caja por camión. Los cambios de aceite frecuentes son indicativos de problemas mecánicos; este módulo permite detectarlos antes de que generen una falla mayor. Al igual que el gasoil, el costo puede descontarse de la quincena del propietario.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Flujo</div>
+      <ul>
+        <li>Registrar cada suministro de aceite con fecha y litros</li>
+        <li>Asociar al camión correspondiente</li>
+        <li>El sistema acumula el costo en el período activo</li>
+        <li>Se descuenta automáticamente de la nómina si corresponde</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">Por qué es necesario</div>
+      <ul>
+        <li>El aceite es un indicador de salud del motor</li>
+        <li>Consumo elevado = fuga o desgaste interno</li>
+        <li>Sin registro, el costo lo absorbe la empresa sin recuperarlo</li>
+        <li>Historial útil para diagnósticos de mantenimiento</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 13 CAUCHOS -->
+<div class="section-title">13 · Cauchos</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Cauchos — Inventario y control de neumáticos</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/cauchos</span>
+  </div>
+  <p class="module-desc">
+    Gestión del inventario de cauchos: stock disponible, asignación por camión, fecha de instalación y vida útil estimada. Los cauchos son uno de los insumos más costosos de la operación. Este módulo permite planificar compras y evitar que un camión quede varado por falta de repuesto.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Información registrada</div>
+      <ul>
+        <li>Marca, medida y cantidad de cauchos</li>
+        <li>Costo unitario</li>
+        <li>Camión donde fue instalado</li>
+        <li>Fecha de instalación y km estimado de duración</li>
+        <li>Stock disponible en almacén</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">Beneficio</div>
+      <ul>
+        <li>Nunca más quedarse sin repuesto en ruta</li>
+        <li>Calcular costo de cauchos por km recorrido</li>
+        <li>Proyectar próximas compras según desgaste</li>
+        <li>Recuperar el costo al descontarlo de la nómina</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 14 ASISTENCIA -->
+<div class="section-title">14 · Asistencia</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Asistencia — Control de presencia del personal</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/asistencia</span>
+  </div>
+  <p class="module-desc">
+    Registro diario de asistencia de choferes y mecánicos. Permite llevar control de quién se presentó, quién llegó tarde, quién faltó justificada o injustificadamente. Esta información se cruza con el despacho y con la nómina para calcular descuentos por inasistencias cuando aplica.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Funciones</div>
+      <ul>
+        <li>Marcar asistencia, tardanza o ausencia por día</li>
+        <li>Filtrar por empleado o rango de fechas</li>
+        <li>Ver resumen mensual de asistencias</li>
+        <li>Registrar motivo de ausencia</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">Relación con nómina</div>
+      <ul>
+        <li>Las inasistencias injustificadas generan descuentos</li>
+        <li>El ENCARGADO decide si aplicar o no el descuento</li>
+        <li>El historial queda disponible para resolución de disputas</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 15 RELACIONES -->
+<div class="section-title">15 · Relaciones</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Relaciones — Exportación quincenal de pagos</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/relaciones</span>
+  </div>
+  <p class="module-desc">
+    Módulo de exportación que genera el documento formal que se entrega a cada propietario al momento de pagar su quincena. Produce dos documentos: la <strong>Nota de Entrega</strong> (comprobante del propietario, tipo recibo) y el <strong>Estado de Cuenta</strong> (desglose completo por ruta y camión). Ambos se pueden imprimir en PDF o exportar en Excel profesional.
+  </p>
+  <div class="flow">
+    <div class="flow-step"><div class="flow-num">1</div><span>Seleccionar el <strong>tipo de relación</strong>: Nota de Entrega simple, Estado de Cuenta, o relación por propietario específico.</span></div>
+    <div class="flow-step"><div class="flow-num">2</div><span>Definir el <strong>rango de fechas</strong> (normalmente el período quincenal).</span></div>
+    <div class="flow-step"><div class="flow-num">3</div><span>El sistema muestra una vista previa con el resumen: viajes por ruta, toneladas, bruto, deducciones y neto a pagar.</span></div>
+    <div class="flow-step"><div class="flow-num">4</div><span>Elegir entre <strong>Imprimir PDF</strong> (para entregar físicamente) o <strong>Exportar Excel</strong> (para enviar por WhatsApp o guardar).</span></div>
+    <div class="flow-step"><div class="flow-num">5</div><span>El propietario firma la Nota de Entrega como constancia de recibido.</span></div>
+  </div>
+  <div class="note">
+    <strong>Eliminación del proceso manual:</strong> Antes, estas relaciones se calculaban en hojas de cálculo separadas, tardando horas. El sistema las genera en segundos con datos exactos del período, sin errores de cálculo.
+  </div>
+</div>
+
+<!-- 16 CUENTAS POR COBRAR -->
+<div class="section-title">16 · Por cobrar</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Cuentas por cobrar — Saldos pendientes</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/cuentas-por-cobrar</span>
+  </div>
+  <p class="module-desc">
+    Vista consolidada de todos los saldos que propietarios o terceros le deben a Transporte JR: anticipo de combustible no descontado, préstamos pendientes, gastos cubiertos por la empresa que aún no se han recuperado. Facilita el cobro en el momento del pago quincenal.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Orígenes de deuda</div>
+      <ul>
+        <li>Gasoil o aceite cargado por la empresa</li>
+        <li>Cauchos comprados y no descontados</li>
+        <li>Reparaciones cubiertas adelantadas</li>
+        <li>Préstamos (registrados en módulo Préstamos)</li>
+        <li>Saldos negativos de períodos anteriores</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">¿Cómo se cobra?</div>
+      <ul>
+        <li>Al generar la nómina, las deudas se deducen del neto del propietario</li>
+        <li>Si el propietario no generó suficiente para cubrir la deuda, queda saldo pendiente</li>
+        <li>Este módulo muestra esos saldos en espera de recuperación</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 17 PRÉSTAMOS -->
+<div class="section-title">17 · Préstamos</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Préstamos — Adelantos a propietarios</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/prestamos</span>
+  </div>
+  <p class="module-desc">
+    Registro y seguimiento de dinero prestado a propietarios fuera de la nómina regular. Cada préstamo tiene un monto inicial, un saldo pendiente y un historial de abonos. Se integra con la nómina: al calcular el pago quincenal, el sistema puede descontar automáticamente una cuota del préstamo.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Ciclo de un préstamo</div>
+      <ul>
+        <li>Registrar monto prestado y propietario</li>
+        <li>Definir cuota de descuento por quincena</li>
+        <li>Al generar nómina, se descuenta automáticamente</li>
+        <li>El sistema actualiza el saldo pendiente</li>
+        <li>Al saldarse, el préstamo se cierra</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">Control financiero</div>
+      <ul>
+        <li>Saber en todo momento cuánto dinero está prestado</li>
+        <li>Evitar prestar más a quien ya tiene deuda alta</li>
+        <li>Dashboard muestra el total de préstamos pendientes</li>
+        <li>Historial de abonos por propietario</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 18 REPORTES -->
+<div class="section-title">18 · Reportes</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Reportes — Análisis y estadísticas</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/reportes</span>
+  </div>
+  <p class="module-desc">
+    Módulo de inteligencia de negocio que consolida datos de toda la operación para producir reportes por período, camión, ruta o propietario. Permite identificar tendencias, comparar rendimiento entre quincenas y exportar información para presentar a socios o tomar decisiones estratégicas.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Tipos de reporte</div>
+      <ul>
+        <li>Toneladas por ruta (período o acumulado)</li>
+        <li>Facturación por camión</li>
+        <li>Comparativa de períodos</li>
+        <li>Costo de mantenimiento por vehículo</li>
+        <li>Rendimiento de flota (activa vs. paralizada)</li>
+        <li>Balance de caja acumulado</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">Valor estratégico</div>
+      <ul>
+        <li>Identificar qué camión genera más y cuál más gasto</li>
+        <li>Detectar rutas más rentables</li>
+        <li>Proyectar ingresos de próximos períodos</li>
+        <li>Sustentar negociación de tarifas con Aurumin</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 19 MINAS & RUTAS -->
+<div class="section-title">19 · Minas &amp; Rutas</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Minas &amp; Rutas — Configuración de destinos</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/rutas</span>
+  </div>
+  <p class="module-desc">
+    Configuración maestra de las minas y rutas en las que opera Transporte JR. Cada ruta define el origen, destino, tarifa por tonelada y el cliente (Aurumin / Luis Peña). Esta información es la base para que la romana calcule correctamente el monto de cada viaje al importar el Excel.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Datos de cada ruta</div>
+      <ul>
+        <li>Nombre descriptivo de la ruta</li>
+        <li>Mina de origen (La Fe, Nuevo Callao…)</li>
+        <li>Destino (planta, puerto, almacén)</li>
+        <li>Tarifa USD por tonelada</li>
+        <li>Cliente asociado (Aurumin / Luis Peña)</li>
+        <li>Activa / Inactiva</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">¿Por qué es crítica?</div>
+      <ul>
+        <li>Sin rutas configuradas, la romana no puede importar viajes</li>
+        <li>Si cambia la tarifa, se actualiza aquí y afecta todos los futuros cálculos</li>
+        <li>Permite distinguir entre los dos clientes (Aurumin y Chino Peña) en el mismo sistema</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 20 USUARIOS -->
+<div class="section-title">20 · Usuarios</div>
+<div class="module">
+  <div class="module-header">
+    <div>
+      <span class="module-title">Usuarios — Administración de accesos</span>
+      <span class="badge badge-owner">DUENO</span>
+      <span class="badge badge-owner">ENCARGADO</span>
+    </div>
+    <span class="module-path">/usuarios</span>
+  </div>
+  <p class="module-desc">
+    Gestión de todas las cuentas de usuario del sistema. Permite crear, editar o desactivar usuarios, asignarles rol y vincularlos (en el caso de choferes) al camión correspondiente. Solo el DUENO y ENCARGADO pueden acceder a este módulo.
+  </p>
+  <div class="two-col">
+    <div class="info-block">
+      <div class="info-block-title">Roles del sistema</div>
+      <ul>
+        <li><strong>DUENO:</strong> acceso total a todos los módulos</li>
+        <li><strong>ENCARGADO:</strong> acceso operativo completo</li>
+        <li><strong>AFILIADO:</strong> solo sus camiones, nómina y perfil</li>
+        <li><strong>MECANICO:</strong> mantenimiento y su perfil</li>
+        <li><strong>CHOFER:</strong> solo su cuenta personal</li>
+      </ul>
+    </div>
+    <div class="info-block">
+      <div class="info-block-title">Seguridad</div>
+      <ul>
+        <li>Cada usuario tiene credenciales únicas</li>
+        <li>Las sesiones están cifradas</li>
+        <li>Un usuario desactivado pierde el acceso inmediatamente</li>
+        <li>Los datos financieros nunca son visibles para choferes ni mecánicos</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- 21 TABLA DE ROLES -->
+<div class="section-title">21 · Resumen de roles y accesos</div>
+<table class="roles-table">
+  <thead>
+    <tr>
+      <th>Módulo</th>
+      <th>DUENO</th>
+      <th>ENCARGADO</th>
+      <th>AFILIADO</th>
+      <th>MECANICO</th>
+      <th>CHOFER</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Dashboard</td><td class="check">✓ Completo</td><td class="check">✓ Completo</td><td class="partial">△ Parcial</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Romana</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Viajes</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Camiones</td><td class="check">✓</td><td class="check">✓</td><td class="partial">△ Solo los suyos</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Propietarios</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Nómina</td><td class="check">✓</td><td class="check">✓</td><td class="partial">△ Solo lectura</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Gastos</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Mantenimiento</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="partial">△ Solo registro</td><td class="cross">–</td></tr>
+    <tr><td>Despacho</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Caja</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Gasoil / Aceite / Cauchos</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Asistencia</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Relaciones</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Por cobrar</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Préstamos</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Reportes</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Minas &amp; Rutas</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Usuarios</td><td class="check">✓</td><td class="check">✓</td><td class="cross">–</td><td class="cross">–</td><td class="cross">–</td></tr>
+    <tr><td>Mi cuenta / Perfil</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td></tr>
+  </tbody>
+</table>
+
+<br><br>
+<div class="note" style="font-size:9pt; margin-top: 16pt;">
+  <strong>Transporte JR · Sistema de Gestión Interna</strong><br>
+  Documento generado en Abril 2026. Operación: Aurumin · Luis Peña (Chino Peña) · Minas La Fe y Nuevo Callao.<br>
+  Para soporte técnico o modificaciones al sistema, contactar al administrador.
+</div>
+
+<div class="footer">
+  <span>Transporte JR — Manual del Sistema v1.0</span>
+  <span>Confidencial · Uso interno</span>
+</div>
+
+</body>
+</html>
