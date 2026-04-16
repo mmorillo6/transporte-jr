@@ -773,7 +773,7 @@ export async function POST(req: NextRequest) {
       : await buildChinoExcel(preview, abono)
 
     const dest       = preview.destinatario === 'EMPRESA' ? 'Empresa' : 'Jose'
-    const clientSlug = preview.client === 'AURUMIN' ? 'Aurumin' : 'ChinoPena'
+    const clientSlug = preview.client === 'AURUMIN' ? 'Aurumin' : 'LuisPena'
     const filename   = `Relacion-${clientSlug}-${dest}-${preview.periodLabel.replace(/\//g,'-').replace(/\s/g,'_')}.xlsx`
 
     return new NextResponse(buf as unknown as BodyInit, {

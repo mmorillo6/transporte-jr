@@ -196,7 +196,7 @@ export default function RelacionesClient({ defaultStart, defaultEnd }: { default
     })
     if (!res.ok) { setError('Error generando Excel'); return }
     const dest   = preview.destinatario === 'EMPRESA' ? 'Empresa' : 'Jose'
-    const client = preview.client === 'AURUMIN' ? 'Aurumin' : 'ChinoPena'
+    const client = preview.client === 'AURUMIN' ? 'Aurumin' : 'LuisPena'
     const filename = `Relacion-${client}-${dest}-${preview.periodLabel.replace(/\//g,'-').replace(/\s/g,'_')}.xlsx`
     const blob = new Blob([await res.arrayBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     const url = URL.createObjectURL(blob)
