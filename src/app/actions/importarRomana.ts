@@ -40,6 +40,10 @@ export type RomanaPreview = {
   likelyAlreadyImported: boolean
   /** Camiones registrados en el sistema, para el remapeo de placas erróneas */
   registeredTrucks: { id: string; plate: string }[]
+  /** Choferes registrados en el sistema (rol CHOFER), para reconciliación */
+  registeredDrivers: { id: string; name: string }[]
+  /** Conductores de la romana que no coinciden exactamente con ningún chofer registrado */
+  unknownConductors: string[]
 }
 
 // Mapa PROVEEDOR → nombre de ruta en el sistema
@@ -124,11 +128,12 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     netoKg:      iNetoKg      !== -1 ? iNetoKg      : 20,
   }
 
-  // Load routes and trucks from DB
-  const [routes, trucks, existingTickets] = await Promise.all([
+  // Load routes, trucks, drivers and existing tickets from DB
+  const [routes, trucks, existingTickets, registeredDrivers] = await Promise.all([
     prisma.route.findMany({ where: { active: true } }),
     prisma.truck.findMany({ include: { driver: { select: { id: true, name: true } } } }),
     prisma.trip.findMany({ select: { ticketNo: true }, where: { ticketNo: { not: null } } }),
+    prisma.user.findMany({ where: { role: 'CHOFER', active: true }, select: { id: true, name: true } }),
   ])
 
   const routeMap = new Map(routes.map(r => [r.name.toUpperCase(), r]))
@@ -228,6 +233,11 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
   const duplicates = trips.filter(t => t.duplicate).length
   const likelyAlreadyImported = trips.length > 0 && (duplicates / trips.length) >= 0.7
 
+  // Detectar conductores de la romana que no coinciden exactamente con un chofer registrado
+  const registeredNameSet = new Set(registeredDrivers.map(d => d.name.toUpperCase().trim()))
+  const uniqueConductors = [...new Set(trips.map(t => t.conductor).filter(Boolean))]
+  const unknownConductors = uniqueConductors.filter(c => !registeredNameSet.has(c.toUpperCase().trim()))
+
   return {
     period: `${dateMin} al ${dateMax}`,
     totalTrips: trips.length,
@@ -237,6 +247,8 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     newTrips: trips.filter(t => !t.duplicate).length,
     likelyAlreadyImported,
     registeredTrucks: trucks.map(t => ({ id: t.id, plate: t.plate })).sort((a, b) => a.plate.localeCompare(b.plate)),
+    registeredDrivers: registeredDrivers.sort((a, b) => a.name.localeCompare(b.name)),
+    unknownConductors,
   }
 }
 

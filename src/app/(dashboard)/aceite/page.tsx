@@ -39,9 +39,7 @@ export default async function AceitePage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-white">Aceite</h1>
-        <p className="text-zinc-500 text-sm mt-0.5">
-          Control de pailas y consumo por camión
-        </p>
+        <p className="text-zinc-500 text-sm mt-0.5">Registra las compras de aceite por tipo y el uso en cada camión. Controla el inventario de lubricantes del taller.</p>
       </div>
       <AceiteClient batches={batches as any} trucks={trucks} truckCosts={Object.fromEntries(truckCostMap)} />
     </div>

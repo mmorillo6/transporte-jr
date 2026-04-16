@@ -19,7 +19,8 @@ function levenshtein(a: string, b: string): number {
   return dp[m][n]
 }
 
-type PlacaSugerida = { id: string; plate: string; distance: number }
+type PlacaSugerida  = { id: string; plate: string; distance: number }
+type ChoferSugerido = { id: string; name: string; distance: number }
 
 function sugerirPlacas(
   placaErronea: string,
@@ -29,6 +30,19 @@ function sugerirPlacas(
   return registradas
     .map(t => ({ ...t, distance: levenshtein(placaErronea, t.plate) }))
     .filter(t => t.distance <= maxDistance && t.distance > 0)
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 3)
+}
+
+function sugerirChoferes(
+  nombre: string,
+  registrados: { id: string; name: string }[],
+  maxDistance = 4,
+): ChoferSugerido[] {
+  const norm = (s: string) => s.toUpperCase().trim()
+  return registrados
+    .map(d => ({ ...d, distance: levenshtein(norm(nombre), norm(d.name)) }))
+    .filter(d => d.distance <= maxDistance && d.distance > 0)
     .sort((a, b) => a.distance - b.distance)
     .slice(0, 3)
 }
@@ -85,12 +99,16 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
     if (!preview) return
     setSaving(true); setError('')
     try {
-      // Aplicar remapeos: viajes con placa errónea → truckId del camión correcto
+      // Aplicar remapeos de placas y normalización de conductores
       const tripsConRemapeo = preview.trips.map(t => {
+        let trip = t
         if (!t.truckId && !t.duplicate && plateMappings[t.plate]) {
-          return { ...t, truckId: plateMappings[t.plate] }
+          trip = { ...trip, truckId: plateMappings[t.plate] }
         }
-        return t
+        if (!t.duplicate && t.conductor && conductorMappings[t.conductor]) {
+          trip = { ...trip, conductor: conductorMappings[t.conductor] }
+        }
+        return trip
       })
       const res = await confirmarImport(tripsConRemapeo, openPeriodId)
       setResultado(res)
@@ -106,8 +124,10 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
     : []
   // plateMappings: placa errónea → truckId del camión correcto
   const [plateMappings, setPlateMappings] = useState<Record<string, string>>({})
-  // placas donde el usuario rechazó la sugerencia automática
   const [sugerenciasRechazadas, setSugerenciasRechazadas] = useState<Set<string>>(new Set())
+  // conductorMappings: nombre romana → nombre normalizado del chofer registrado
+  const [conductorMappings, setConductorMappings] = useState<Record<string, string>>({})
+  const [conductoresSugerRechazadas, setConductoresSugerRechazadas] = useState<Set<string>>(new Set())
   const [ignorarDuplicado, setIgnorarDuplicado] = useState(false)
 
   return (
@@ -421,6 +441,160 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
             </div>
             )
           })()}
+
+          {/* Conductores desconocidos */}
+          {preview.unknownConductors.length > 0 && (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl px-4 py-4 space-y-3">
+              <div>
+                <p className="text-blue-400 text-sm font-medium">
+                  {preview.unknownConductors.length} {preview.unknownConductors.length === 1 ? 'chofer nuevo' : 'choferes nuevos'} detectados en la romana
+                </p>
+                <p className="text-zinc-500 text-xs mt-0.5">
+                  Estos nombres no coinciden exactamente con ningún chofer registrado. Confírmalos o regístralos.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                {preview.unknownConductors.map(conductor => {
+                  const mapeadoA    = conductorMappings[conductor]
+                  const rechazada   = conductoresSugerRechazadas.has(conductor)
+                  const resuelta    = !!mapeadoA || rechazada
+                  const sugerencias = sugerirChoferes(conductor, preview.registeredDrivers)
+                  const mejor       = sugerencias[0]
+                  const viajesCount = preview.trips.filter(t => t.conductor === conductor && !t.duplicate).length
+
+                  return (
+                    <div key={conductor} className={`border rounded-xl p-3 space-y-2.5 transition-colors ${
+                      mapeadoA ? 'bg-emerald-500/5 border-emerald-500/20'
+                      : rechazada ? 'bg-zinc-900/60 border-zinc-700'
+                      : 'bg-zinc-900/60 border-blue-500/20'
+                    }`}>
+                      {/* Encabezado */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-white font-medium text-sm">{conductor}</span>
+                        <span className="text-zinc-500 text-xs">· {viajesCount} {viajesCount === 1 ? 'viaje' : 'viajes'}</span>
+                        {mapeadoA && (
+                          <span className="text-emerald-400 text-xs font-medium ml-auto">
+                            ✓ normalizado a <span className="font-medium">{mapeadoA}</span>
+                          </span>
+                        )}
+                        {rechazada && !mapeadoA && (
+                          <span className="text-zinc-500 text-xs ml-auto">Se importará como nombre nuevo</span>
+                        )}
+                      </div>
+
+                      {mapeadoA ? (
+                        <button
+                          onClick={() => setConductorMappings(prev => { const n = { ...prev }; delete n[conductor]; return n })}
+                          className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors"
+                        >
+                          Cambiar →
+                        </button>
+                      ) : rechazada ? (
+                        <div className="flex gap-2 items-center flex-wrap">
+                          <Link
+                            href={`/usuarios?nuevoConductor=${encodeURIComponent(conductor)}`}
+                            className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors border border-amber-500/20"
+                          >
+                            + Registrar como chofer
+                          </Link>
+                          <button
+                            onClick={() => setConductoresSugerRechazadas(prev => { const n = new Set(prev); n.delete(conductor); return n })}
+                            className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors"
+                          >
+                            ← Volver
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Sugerencia automática */}
+                          {mejor && (
+                            <div className="bg-zinc-800/80 border border-zinc-700 rounded-lg px-3 py-2.5 space-y-2">
+                              <p className="text-zinc-400 text-xs">
+                                {mejor.distance <= 2
+                                  ? 'Muy similar a un chofer registrado — ¿es este?'
+                                  : 'Podría ser este chofer registrado:'}
+                              </p>
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <div>
+                                  <p className="text-zinc-600 text-xs mb-0.5">Romana dice</p>
+                                  <span className="text-zinc-400 text-sm font-medium">{conductor}</span>
+                                </div>
+                                <span className="text-zinc-600">→</span>
+                                <div>
+                                  <p className="text-zinc-600 text-xs mb-0.5">¿Era este?</p>
+                                  <span className="text-white text-sm font-medium">{mejor.name}</span>
+                                </div>
+                                {sugerencias.length > 1 && (
+                                  <div className="ml-2">
+                                    <p className="text-zinc-600 text-xs mb-0.5">Otros similares</p>
+                                    <div className="flex gap-1.5">
+                                      {sugerencias.slice(1).map(s => (
+                                        <button key={s.id}
+                                          onClick={() => setConductorMappings(prev => ({ ...prev, [conductor]: s.name }))}
+                                          className="text-xs text-zinc-400 hover:text-amber-400 bg-zinc-700 hover:bg-zinc-600 px-2 py-0.5 rounded transition-colors"
+                                        >
+                                          {s.name}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  onClick={() => setConductorMappings(prev => ({ ...prev, [conductor]: mejor.name }))}
+                                  className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                                >
+                                  Sí, es {mejor.name}
+                                </button>
+                                <button
+                                  onClick={() => setConductoresSugerRechazadas(prev => new Set([...prev, conductor]))}
+                                  className="text-zinc-500 hover:text-zinc-300 text-xs px-3 py-1.5 rounded-lg hover:bg-zinc-700 transition-colors"
+                                >
+                                  No es ese
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Sin sugerencia: opciones directas */}
+                          {!mejor && (
+                            <div className="flex gap-2 items-center flex-wrap">
+                              <span className="text-zinc-500 text-xs">Asignar a:</span>
+                              <select
+                                value={mapeadoA ?? ''}
+                                onChange={e => {
+                                  const val = e.target.value
+                                  setConductorMappings(prev => {
+                                    if (!val) { const n = { ...prev }; delete n[conductor]; return n }
+                                    const driver = preview.registeredDrivers.find(d => d.id === val)
+                                    return driver ? { ...prev, [conductor]: driver.name } : prev
+                                  })
+                                }}
+                                className="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500"
+                              >
+                                <option value="">Seleccionar chofer...</option>
+                                {preview.registeredDrivers.map(d => (
+                                  <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                              </select>
+                              <Link
+                                href={`/usuarios?nuevoConductor=${encodeURIComponent(conductor)}`}
+                                className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors border border-amber-500/20"
+                              >
+                                + Registrar nuevo
+                              </Link>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Acción */}
           <div className="flex gap-3">

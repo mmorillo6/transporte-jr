@@ -129,7 +129,7 @@ export default async function DespachoPage({
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-white">Despacho</h1>
-        <p className="text-zinc-500 text-sm mt-0.5">Asignación diaria · Asistencia de personal</p>
+        <p className="text-zinc-500 text-sm mt-0.5">Planifica qué camiones salen cada día y a qué ruta. Sirve como hoja de ruta diaria para el encargado.</p>
       </div>
       <DespachoClient
         trucks={trucks as any}

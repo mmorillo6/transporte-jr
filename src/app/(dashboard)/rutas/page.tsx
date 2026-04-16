@@ -19,9 +19,8 @@ export default async function RutasPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Rutas / Minas</h1>
-          <p className="text-zinc-500 text-sm mt-0.5">
-            {routes.filter(r => r.active).length} activas · {routes.length} total
-          </p>
+          <p className="text-zinc-500 text-sm mt-0.5">Define las minas y destinos con su tarifa (por tonelada, viaje u hora). Estas tarifas se usan para calcular automáticamente el monto de cada viaje.</p>
+          <p className="text-zinc-600 text-xs mt-1">{routes.filter(r => r.active).length} activas · {routes.length} total</p>
         </div>
       </div>
 

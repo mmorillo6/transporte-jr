@@ -98,7 +98,7 @@ export default async function FinanzasPage({
         <div className="w-1 h-10 rounded-full bg-amber-500 flex-shrink-0" />
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight leading-none">Finanzas</h1>
-          <p className="text-zinc-500 text-sm mt-1">Caja · Gastos operativos · Préstamos</p>
+          <p className="text-zinc-500 text-sm mt-1">Controla el flujo de efectivo y USDT. Registra gastos, préstamos a choferes y cuentas por cobrar de clientes.</p>
         </div>
       </div>
 

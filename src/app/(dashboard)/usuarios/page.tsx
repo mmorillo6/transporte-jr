@@ -22,9 +22,8 @@ export default async function UsuariosPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Usuarios</h1>
-          <p className="text-zinc-500 text-sm mt-0.5">
-            {users.filter(u => u.active).length} activos · {users.length} total
-          </p>
+          <p className="text-zinc-500 text-sm mt-0.5">Gestiona los accesos al sistema: choferes, mecánicos, encargados y dueños. Asigna roles y vincula cada usuario a su camión o dueño.</p>
+          <p className="text-zinc-600 text-xs mt-1">{users.filter(u => u.active).length} activos · {users.length} total</p>
         </div>
       </div>
 

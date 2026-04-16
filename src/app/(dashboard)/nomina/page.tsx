@@ -30,7 +30,7 @@ export default async function NominaPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-white">Nómina</h1>
-        <p className="text-zinc-500 text-sm mt-0.5">Relaciones quincenales por período</p>
+        <p className="text-zinc-500 text-sm mt-0.5">Calcula el pago quincenal por camión: facturación, viáticos, comisiones, NPR y deducciones. También muestra la nómina de choferes por período.</p>
       </div>
 
       {/* Periods list */}

@@ -102,7 +102,8 @@ export default async function ViajesPage({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Viajes</h1>
-          <p className="text-zinc-500 text-sm mt-0.5">{total} viajes registrados</p>
+          <p className="text-zinc-500 text-sm mt-0.5">Registro de todos los viajes realizados. Puedes ver, filtrar y editar viajes por fecha, camión o ruta. Los viajes son la base del cálculo de nómina.</p>
+          <p className="text-zinc-600 text-xs mt-1">{total} viajes registrados</p>
         </div>
         <Link
           href="/viajes/nuevo"

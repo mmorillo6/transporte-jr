@@ -92,9 +92,8 @@ export default async function CamionesPage({
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-white">Flota</h1>
-        <p className="text-zinc-500 text-sm mt-0.5">
-          {trucks.filter(t => t.active).length} unidades activas · {owners.filter(o => o.active).length} propietarios
-        </p>
+        <p className="text-zinc-500 text-sm mt-0.5">Administra los camiones activos. Consulta a qué dueño pertenece cada unidad, qué chofer tiene asignado y su estado operativo.</p>
+        <p className="text-zinc-600 text-xs mt-1">{trucks.filter(t => t.active).length} unidades activas · {owners.filter(o => o.active).length} propietarios</p>
       </div>
       <CamionesClient
         trucks={trucks as any}

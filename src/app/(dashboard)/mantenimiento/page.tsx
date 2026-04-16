@@ -78,9 +78,8 @@ export default async function MantenimientoPage({
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-white">Mantenimiento</h1>
-        <p className="text-zinc-500 text-sm mt-0.5">
-          {alerts.length} alertas pendientes · {trucks.length} camiones activos
-        </p>
+        <p className="text-zinc-500 text-sm mt-0.5">Historial de servicios de cada camión: cambios de aceite, filtros, engrases e inspecciones. Genera alertas cuando se acerca el próximo mantenimiento.</p>
+        <p className="text-zinc-600 text-xs mt-1">{alerts.length} alertas pendientes · {trucks.length} camiones activos</p>
       </div>
 
       <MantenimientoClient

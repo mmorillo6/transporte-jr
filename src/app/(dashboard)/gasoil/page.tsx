@@ -74,7 +74,7 @@ export default async function GasoilPage({
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-white">Gasoil</h1>
-        <p className="text-zinc-500 text-sm mt-0.5">Control de combustible — tanques e inventario</p>
+        <p className="text-zinc-500 text-sm mt-0.5">Controla las entradas al tanque y el consumo de gasoil por camión. Lleva el inventario del depósito propio.</p>
       </div>
       <GasoilClient
         tanks={tanks.map(t => ({
