@@ -6,11 +6,11 @@ import CamionesClient from './CamionesClient'
 export default async function CamionesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>
+  searchParams: Promise<{ tab?: string; nuevaPlaca?: string }>
 }) {
   const session = await getSession()
   if (!session) redirect('/login')
-  const { tab: initialTab } = await searchParams
+  const { tab: initialTab, nuevaPlaca } = await searchParams
 
   const [trucks, owners, drivers] = await Promise.all([
     prisma.truck.findMany({
@@ -103,6 +103,7 @@ export default async function CamionesPage({
         canEdit={canEdit}
         payrollByOwner={payrollByOwner as any}
         initialTab={initialTab}
+        nuevaPlaca={nuevaPlaca}
       />
     </div>
   )

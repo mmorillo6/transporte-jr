@@ -1,5 +1,5 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createTruck, updateTruck, toggleTruckStatus, deleteTruck, createOwner, updateOwner, deleteOwner } from '@/app/actions/config'
@@ -45,7 +45,7 @@ const OWNER_TYPE_STYLE: Record<string, string> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CamionesClient({
-  trucks, owners, drivers, canEdit, payrollByOwner, initialTab,
+  trucks, owners, drivers, canEdit, payrollByOwner, initialTab, nuevaPlaca,
 }: {
   trucks: Truck[]
   owners: Owner[]
@@ -53,6 +53,7 @@ export default function CamionesClient({
   canEdit: boolean
   payrollByOwner: Record<string, PeriodGroup[]>
   initialTab?: string
+  nuevaPlaca?: string
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<'flota' | 'propietarios'>(
@@ -64,6 +65,17 @@ export default function CamionesClient({
   // Truck form state
   const [showTruckForm, setShowTruckForm] = useState(false)
   const [editingTruck, setEditingTruck] = useState<Truck | null>(null)
+  const [formPlate, setFormPlate] = useState('')
+
+  // Auto-open form when coming from romana with a plate
+  useEffect(() => {
+    if (nuevaPlaca && canEdit) {
+      setFormPlate(nuevaPlaca)
+      setEditingTruck(null)
+      setShowTruckForm(true)
+      setError('')
+    }
+  }, [nuevaPlaca, canEdit])
 
   // Owner form state
   const [showOwnerForm, setShowOwnerForm] = useState(false)
@@ -144,7 +156,7 @@ export default function CamionesClient({
         <>
           {canEdit && (
             <div className="flex gap-2">
-              <button onClick={() => { setEditingTruck(null); setShowTruckForm(true); setError('') }}
+              <button onClick={() => { setEditingTruck(null); setFormPlate(''); setShowTruckForm(true); setError('') }}
                 className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold rounded-xl px-4 py-2 text-sm transition-colors">
                 + Nuevo camión
               </button>
@@ -154,11 +166,11 @@ export default function CamionesClient({
           {(showTruckForm || editingTruck) && (
             <div className="bg-zinc-900 border border-amber-500/20 rounded-2xl p-5">
               <h3 className="text-white font-semibold mb-4">{editingTruck ? 'Editar camión' : 'Nuevo camión'}</h3>
-              <form onSubmit={handleTruckSubmit} className="space-y-4">
+              <form key={editingTruck?.id ?? formPlate} onSubmit={handleTruckSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs text-zinc-400 mb-1.5">Placa *</label>
-                    <input name="plate" required defaultValue={editingTruck?.plate ?? ''} placeholder="A31CX2A"
+                    <input name="plate" required defaultValue={editingTruck?.plate ?? formPlate} placeholder="A31CX2A"
                       maxLength={8}
                       onKeyDown={e => { if (!/[A-Za-z0-9]/.test(e.key) && !['Backspace','Delete','Tab','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault() }}
                       onInput={e => { const el = e.target as HTMLInputElement; el.value = el.value.toUpperCase().replace(/[^A-Z0-9]/g, '') }}

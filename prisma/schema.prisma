@@ -127,6 +127,7 @@ model Trip {
   netWeightKg Float?
   material    String?
   origin      String?
+  conductor   String?
   viatico     Float    @default(0)
   amount      Float    @default(0)
   periodId    String?

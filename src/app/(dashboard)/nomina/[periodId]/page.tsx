@@ -17,7 +17,7 @@ async function getPeriodData(periodId: string, role: string, ownerId: string | n
               owner: { select: { id: true, name: true, type: true, nprPercent: true } },
             },
           },
-          route: { select: { name: true, rateType: true } },
+          route: { select: { name: true, rateType: true, driverWage: true } },
         },
         orderBy: { date: 'asc' },
       },
@@ -106,6 +106,36 @@ export default async function PeriodDetailPage({
     existing.push(trip)
     tripsByTruck.set(trip.truckId, existing)
   }
+
+  // Nómina de choferes: agrupar por conductor, calcular sueldo y desglose por camión
+  type ConductorEntry = {
+    conductor: string
+    totalTrips: number
+    totalWage: number
+    byTruck: { plate: string; trips: number; wage: number }[]
+  }
+  const conductorMap = new Map<string, { totalTrips: number; totalWage: number; byTruck: Map<string, { plate: string; trips: number; wage: number }> }>()
+  for (const trip of trips) {
+    const name = (trip as any).conductor?.trim() || trip.truck?.driver?.name || '—'
+    if (!conductorMap.has(name)) conductorMap.set(name, { totalTrips: 0, totalWage: 0, byTruck: new Map() })
+    const ce = conductorMap.get(name)!
+    const wage = (trip.route as any).driverWage ?? 0
+    ce.totalTrips++
+    ce.totalWage += wage
+    const plate = trip.truck?.plate ?? '—'
+    if (!ce.byTruck.has(plate)) ce.byTruck.set(plate, { plate, trips: 0, wage: 0 })
+    const bt = ce.byTruck.get(plate)!
+    bt.trips++
+    bt.wage += wage
+  }
+  const nominaChoferes: ConductorEntry[] = Array.from(conductorMap.entries())
+    .map(([conductor, data]) => ({
+      conductor,
+      totalTrips: data.totalTrips,
+      totalWage: Math.round(data.totalWage * 100) / 100,
+      byTruck: Array.from(data.byTruck.values()).map(bt => ({ ...bt, wage: Math.round(bt.wage * 100) / 100 })),
+    }))
+    .sort((a, b) => b.totalWage - a.totalWage)
 
   return (
     <div className="space-y-5">
@@ -217,6 +247,63 @@ export default async function PeriodDetailPage({
             totalAbono={totalAbono}
             totalNet={totalNet}
           />
+
+          {/* Nómina de choferes */}
+          {nominaChoferes.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-white font-semibold text-sm">Nómina de choferes</h2>
+                <span className="text-zinc-500 text-xs">Sueldo total por conductor · desglosado por camión</span>
+              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-800">
+                      <th className="text-left text-zinc-500 font-medium px-4 py-3">Conductor</th>
+                      <th className="text-left text-zinc-500 font-medium px-4 py-3">Camión(es)</th>
+                      <th className="text-right text-zinc-500 font-medium px-4 py-3">Viajes</th>
+                      <th className="text-right text-zinc-500 font-medium px-4 py-3">Sueldo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {nominaChoferes.map((ce, i) => (
+                      <tr key={ce.conductor} className={`border-b border-zinc-800/50 ${i % 2 === 0 ? '' : 'bg-zinc-800/20'}`}>
+                        <td className="px-4 py-3 text-white font-medium">{ce.conductor}</td>
+                        <td className="px-4 py-3">
+                          {ce.byTruck.length === 1 ? (
+                            <span className="text-zinc-400 font-mono text-xs">{ce.byTruck[0].plate}</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {ce.byTruck.map(bt => (
+                                <span key={bt.plate} className="inline-flex items-center gap-1 bg-zinc-800 rounded-md px-2 py-0.5 text-xs">
+                                  <span className="text-zinc-300 font-mono">{bt.plate}</span>
+                                  <span className="text-zinc-500">·</span>
+                                  <span className="text-zinc-400">{bt.trips}v</span>
+                                  <span className="text-zinc-500">·</span>
+                                  <span className="text-amber-400">${bt.wage.toFixed(2)}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right text-zinc-400">{ce.totalTrips}</td>
+                        <td className="px-4 py-3 text-right text-amber-400 font-semibold">${ce.totalWage.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-zinc-700">
+                      <td className="px-4 py-3 text-zinc-500 font-medium" colSpan={2}>Total nómina choferes</td>
+                      <td className="px-4 py-3 text-right text-zinc-400 font-medium">{nominaChoferes.reduce((s, c) => s + c.totalTrips, 0)}</td>
+                      <td className="px-4 py-3 text-right text-amber-400 font-bold">
+                        ${nominaChoferes.reduce((s, c) => s + c.totalWage, 0).toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Trip details per truck */}
           <div className="space-y-3">

@@ -1,8 +1,56 @@
 'use client'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { parseRomana, confirmarImport } from '@/app/actions/importarRomana'
 import type { RomanaPreview, RomanaTrip } from '@/app/actions/importarRomana'
+
+// ─── Utilidades de similitud de placas ────────────────────────────────────────
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1]
+        ? dp[i-1][j-1]
+        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
+  return dp[m][n]
+}
+
+type PlacaSugerida = { id: string; plate: string; distance: number }
+
+function sugerirPlacas(
+  placaErronea: string,
+  registradas: { id: string; plate: string }[],
+  maxDistance = 2,
+): PlacaSugerida[] {
+  return registradas
+    .map(t => ({ ...t, distance: levenshtein(placaErronea, t.plate) }))
+    .filter(t => t.distance <= maxDistance && t.distance > 0)
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 3)
+}
+
+// Renderiza dos placas resaltando los caracteres diferentes
+function DiffPlate({ wrong, correct }: { wrong: string; correct: string }) {
+  const maxLen = Math.max(wrong.length, correct.length)
+  return (
+    <span className="font-mono text-sm font-bold tracking-wider">
+      {Array.from({ length: maxLen }).map((_, i) => {
+        const wc = wrong[i] ?? ''
+        const cc = correct[i] ?? ''
+        const differs = wc !== cc
+        return (
+          <span key={i} className={differs ? 'text-amber-400 underline underline-offset-2' : 'text-white'}>
+            {cc || ' '}
+          </span>
+        )
+      })}
+    </span>
+  )
+}
 
 export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }) {
   const router  = useRouter()
@@ -37,7 +85,14 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
     if (!preview) return
     setSaving(true); setError('')
     try {
-      const res = await confirmarImport(preview.trips, openPeriodId)
+      // Aplicar remapeos: viajes con placa errónea → truckId del camión correcto
+      const tripsConRemapeo = preview.trips.map(t => {
+        if (!t.truckId && !t.duplicate && plateMappings[t.plate]) {
+          return { ...t, truckId: plateMappings[t.plate] }
+        }
+        return t
+      })
+      const res = await confirmarImport(tripsConRemapeo, openPeriodId)
       setResultado(res)
       router.refresh()
     } catch (e: unknown) {
@@ -46,6 +101,13 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
   }
 
   const sinCamion = preview?.trips.filter(t => !t.truckId && !t.duplicate).length ?? 0
+  const placasSinRegistrar = preview
+    ? [...new Set(preview.trips.filter(t => !t.truckId && !t.duplicate).map(t => t.plate))]
+    : []
+  // plateMappings: placa errónea → truckId del camión correcto
+  const [plateMappings, setPlateMappings] = useState<Record<string, string>>({})
+  // placas donde el usuario rechazó la sugerencia automática
+  const [sugerenciasRechazadas, setSugerenciasRechazadas] = useState<Set<string>>(new Set())
   const [ignorarDuplicado, setIgnorarDuplicado] = useState(false)
 
   return (
@@ -215,12 +277,150 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
           ))}
 
           {/* Warning sin camión */}
-          {sinCamion > 0 && (
-            <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl px-4 py-3">
-              <p className="text-orange-400 text-sm font-medium">{sinCamion} viajes no se importarán — placa no registrada en el sistema</p>
-              <p className="text-zinc-500 text-xs mt-0.5">Registra esos camiones en el módulo de Camiones y vuelve a importar.</p>
+          {sinCamion > 0 && (() => {
+            const viajesSinResolver = preview.trips.filter(t => !t.truckId && !t.duplicate && !plateMappings[t.plate]).length
+            return (
+            <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl px-4 py-4 space-y-3">
+              <div>
+                <p className="text-orange-400 text-sm font-medium">
+                  {sinCamion} {sinCamion === 1 ? 'viaje' : 'viajes'} con {placasSinRegistrar.length === 1 ? 'placa' : 'placas'} no registrada{placasSinRegistrar.length !== 1 ? 's' : ''}
+                </p>
+                <p className="text-zinc-500 text-xs mt-0.5">
+                  Revisa si es un error tipográfico de la romana o una placa nueva.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                {placasSinRegistrar.map(placa => {
+                  const viajesPlaca = preview.trips.filter(t => t.plate === placa && !t.duplicate).length
+                  const mapeadoA = plateMappings[placa]
+                  const truckMapeado = mapeadoA ? preview.registeredTrucks.find(t => t.id === mapeadoA) : null
+                  const sugerencias = sugerirPlacas(placa, preview.registeredTrucks)
+                  const mejorSugerencia = sugerencias[0]
+                  const rechazada = sugerenciasRechazadas.has(placa)
+                  const resuelta = !!mapeadoA
+
+                  return (
+                    <div key={placa} className={`border rounded-xl p-3 space-y-2.5 transition-colors ${
+                      resuelta ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-zinc-900/60 border-orange-500/20'
+                    }`}>
+                      {/* Encabezado: placa errónea + conteo */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-white font-mono text-sm font-bold tracking-wider line-through decoration-orange-400/60">{placa}</span>
+                        <span className="text-zinc-500 text-xs">· {viajesPlaca} {viajesPlaca === 1 ? 'viaje' : 'viajes'}</span>
+                        {resuelta && truckMapeado && (
+                          <span className="text-emerald-400 text-xs font-medium ml-auto flex items-center gap-1">
+                            ✓ asignado a <span className="font-mono">{truckMapeado.plate}</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Estado resuelto — solo botón para cambiar */}
+                      {resuelta ? (
+                        <button
+                          onClick={() => setPlateMappings(prev => { const n = { ...prev }; delete n[placa]; return n })}
+                          className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors"
+                        >
+                          Cambiar asignación →
+                        </button>
+                      ) : (
+                        <>
+                          {/* Sugerencia automática */}
+                          {mejorSugerencia && !rechazada && (
+                            <div className="bg-zinc-800/80 border border-zinc-700 rounded-lg px-3 py-2.5 space-y-2">
+                              <p className="text-zinc-400 text-xs">
+                                {mejorSugerencia.distance === 1
+                                  ? '1 carácter de diferencia — probablemente es:'
+                                  : `${mejorSugerencia.distance} caracteres de diferencia — ¿quizás es?`}
+                              </p>
+                              {/* Diff visual */}
+                              <div className="flex items-center gap-3">
+                                <div className="space-y-0.5">
+                                  <p className="text-zinc-600 text-xs">Romana dice</p>
+                                  <span className="font-mono text-sm text-zinc-400 tracking-wider">{placa}</span>
+                                </div>
+                                <span className="text-zinc-600">→</span>
+                                <div className="space-y-0.5">
+                                  <p className="text-zinc-600 text-xs">¿Era esta?</p>
+                                  <DiffPlate wrong={placa} correct={mejorSugerencia.plate} />
+                                </div>
+                                {sugerencias.length > 1 && (
+                                  <div className="ml-2 space-y-0.5">
+                                    <p className="text-zinc-600 text-xs">Otras similares</p>
+                                    <div className="flex gap-1.5">
+                                      {sugerencias.slice(1).map(s => (
+                                        <button key={s.id}
+                                          onClick={() => setPlateMappings(prev => ({ ...prev, [placa]: s.id }))}
+                                          className="font-mono text-xs text-zinc-400 hover:text-amber-400 bg-zinc-700 hover:bg-zinc-600 px-1.5 py-0.5 rounded transition-colors"
+                                        >
+                                          {s.plate}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                              {/* Acciones sugerencia */}
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  onClick={() => setPlateMappings(prev => ({ ...prev, [placa]: mejorSugerencia.id }))}
+                                  className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                                >
+                                  Sí, es {mejorSugerencia.plate}
+                                </button>
+                                <button
+                                  onClick={() => setSugerenciasRechazadas(prev => new Set([...prev, placa]))}
+                                  className="text-zinc-500 hover:text-zinc-300 text-xs px-3 py-1.5 rounded-lg hover:bg-zinc-700 transition-colors"
+                                >
+                                  No es esa
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Sin sugerencia o sugerencia rechazada: mostrar opciones manuales */}
+                          {(!mejorSugerencia || rechazada) && (
+                            <div className="flex flex-wrap gap-2 items-center">
+                              <Link
+                                href={`/camiones?nuevaPlaca=${encodeURIComponent(placa)}`}
+                                className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 hover:text-amber-300 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors border border-amber-500/20"
+                              >
+                                + Registrar placa nueva
+                              </Link>
+                              <span className="text-zinc-600 text-xs">o asignar a:</span>
+                              <select
+                                value={mapeadoA ?? ''}
+                                onChange={e => {
+                                  const val = e.target.value
+                                  setPlateMappings(prev => {
+                                    if (!val) { const n = { ...prev }; delete n[placa]; return n }
+                                    return { ...prev, [placa]: val }
+                                  })
+                                }}
+                                className="bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:border-amber-500"
+                              >
+                                <option value="">Seleccionar placa...</option>
+                                {preview.registeredTrucks.map(t => (
+                                  <option key={t.id} value={t.id}>{t.plate}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {viajesSinResolver > 0 && (
+                <p className="text-zinc-600 text-xs">
+                  {viajesSinResolver} {viajesSinResolver === 1 ? 'viaje quedará' : 'viajes quedarán'} sin importar hasta que resuelvas todas las placas.
+                </p>
+              )}
             </div>
-          )}
+            )
+          })()}
 
           {/* Acción */}
           <div className="flex gap-3">

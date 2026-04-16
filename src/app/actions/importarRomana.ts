@@ -38,6 +38,8 @@ export type RomanaPreview = {
   newTrips: number
   /** true when ≥70% of tickets in this file already exist — likely a re-upload */
   likelyAlreadyImported: boolean
+  /** Camiones registrados en el sistema, para el remapeo de placas erróneas */
+  registeredTrucks: { id: string; plate: string }[]
 }
 
 // Mapa PROVEEDOR → nombre de ruta en el sistema
@@ -72,6 +74,15 @@ function excelDate(serial: number): Date {
   return new Date((serial - 25569) * 86400 * 1000)
 }
 
+// Detecta el índice de una columna buscando palabras clave en la fila de cabecera
+function colIdx(headers: (string | number)[], ...keywords: string[]): number {
+  for (const kw of keywords) {
+    const idx = headers.findIndex(h => String(h).toUpperCase().includes(kw.toUpperCase()))
+    if (idx !== -1) return idx
+  }
+  return -1
+}
+
 export async function parseRomana(base64: string): Promise<RomanaPreview> {
   const XLSX = await import('xlsx')
   const buf  = Buffer.from(base64, 'base64')
@@ -79,10 +90,38 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
   const ws   = wb.Sheets[wb.SheetNames[0]]
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as (string | number)[][]
 
-  // Find header row (has PLACA or CONDUCTOR)
-  let headerRow = 9
-  for (let i = 0; i < 20; i++) {
-    if (rows[i].some(c => String(c).toUpperCase().includes('PLACA'))) { headerRow = i; break }
+  // Encontrar la fila de cabecera (tiene PLACA)
+  let headerRowIdx = -1
+  for (let i = 0; i < 30; i++) {
+    if (rows[i]?.some(c => String(c).toUpperCase().includes('PLACA'))) {
+      headerRowIdx = i
+      break
+    }
+  }
+  if (headerRowIdx === -1) throw new Error('No se encontró la cabecera del archivo. Verifica que sea el Excel correcto de la romana.')
+
+  const headers = rows[headerRowIdx]
+
+  // Detectar columnas por nombre
+  const iTicket     = colIdx(headers, 'CODI', 'CODIGO', 'TICKET', 'N°', 'NO.', 'NUM')
+  const iFecha      = colIdx(headers, 'FECHA', 'DATE', 'DIA')
+  const iProcedencia= colIdx(headers, 'PROCEDENCIA', 'PROC', 'ORIGEN', 'MINA')
+  const iProveedor  = colIdx(headers, 'PROVEEDOR', 'EMPRESA', 'TRANSPORTE')
+  const iConductor  = colIdx(headers, 'CONDUCTOR', 'CHOFER', 'OPERADOR')
+  const iPlaca      = colIdx(headers, 'PLACA', 'VEHICULO', 'UNIDAD')
+  const iMaterial   = colIdx(headers, 'MATERIAL', 'MAT', 'TIPO')
+  const iNetoKg     = colIdx(headers, 'NETO', 'PESO N', 'NET')
+
+  // Fallback a índices históricos si no encuentra por nombre
+  const COL = {
+    ticket:      iTicket      !== -1 ? iTicket      : 4,
+    fecha:       iFecha       !== -1 ? iFecha       : 5,
+    procedencia: iProcedencia !== -1 ? iProcedencia : 7,
+    proveedor:   iProveedor   !== -1 ? iProveedor   : 10,
+    conductor:   iConductor   !== -1 ? iConductor   : 13,
+    placa:       iPlaca       !== -1 ? iPlaca       : 15,
+    material:    iMaterial    !== -1 ? iMaterial    : 16,
+    netoKg:      iNetoKg      !== -1 ? iNetoKg      : 20,
   }
 
   // Load routes and trucks from DB
@@ -99,27 +138,30 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
   const trips: RomanaTrip[] = []
   let dateMin = '', dateMax = ''
 
-  for (let i = headerRow + 1; i < rows.length; i++) {
+  for (let i = headerRowIdx + 1; i < rows.length; i++) {
     const r = rows[i]
-    const codi = r[4]
-    if (!codi || typeof codi !== 'number') continue
+    const codi = r[COL.ticket]
+    // Aceptar ticket numérico o texto, siempre que tenga valor
+    if (!codi && codi !== 0) continue
+    const ticketNo = String(codi).trim()
+    if (!ticketNo) continue
 
-    const dateSerial = r[5] as number
-    const procedencia = String(r[7]).trim()
-    const proveedor   = String(r[10]).trim()
-    const conductor   = String(r[13]).trim()
-    const plate       = String(r[15]).trim().toUpperCase()
-    const material    = String(r[16]).trim()
-    const netoKg      = typeof r[20] === 'number' ? r[20] : 0
-    const ticketNo    = String(codi)
+    const dateSerial  = r[COL.fecha]
+    const procedencia = String(r[COL.procedencia] ?? '').trim()
+    const proveedor   = String(r[COL.proveedor]   ?? '').trim()
+    const conductor   = String(r[COL.conductor]   ?? '').trim()
+    const plate       = String(r[COL.placa]       ?? '').trim().toUpperCase().replace(/\s+/g, '')
+    const material    = String(r[COL.material]    ?? '').trim()
+    const netoKg      = typeof r[COL.netoKg] === 'number' ? r[COL.netoKg] as number : 0
 
-    if (!procedencia || !proveedor) continue
+    if (!procedencia || !proveedor || !plate) continue
 
     const routeName = resolveRoute(proveedor, procedencia)
     const route     = routeMap.get(routeName.toUpperCase())
     if (!route) continue
 
-    const date     = excelDate(dateSerial)
+    const date     = typeof dateSerial === 'number' ? excelDate(dateSerial) : new Date(String(dateSerial))
+    if (isNaN(date.getTime())) continue
     const dateStr  = date.toISOString()
     const dateKey  = date.toISOString().slice(0, 10)
     if (!dateMin || dateKey < dateMin) dateMin = dateKey
@@ -194,6 +236,7 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     duplicates,
     newTrips: trips.filter(t => !t.duplicate).length,
     likelyAlreadyImported,
+    registeredTrucks: trucks.map(t => ({ id: t.id, plate: t.plate })).sort((a, b) => a.plate.localeCompare(b.plate)),
   }
 }
 
@@ -215,6 +258,7 @@ export async function confirmarImport(trips: RomanaTrip[], openPeriodId?: string
       netWeightKg: t.rateType === 'PER_TON' ? t.netWeightKg : null,
       material:    t.material || null,
       origin:      t.procedencia || null,
+      conductor:   t.conductor || null,
       amount:      t.amount,
       viatico:     0,
       periodId:    openPeriodId ?? null,
