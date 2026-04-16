@@ -571,6 +571,172 @@ function addEstadoCuentaSheet(wb: ExcelJS.Workbook, preview: RelacionPreview) {
   }
 }
 
+// ── RELACIÓN POR CAMIONES ─────────────────────────────────────────────────────
+function addRelacionPorCarrosSheet(wb: ExcelJS.Workbook, preview: RelacionPreview) {
+  type PlateData = { conductor: string; byRoute: Map<string, { tons: number; amount: number }> }
+  const plateMap = new Map<string, PlateData>()
+
+  for (const route of preview.byRoute) {
+    for (const trip of route.trips) {
+      const plate = trip.plate || '—'
+      if (!plateMap.has(plate)) plateMap.set(plate, { conductor: trip.conductor || '—', byRoute: new Map() })
+      const pd = plateMap.get(plate)!
+      if ((pd.conductor === '—' || !pd.conductor) && trip.conductor) pd.conductor = trip.conductor
+      if (!pd.byRoute.has(route.routeName)) pd.byRoute.set(route.routeName, { tons: 0, amount: 0 })
+      const rd = pd.byRoute.get(route.routeName)!
+      rd.tons   += (trip.netWeightKg ?? 0) / 1000
+      rd.amount += trip.amount
+    }
+  }
+
+  if (plateMap.size === 0) return
+
+  const routes    = preview.byRoute
+  const fixedCols = 3  // TRANSPORTISTA, (vacío), PLACA
+  const routeCols = routes.length * 2  // TON + $ per route
+  const totalCols = fixedCols + routeCols + 1
+
+  const ws = wb.addWorksheet('REL. POR CARROS')
+  ws.columns = [
+    { width: 22 }, // TRANSPORTISTA
+    { width: 10 }, // (space / nro)
+    { width: 10 }, // PLACA
+    ...routes.flatMap(() => [{ width: 10 }, { width: 13 }] as {width:number}[]),
+    { width: 14 }, // TOTAL
+  ]
+
+  // ── Título ────────────────────────────────────────────────────────────────
+  ws.mergeCells(1, 1, 1, totalCols)
+  const titleCell = ws.getRow(1).getCell(1)
+  titleCell.value     = `RELACIÓN POR CAMIONES — ${preview.periodLabel}`
+  titleCell.font      = { bold: true, size: 12, color: { argb: COL.NAVY } }
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' }
+  titleCell.fill      = fill(COL.NAVY_LIGHT)
+  ws.getRow(1).height = 24
+
+  ws.addRow([])
+
+  // ── Fila de encabezado: nombre de ruta (2 columnas cada una) ──────────────
+  const hRow1 = ws.getRow(3)
+  hRow1.height = 34
+
+  const fixedLabels: [number, string][] = [[1, 'TRANSPORTISTA'], [2, ''], [3, 'PLACA']]
+  fixedLabels.forEach(([col, val]) => {
+    if (col === 2) return
+    ws.mergeCells(3, col, 4, col)
+    const cell = hRow1.getCell(col)
+    cell.value     = val
+    cell.font      = { bold: true, size: 9, color: { argb: COL.WHITE } }
+    cell.fill      = fill(COL.NAVY)
+    cell.border    = border('thin')
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+  })
+
+  routes.forEach((route, i) => {
+    const col = fixedCols + 1 + i * 2
+    ws.mergeCells(3, col, 3, col + 1)
+    const cell = hRow1.getCell(col)
+    cell.value     = route.routeName
+    cell.font      = { bold: true, size: 9, color: { argb: COL.WHITE } }
+    cell.fill      = fill(COL.NAVY)
+    cell.border    = border('thin')
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+  })
+
+  ws.mergeCells(3, totalCols, 4, totalCols)
+  const totHCell = hRow1.getCell(totalCols)
+  totHCell.value     = 'TOTAL'
+  totHCell.font      = { bold: true, size: 9, color: { argb: COL.WHITE } }
+  totHCell.fill      = fill(COL.NAVY)
+  totHCell.border    = border('thin')
+  totHCell.alignment = { horizontal: 'center', vertical: 'middle' }
+
+  // ── Sub-encabezado: TON | $ ───────────────────────────────────────────────
+  const hRow2 = ws.getRow(4)
+  hRow2.height = 18
+  routes.forEach((_, i) => {
+    const col = fixedCols + 1 + i * 2
+    ;(['TON', '$'] as const).forEach((label, j) => {
+      const cell = hRow2.getCell(col + j)
+      cell.value     = label
+      cell.font      = { bold: true, size: 8, color: { argb: COL.WHITE } }
+      cell.fill      = fill(COL.NAVY_MID)
+      cell.border    = border('thin')
+      cell.alignment = { horizontal: 'center', vertical: 'middle' }
+    })
+  })
+
+  // ── Filas de datos ────────────────────────────────────────────────────────
+  let rowN = 5
+  let grandTotal = 0
+  const routeTotals = new Map<string, number>()
+
+  Array.from(plateMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([plate, pd], idx) => {
+      const isEven = idx % 2 === 1
+      const row    = ws.getRow(rowN++)
+      row.height   = 18
+
+      row.getCell(1).value = pd.conductor
+      row.getCell(3).value = plate
+
+      let rowTotal = 0
+      routes.forEach((route, ri) => {
+        const col = fixedCols + 1 + ri * 2
+        const rd  = pd.byRoute.get(route.routeName)
+        const tonCell = row.getCell(col)
+        const amtCell = row.getCell(col + 1)
+        if (rd) {
+          tonCell.value  = Math.round(rd.tons   * 1000) / 1000
+          amtCell.value  = Math.round(rd.amount * 100)  / 100
+          tonCell.numFmt = '#,##0.000'
+          amtCell.numFmt = '#,##0.00'
+          rowTotal += rd.amount
+          routeTotals.set(route.routeName, (routeTotals.get(route.routeName) ?? 0) + rd.amount)
+        }
+      })
+
+      grandTotal += rowTotal
+      const tc    = row.getCell(totalCols)
+      tc.value    = Math.round(rowTotal * 100) / 100
+      tc.numFmt   = '#,##0.00'
+      tc.font     = { bold: true, size: 9 }
+
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        cell.fill      = fill(isEven ? COL.OFF_WHITE : COL.WHITE)
+        cell.border    = border('thin')
+        if (!cell.font?.bold) cell.font = { size: 9 }
+        if (!cell.alignment) cell.alignment = {}
+        cell.alignment.vertical = 'middle'
+      })
+    })
+
+  // ── Fila de totales ───────────────────────────────────────────────────────
+  const totRow = ws.getRow(rowN)
+  totRow.height = 22
+  ws.mergeCells(rowN, 1, rowN, 3)
+  totRow.getCell(1).value = 'TOTAL'
+
+  routes.forEach((route, ri) => {
+    const col     = fixedCols + 1 + ri * 2 + 1 // only $ column
+    const cell    = totRow.getCell(col)
+    cell.value    = Math.round((routeTotals.get(route.routeName) ?? 0) * 100) / 100
+    cell.numFmt   = '#,##0.00'
+  })
+
+  totRow.getCell(totalCols).value  = Math.round(grandTotal * 100) / 100
+  totRow.getCell(totalCols).numFmt = '#,##0.00'
+
+  totRow.eachCell({ includeEmpty: false }, (cell) => {
+    cell.font      = { bold: true, size: 10, color: { argb: COL.NAVY } }
+    cell.fill      = fill(COL.GOLD_LIGHT)
+    cell.border    = mediumBorder(['top', 'bottom'])
+    cell.alignment = { horizontal: 'right', vertical: 'middle' }
+  })
+  totRow.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' }
+}
+
 // ── Builders ─────────────────────────────────────────────────────────────────
 async function buildAuruminExcel(preview: RelacionPreview, abono: number, hasEstadoCuenta = false): Promise<ExcelJS.Buffer> {
   const wb = new ExcelJS.Workbook()
@@ -580,6 +746,7 @@ async function buildAuruminExcel(preview: RelacionPreview, abono: number, hasEst
     'Aurumin A 4km Desde la Entrada de El Callao, Vía Tumeremo Edo. Bolívar.', 'Planta Aurumin')
   for (const route of preview.byRoute) addRouteSheet(wb, route)
   addRelacionFinalSheet(wb, preview, abono)
+  addRelacionPorCarrosSheet(wb, preview)
   if (hasEstadoCuenta) addEstadoCuentaSheet(wb, preview)
   return wb.xlsx.writeBuffer()
 }
@@ -606,7 +773,7 @@ export async function POST(req: NextRequest) {
       : await buildChinoExcel(preview, abono)
 
     const dest       = preview.destinatario === 'EMPRESA' ? 'Empresa' : 'Jose'
-    const clientSlug = preview.client === 'AURUMIN' ? 'Aurumin' : 'LuisPena'
+    const clientSlug = preview.client === 'AURUMIN' ? 'Aurumin' : 'ChinoPena'
     const filename   = `Relacion-${clientSlug}-${dest}-${preview.periodLabel.replace(/\//g,'-').replace(/\s/g,'_')}.xlsx`
 
     return new NextResponse(buf as unknown as BodyInit, {

@@ -23,7 +23,7 @@ export default async function RelacionesPage() {
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight leading-none">Relaciones</h1>
           <p className="text-zinc-500 text-sm mt-1">
-            Genera y exporta la relación quincenal — Aurumin · Luis Peña
+            Genera y exporta la relación quincenal — Aurumin · Chino Peña
           </p>
         </div>
       </div>
