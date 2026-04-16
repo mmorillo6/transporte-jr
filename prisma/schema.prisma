@@ -73,6 +73,7 @@ model Truck {
   updatedAt DateTime @updatedAt
 
   trips           Trip[]
+  payrollEntries  PayrollEntry[]
   expenses        Expense[]
   maintenanceLogs MaintenanceLog[]
   mechanicWork    MechanicWork[]
@@ -164,6 +165,7 @@ model PayrollEntry {
   periodId      String
   period        Period   @relation(fields: [periodId], references: [id])
   truckId       String
+  truck         Truck    @relation(fields: [truckId], references: [id])
   totalTons     Float    @default(0)
   grossAmount   Float    @default(0)   // facturación bruta del camión
   viaticos      Float    @default(0)
