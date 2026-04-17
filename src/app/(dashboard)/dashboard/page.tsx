@@ -12,7 +12,7 @@ async function getStats() {
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
   // ── Datos básicos ─────────────────────────────────────────────────────────
-  const [totalTrucks, activeTrucks, openAlerts, truckStatuses, openPeriod, cashEntries, loans] = await Promise.all([
+  const [totalTrucks, activeTrucks, openAlerts, truckStatuses, openPeriod, cashEntries, loans, cuentasPorCobrar] = await Promise.all([
     prisma.truck.count(),
     prisma.truck.count({ where: { active: true } }),
     prisma.maintenanceAlert.count({ where: { status: 'PENDING' } }),
@@ -22,6 +22,10 @@ async function getStats() {
     prisma.period.findFirst({ where: { status: 'OPEN' }, orderBy: { startDate: 'desc' } }),
     prisma.cashEntry.findMany({ orderBy: { date: 'desc' }, take: 200 }),
     prisma.loan.findMany({ where: { balance: { gt: 0 } } }),
+    prisma.cuentaPorCobrar.findMany({
+      where: { status: { not: 'PAID' } },
+      orderBy: { date: 'desc' },
+    }),
   ])
 
   // ── Caja ─────────────────────────────────────────────────────────────────
@@ -149,6 +153,32 @@ async function getStats() {
   }
   const nonOperational = truckStatuses.filter(t => t.status !== 'OPERATIONAL')
 
+  // Cuentas por cobrar por empresa
+  const cxcByClient = new Map<string, number>()
+  for (const c of cuentasPorCobrar) {
+    cxcByClient.set(c.clientName, (cxcByClient.get(c.clientName) ?? 0) + c.balance)
+  }
+  const totalPorCobrar = Array.from(cxcByClient.values()).reduce((s, v) => s + v, 0)
+
+  // Camiones de José en el período actual (para su cuenta personal)
+  const joseOwner = await prisma.owner.findFirst({ where: { id: 'owner-jose' } })
+  let joseTrucksPayroll: {
+    plate: string; driverName: string; grossAmount: number; netAmount: number; nprFee: number
+  }[] = []
+  if (openPeriod && joseOwner) {
+    const entries = await prisma.payrollEntry.findMany({
+      where: { periodId: openPeriod.id, truck: { ownerId: joseOwner.id } },
+      include: { truck: { include: { driver: { select: { name: true } } } } },
+    })
+    joseTrucksPayroll = entries.map(e => ({
+      plate:       e.truck.plate,
+      driverName:  e.truck.driver?.name ?? '—',
+      grossAmount: e.grossAmount,
+      netAmount:   e.netAmount,
+      nprFee:      e.nprFee,
+    }))
+  }
+
   return {
     totalTrucks, activeTrucks, openAlerts, openPeriod,
     balanceEfectivo, balanceUsdt, totalLoans,
@@ -156,6 +186,8 @@ async function getStats() {
     recentTrips, nonOperational, fleetCounts,
     periodTripCount: periodTrips.length,
     topTrucks,
+    cxcByClient, totalPorCobrar,
+    joseTrucksPayroll,
   }
 }
 
@@ -200,6 +232,30 @@ export default async function DashboardPage() {
           </Link>
         )}
       </div>
+
+      {/* ── Por cobrar — banner destacado ───────────────────────────────────── */}
+      {showFinancials && stats.totalPorCobrar > 0 && (
+        <div className="bg-zinc-900 border border-amber-500/25 rounded-2xl p-4">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-widest font-bold text-amber-500 mb-1">Por cobrar</p>
+              <p className="text-3xl font-extrabold text-amber-400">${stats.totalPorCobrar.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              <div className="flex gap-4 mt-2 flex-wrap">
+                {Array.from(stats.cxcByClient.entries()).map(([client, balance]) => (
+                  <span key={client} className="text-xs text-zinc-400">
+                    <span className="text-zinc-500">{client === 'AURUMIN' ? 'Aurumin' : 'Chino Peña'}: </span>
+                    <span className="text-white font-semibold">${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <Link href="/cuentas-por-cobrar"
+              className="flex items-center gap-2 text-sm bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 font-medium rounded-xl px-4 py-2.5 transition-colors flex-shrink-0">
+              Ver detalle →
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* ── Fila 1: KPIs principales ────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -330,6 +386,62 @@ export default async function DashboardPage() {
               <DashboardCharts data={[]} showFinancials={false} routeData={stats.routeData} mode="routes" />
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Cuenta de José (sus camiones este período) ──────────────────────── */}
+      {showFinancials && stats.joseTrucksPayroll.length > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+            <div>
+              <h2 className="text-white font-semibold text-sm">Cuenta — José Rodríguez</h2>
+              <p className="text-zinc-500 text-xs mt-0.5">Sus camiones en el período actual · neto = lo que le queda a él</p>
+            </div>
+            <Link href="/reportes"
+              className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 hover:text-white rounded-lg px-3 py-1.5 transition-colors">
+              Descargar completo →
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800 bg-zinc-800/30">
+                  <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs">Placa</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs">Chofer</th>
+                  <th className="text-right text-zinc-500 font-medium px-4 py-2.5 text-xs">Bruto</th>
+                  <th className="text-right text-zinc-500 font-medium px-4 py-2.5 text-xs">5% NPR</th>
+                  <th className="text-right text-zinc-500 font-medium px-4 py-2.5 text-xs">Neto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.joseTrucksPayroll.map((e, i) => (
+                  <tr key={e.plate} className={`border-b border-zinc-800/40 ${i % 2 === 1 ? 'bg-zinc-800/10' : ''}`}>
+                    <td className="px-4 py-2.5 font-mono text-white font-medium text-sm">{e.plate}</td>
+                    <td className="px-4 py-2.5 text-zinc-400 text-xs">{e.driverName}</td>
+                    <td className="px-4 py-2.5 text-right text-zinc-300 text-xs">${e.grossAmount.toFixed(2)}</td>
+                    <td className="px-4 py-2.5 text-right text-zinc-500 text-xs">${e.nprFee.toFixed(2)}</td>
+                    <td className={`px-4 py-2.5 text-right font-bold text-sm ${e.netAmount < 0 ? 'text-red-400' : 'text-amber-400'}`}>
+                      ${e.netAmount.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-zinc-700 bg-zinc-800/30">
+                  <td colSpan={2} className="px-4 py-2.5 text-white font-semibold text-xs">Total</td>
+                  <td className="px-4 py-2.5 text-right text-zinc-300 font-semibold text-xs">
+                    ${stats.joseTrucksPayroll.reduce((s, e) => s + e.grossAmount, 0).toFixed(2)}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-zinc-500 font-semibold text-xs">
+                    ${stats.joseTrucksPayroll.reduce((s, e) => s + e.nprFee, 0).toFixed(2)}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-bold text-amber-400">
+                    ${stats.joseTrucksPayroll.reduce((s, e) => s + e.netAmount, 0).toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       )}
 

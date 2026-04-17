@@ -285,6 +285,31 @@ export default function RelacionesClient({ defaultStart, defaultEnd }: { default
 
       {/* ── Formulario de período ─────────────────────────────────────────── */}
       <form onSubmit={handlePreview} className="print-hide bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+        {/* Cortes rápidos */}
+        <div className="flex gap-2 mb-3 flex-wrap">
+          {[0, -1].map(offset => {
+            const now = new Date()
+            const d = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+            const y = d.getFullYear(), m = d.getMonth()
+            const lastDay = new Date(y, m + 1, 0).getDate()
+            const pad = (n: number) => String(n).padStart(2, '0')
+            const q1s = `${y}-${pad(m + 1)}-01`, q1e = `${y}-${pad(m + 1)}-15`
+            const q2s = `${y}-${pad(m + 1)}-16`, q2e = `${y}-${pad(m + 1)}-${lastDay}`
+            const monthName = d.toLocaleString('es-VE', { month: 'short' })
+            return [
+              <button key={`${offset}-1`} type="button"
+                onClick={() => { setStartDate(q1s); setEndDate(q1e); setPreview(null) }}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${startDate === q1s && endDate === q1e ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600'}`}>
+                1–15 {monthName}
+              </button>,
+              <button key={`${offset}-2`} type="button"
+                onClick={() => { setStartDate(q2s); setEndDate(q2e); setPreview(null) }}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${startDate === q2s && endDate === q2e ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600'}`}>
+                16–{lastDay} {monthName}
+              </button>,
+            ]
+          })}
+        </div>
         <div className="flex items-end gap-4 flex-wrap">
           <div>
             <label className="block text-xs text-zinc-400 mb-1.5">Desde</label>

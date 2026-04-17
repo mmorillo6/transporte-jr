@@ -746,7 +746,7 @@ async function buildAuruminExcel(preview: RelacionPreview, abono: number, hasEst
     'Aurumin A 4km Desde la Entrada de El Callao, Vía Tumeremo Edo. Bolívar.', 'Planta Aurumin')
   for (const route of preview.byRoute) addRouteSheet(wb, route)
   addRelacionFinalSheet(wb, preview, abono)
-  addRelacionPorCarrosSheet(wb, preview)
+  if (preview.destinatario === 'JOSE') addRelacionPorCarrosSheet(wb, preview)
   if (hasEstadoCuenta) addEstadoCuentaSheet(wb, preview)
   return wb.xlsx.writeBuffer()
 }

@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createTruck, updateTruck, toggleTruckStatus, deleteTruck, createOwner, updateOwner, deleteOwner } from '@/app/actions/config'
@@ -66,6 +66,7 @@ export default function CamionesClient({
   const [showTruckForm, setShowTruckForm] = useState(false)
   const [editingTruck, setEditingTruck] = useState<Truck | null>(null)
   const [formPlate, setFormPlate] = useState('')
+  const editFormRef = useRef<HTMLDivElement>(null)
 
   // Auto-open form when coming from romana with a plate
   useEffect(() => {
@@ -76,6 +77,13 @@ export default function CamionesClient({
       setError('')
     }
   }, [nuevaPlaca, canEdit])
+
+  // Scroll to form when editing a truck
+  useEffect(() => {
+    if (editingTruck && editFormRef.current) {
+      editFormRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [editingTruck])
 
   // Owner form state
   const [showOwnerForm, setShowOwnerForm] = useState(false)
@@ -164,7 +172,7 @@ export default function CamionesClient({
           )}
 
           {(showTruckForm || editingTruck) && (
-            <div className="bg-zinc-900 border border-amber-500/20 rounded-2xl p-5">
+            <div ref={editFormRef} className="bg-zinc-900 border border-amber-500/20 rounded-2xl p-5">
               <h3 className="text-white font-semibold mb-4">{editingTruck ? 'Editar camión' : 'Nuevo camión'}</h3>
               <form key={editingTruck?.id ?? formPlate} onSubmit={handleTruckSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
