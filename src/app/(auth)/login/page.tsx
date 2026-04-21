@@ -25,7 +25,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo / Header */}
         <div className="flex justify-center mb-8">
-          <img src={LOGO_SRC} alt="Transporte José Rodríguez" className="h-20 w-auto" />
+          <img src={LOGO_SRC} alt="Transporte José Rodríguez" className="h-32 w-auto" />
         </div>
 
         {/* Form */}
