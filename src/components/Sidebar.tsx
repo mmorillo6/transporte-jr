@@ -47,21 +47,21 @@ export default function Sidebar({
           </button>
         ) : (
           <>
-            <div className="w-9 h-9 bg-amber-500 rounded-xl flex items-center justify-center flex-shrink-0">
-              <svg className="w-7 h-7" viewBox="0 0 100 100" fill="none">
-                <rect x="8" y="26" width="57" height="40" rx="4" fill="#1C1917"/>
-                <rect x="65" y="40" width="26" height="26" rx="4" fill="#1C1917"/>
-                <rect x="67" y="43" width="14" height="11" rx="2" fill="#F59E0B" fillOpacity="0.4"/>
-                <circle cx="24" cy="72" r="9" fill="#1C1917"/>
-                <circle cx="24" cy="72" r="4" fill="#F59E0B"/>
-                <circle cx="78" cy="72" r="9" fill="#1C1917"/>
-                <circle cx="78" cy="72" r="4" fill="#F59E0B"/>
-                <line x1="4" y1="82" x2="96" y2="82" stroke="#92400E" strokeWidth="3" strokeLinecap="round"/>
-                <circle cx="28" cy="22" r="4" fill="#FDE68A"/>
-                <circle cx="42" cy="20" r="4" fill="#FDE68A"/>
-                <circle cx="56" cy="20" r="4" fill="#FDE68A"/>
-              </svg>
-            </div>
+            <svg className="w-9 h-9 flex-shrink-0" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0" y="0" width="256" height="256" rx="54" fill="#F59E0B"/>
+              <g transform="translate(32, 70)">
+                <path d="M 14 100 L 14 44 Q 66 10 136 28 L 172 100 Z" fill="#FFFBEB"/>
+                <path d="M 172 100 L 172 48 L 214 48 L 232 78 L 232 100 Z" fill="#FFFBEB"/>
+                <rect x="180" y="56" width="26" height="14" rx="2" fill="#F59E0B"/>
+                <circle cx="52" cy="118" r="14" fill="#F59E0B" stroke="#FFFBEB" strokeWidth="6"/>
+                <circle cx="196" cy="118" r="14" fill="#F59E0B" stroke="#FFFBEB" strokeWidth="6"/>
+                <line x1="-8" y1="134" x2="248" y2="134" stroke="#FFFBEB" strokeWidth="5" strokeLinecap="round"/>
+                <circle cx="58" cy="32" r="4.5" fill="#FCD34D"/>
+                <circle cx="84" cy="20" r="5.5" fill="#FDE68A"/>
+                <circle cx="108" cy="27" r="4.5" fill="#FCD34D"/>
+                <circle cx="128" cy="21" r="4.5" fill="#FDE68A"/>
+              </g>
+            </svg>
             <div className="flex-1 min-w-0">
               <p className="text-white font-semibold text-sm leading-tight">Transporte JR</p>
               <p className="text-zinc-500 text-xs">Gestión operativa</p>
