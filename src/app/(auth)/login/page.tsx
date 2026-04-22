@@ -25,19 +25,21 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo / Header */}
         <div className="flex items-center justify-center gap-5 mb-8">
-          <svg className="w-24 h-24 flex-shrink-0" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+          <svg width="96" height="96" viewBox="0 0 256 256" style={{overflow:'visible'}} xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
             <rect x="0" y="0" width="256" height="256" rx="54" fill="#F59E0B"/>
-            <g transform="translate(32, 70)">
-              <path d="M 14 100 L 14 44 Q 66 10 136 28 L 172 100 Z" fill="#1C1917"/>
-              <path d="M 172 100 L 172 48 L 214 48 L 232 78 L 232 100 Z" fill="#1C1917"/>
-              <rect x="180" y="56" width="26" height="14" rx="2" fill="#F59E0B"/>
-              <circle cx="52" cy="118" r="14" fill="#1C1917" stroke="#F59E0B" strokeWidth="6"/>
-              <circle cx="196" cy="118" r="14" fill="#1C1917" stroke="#F59E0B" strokeWidth="6"/>
-              <line x1="-8" y1="134" x2="248" y2="134" stroke="#F59E0B" strokeWidth="5" strokeLinecap="round"/>
-              <circle cx="58" cy="32" r="4.5" fill="#FCD34D"/>
-              <circle cx="84" cy="20" r="5.5" fill="#FDE68A"/>
-              <circle cx="108" cy="27" r="4.5" fill="#FCD34D"/>
-              <circle cx="128" cy="21" r="4.5" fill="#FDE68A"/>
+            <g transform="translate(28, 65)">
+              <path d="M 12 106 L 12 42 Q 68 4 142 24 L 178 106 Z" fill="#1C1917" stroke="#F59E0B" strokeWidth="4"/>
+              <path d="M 178 106 L 178 46 L 220 46 L 238 78 L 238 106 Z" fill="#1C1917" stroke="#F59E0B" strokeWidth="4"/>
+              <rect x="186" y="54" width="28" height="15" rx="2" fill="#F59E0B"/>
+              <circle cx="56" cy="122" r="17" fill="#F59E0B"/>
+              <circle cx="56" cy="122" r="8" fill="#1C1917"/>
+              <circle cx="210" cy="122" r="17" fill="#F59E0B"/>
+              <circle cx="210" cy="122" r="8" fill="#1C1917"/>
+              <line x1="-35" y1="139" x2="272" y2="139" stroke="#F59E0B" strokeWidth="6" strokeLinecap="round"/>
+              <circle cx="64" cy="30" r="5" fill="#FCD34D"/>
+              <circle cx="90" cy="18" r="6" fill="#FDE68A"/>
+              <circle cx="114" cy="24" r="5" fill="#FCD34D"/>
+              <circle cx="136" cy="18" r="5" fill="#FDE68A"/>
             </g>
           </svg>
           <div className="leading-snug">
