@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logoutAction } from '@/app/actions/auth'
 import type { SessionPayload } from '@/lib/session'
-import { LogoIcon } from '@/components/LogoIcon'
 
 const navItems = [
   { href: '/mi-cuenta',      label: 'Mi cuenta',      icon: '◯', roles: ['CHOFER', 'MECANICO'] },
@@ -41,11 +40,11 @@ export default function Sidebar({
       <div className={`flex items-center border-b border-zinc-800 h-16 flex-shrink-0 ${collapsed ? 'justify-center px-0' : 'gap-3 px-4'}`}>
         {collapsed ? (
           <button onClick={onToggle} title="Expandir menú" className="flex-shrink-0">
-            <LogoIcon size={36} />
+            <img src="/assets/logos/logo-icon-64.png" alt="Logo" width={36} height={36} className="rounded-lg" />
           </button>
         ) : (
           <>
-            <LogoIcon size={36} className="flex-shrink-0" />
+            <img src="/assets/logos/logo-icon-64.png" alt="Logo" width={36} height={36} className="rounded-lg flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-white font-semibold text-sm leading-tight">Transporte JR</p>
               <p className="text-zinc-500 text-xs">Gestión operativa</p>

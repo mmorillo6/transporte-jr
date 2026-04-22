@@ -1,7 +1,6 @@
 'use client'
 import { useState } from 'react'
 import { loginAction } from '@/app/actions/auth'
-import { LogoIcon } from '@/components/LogoIcon'
 
 export default function LoginPage() {
   const [error, setError] = useState('')
@@ -25,12 +24,12 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
 
         {/* Logo / Header */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-5 mb-10">
-          <LogoIcon size={100} className="flex-shrink-0" />
-          <div className="text-center sm:text-left leading-tight">
-            <p className="text-white font-bold text-3xl sm:text-4xl tracking-tight">Transporte</p>
-            <p className="text-amber-400 font-bold text-3xl sm:text-4xl tracking-tight">José Rodríguez</p>
-          </div>
+        <div className="flex justify-center mb-10">
+          <img
+            src="/assets/logos/logo-full.png"
+            alt="Transporte José Rodríguez"
+            className="w-full max-w-[480px] h-auto"
+          />
         </div>
 
         {/* Form */}
