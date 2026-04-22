@@ -40,7 +40,7 @@ export default function Sidebar({
       <div className={`flex items-center border-b border-zinc-800 h-16 flex-shrink-0 ${collapsed ? 'justify-center px-0' : 'gap-3 px-4'}`}>
         {collapsed ? (
           <button onClick={onToggle} title="Expandir menú" className="flex-shrink-0">
-            <img src="/assets/logos/logo-icon-64.png" alt="Logo" width={36} height={36} className="rounded-lg" />
+            <img src="/assets/logos/logo-icon.png" alt="Logo" width={36} height={36} className="rounded-lg" />
           </button>
         ) : (
           <>
