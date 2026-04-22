@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logoutAction } from '@/app/actions/auth'
 import type { SessionPayload } from '@/lib/session'
+import { LogoIcon } from '@/components/LogoIcon'
 
 const navItems = [
   { href: '/mi-cuenta',      label: 'Mi cuenta',      icon: '◯', roles: ['CHOFER', 'MECANICO'] },
@@ -39,29 +40,12 @@ export default function Sidebar({
       {/* Logo / Toggle */}
       <div className={`flex items-center border-b border-zinc-800 h-16 flex-shrink-0 ${collapsed ? 'justify-center px-0' : 'gap-3 px-4'}`}>
         {collapsed ? (
-          <button onClick={onToggle} title="Expandir menú"
-            className="w-9 h-9 bg-amber-500 rounded-xl flex items-center justify-center hover:bg-amber-400 transition-colors flex-shrink-0">
-            <svg className="w-4 h-4 text-zinc-950" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
+          <button onClick={onToggle} title="Expandir menú" className="flex-shrink-0">
+            <LogoIcon size={36} />
           </button>
         ) : (
           <>
-            <svg className="w-9 h-9 flex-shrink-0" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
-              <rect x="0" y="0" width="256" height="256" rx="54" fill="#F59E0B"/>
-              <g transform="translate(32, 70)">
-                <path d="M 14 100 L 14 44 Q 66 10 136 28 L 172 100 Z" fill="#FFFBEB"/>
-                <path d="M 172 100 L 172 48 L 214 48 L 232 78 L 232 100 Z" fill="#FFFBEB"/>
-                <rect x="180" y="56" width="26" height="14" rx="2" fill="#F59E0B"/>
-                <circle cx="52" cy="118" r="14" fill="#F59E0B" stroke="#FFFBEB" strokeWidth="6"/>
-                <circle cx="196" cy="118" r="14" fill="#F59E0B" stroke="#FFFBEB" strokeWidth="6"/>
-                <line x1="-8" y1="134" x2="248" y2="134" stroke="#FFFBEB" strokeWidth="5" strokeLinecap="round"/>
-                <circle cx="58" cy="32" r="4.5" fill="#FCD34D"/>
-                <circle cx="84" cy="20" r="5.5" fill="#FDE68A"/>
-                <circle cx="108" cy="27" r="4.5" fill="#FCD34D"/>
-                <circle cx="128" cy="21" r="4.5" fill="#FDE68A"/>
-              </g>
-            </svg>
+            <LogoIcon size={36} className="flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-white font-semibold text-sm leading-tight">Transporte JR</p>
               <p className="text-zinc-500 text-xs">Gestión operativa</p>
