@@ -25,22 +25,28 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo / Header */}
         <div className="flex items-center justify-center gap-5 mb-8">
-          <svg width="96" height="96" viewBox="0 0 256 256" style={{overflow:'visible'}} xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+          <svg width="112" height="112" viewBox="-20 0 296 256" style={{overflow:'visible'}} xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+            {/* Fondo naranja redondeado */}
             <rect x="0" y="0" width="256" height="256" rx="54" fill="#F59E0B"/>
-            <g transform="translate(28, 65)">
-              <path d="M 12 106 L 12 42 Q 68 4 142 24 L 178 106 Z" fill="#1C1917" stroke="#F59E0B" strokeWidth="4"/>
-              <path d="M 178 106 L 178 46 L 220 46 L 238 78 L 238 106 Z" fill="#1C1917" stroke="#F59E0B" strokeWidth="4"/>
-              <rect x="186" y="54" width="28" height="15" rx="2" fill="#F59E0B"/>
-              <circle cx="56" cy="122" r="17" fill="#F59E0B"/>
-              <circle cx="56" cy="122" r="8" fill="#1C1917"/>
-              <circle cx="210" cy="122" r="17" fill="#F59E0B"/>
-              <circle cx="210" cy="122" r="8" fill="#1C1917"/>
-              <line x1="-35" y1="139" x2="272" y2="139" stroke="#F59E0B" strokeWidth="6" strokeLinecap="round"/>
-              <circle cx="64" cy="30" r="5" fill="#FCD34D"/>
-              <circle cx="90" cy="18" r="6" fill="#FDE68A"/>
-              <circle cx="114" cy="24" r="5" fill="#FCD34D"/>
-              <circle cx="136" cy="18" r="5" fill="#FDE68A"/>
-            </g>
+            {/* Cuerpo del volteo (caja + carga) */}
+            <path d="M 20 172 L 20 68 Q 72 22 148 50 L 186 172 Z" fill="#1C1917"/>
+            {/* Cabina */}
+            <path d="M 186 172 L 186 68 L 238 68 L 238 172 Z" fill="#1C1917"/>
+            {/* Ventana cabina */}
+            <rect x="194" y="80" width="32" height="18" rx="3" fill="#F59E0B"/>
+            {/* Rueda izquierda: naranja con hueco oscuro */}
+            <circle cx="68" cy="194" r="22" fill="#F59E0B"/>
+            <circle cx="68" cy="194" r="10" fill="#1C1917"/>
+            {/* Rueda derecha */}
+            <circle cx="212" cy="194" r="22" fill="#F59E0B"/>
+            <circle cx="212" cy="194" r="10" fill="#1C1917"/>
+            {/* Linea de piso — sale fuera del cuadro */}
+            <line x1="-18" y1="216" x2="274" y2="216" stroke="#F59E0B" strokeWidth="7" strokeLinecap="round"/>
+            {/* Luces encima de la carga */}
+            <circle cx="72" cy="40" r="5" fill="#FDE68A"/>
+            <circle cx="96" cy="28" r="6" fill="#FCD34D"/>
+            <circle cx="120" cy="34" r="5" fill="#FDE68A"/>
+            <circle cx="143" cy="27" r="5" fill="#FCD34D"/>
           </svg>
           <div className="leading-snug">
             <p className="text-white font-bold text-4xl tracking-tight">Transporte</p>
