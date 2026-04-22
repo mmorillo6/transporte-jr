@@ -24,11 +24,25 @@ export default function LoginPage() {
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Logo / Header */}
-        <div className="flex items-center justify-center gap-4 mb-8">
-          <img src={LOGO_SRC} alt="Transporte José Rodríguez" className="h-20 w-20 flex-shrink-0" />
-          <div className="leading-tight">
-            <p className="text-white font-bold text-3xl tracking-tight">Transporte</p>
-            <p className="text-amber-500 font-bold text-3xl tracking-tight">José Rodríguez</p>
+        <div className="flex items-center justify-center gap-5 mb-8">
+          <svg className="w-24 h-24 flex-shrink-0" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="256" height="256" rx="54" fill="#F59E0B"/>
+            <g transform="translate(32, 70)">
+              <path d="M 14 100 L 14 44 Q 66 10 136 28 L 172 100 Z" fill="#1C1917"/>
+              <path d="M 172 100 L 172 48 L 214 48 L 232 78 L 232 100 Z" fill="#1C1917"/>
+              <rect x="180" y="56" width="26" height="14" rx="2" fill="#F59E0B"/>
+              <circle cx="52" cy="118" r="14" fill="#1C1917" stroke="#F59E0B" strokeWidth="6"/>
+              <circle cx="196" cy="118" r="14" fill="#1C1917" stroke="#F59E0B" strokeWidth="6"/>
+              <line x1="-8" y1="134" x2="248" y2="134" stroke="#F59E0B" strokeWidth="5" strokeLinecap="round"/>
+              <circle cx="58" cy="32" r="4.5" fill="#FCD34D"/>
+              <circle cx="84" cy="20" r="5.5" fill="#FDE68A"/>
+              <circle cx="108" cy="27" r="4.5" fill="#FCD34D"/>
+              <circle cx="128" cy="21" r="4.5" fill="#FDE68A"/>
+            </g>
+          </svg>
+          <div className="leading-snug">
+            <p className="text-white font-bold text-4xl tracking-tight">Transporte</p>
+            <p className="text-amber-500 font-bold text-4xl tracking-tight">José Rodríguez</p>
           </div>
         </div>
 
