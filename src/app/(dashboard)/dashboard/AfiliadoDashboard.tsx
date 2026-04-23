@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import AfiliadoChart from './AfiliadoChart'
 
 const fmt = (d: Date) =>
   new Date(d).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })
@@ -23,7 +24,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
           trucks: {
             where: { active: true },
             include: {
-              driver: { select: { name: true } },
+              driver: { select: { id: true, name: true } },
               status: { select: { status: true } },
               _count: { select: { trips: true } },
             },
@@ -62,8 +63,11 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
     orderBy: { startDate: 'desc' },
   })
 
+  // Drivers for loan lookup
+  const driverNames = owner.trucks.map(t => (t as any).driver?.name).filter(Boolean)
+
   // Viajes del período actual para estos camiones
-  const [periodTrips, recentTrips, payrollHistory] = await Promise.all([
+  const [periodTrips, recentTrips, payrollHistory, maintenanceAlerts, driverLoans] = await Promise.all([
     openPeriod && truckIds.length > 0
       ? prisma.trip.findMany({
           where: { truckId: { in: truckIds }, periodId: openPeriod.id },
@@ -89,6 +93,22 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
             period: { select: { id: true, startDate: true, endDate: true, status: true } },
             truck: { select: { plate: true } },
           },
+        })
+      : Promise.resolve([]),
+
+    // Alertas de mantenimiento de sus camiones
+    truckIds.length > 0
+      ? prisma.maintenanceAlert.findMany({
+          where: { truckId: { in: truckIds }, status: 'PENDING' },
+          include: { truck: { select: { plate: true } } },
+          orderBy: { createdAt: 'desc' },
+        })
+      : Promise.resolve([]),
+
+    // Préstamos pendientes de sus choferes
+    driverNames.length > 0
+      ? prisma.loan.findMany({
+          where: { balance: { gt: 0 }, driverName: { in: driverNames } },
         })
       : Promise.resolve([]),
   ])
@@ -132,6 +152,15 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
     tripsByTruck.set(t.truckId, (tripsByTruck.get(t.truckId) ?? 0) + 1)
   }
 
+  // Comparativo por camión: período actual vs anterior
+  const currentPeriodId  = periodHistory[0]?.period.id
+  const previousPeriodId = periodHistory[1]?.period.id
+  const truckComparison = owner.trucks.map(truck => {
+    const curr = payrollHistory.find(e => e.truckId === truck.id && e.periodId === currentPeriodId)
+    const prev = payrollHistory.find(e => e.truckId === truck.id && e.periodId === previousPeriodId)
+    return { truck, curr, prev }
+  })
+
   // Desglose por cliente en el período actual
   const byClient = new Map<string, { trips: number; tons: number; amount: number }>()
   for (const t of periodTrips) {
@@ -144,6 +173,15 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
     })
   }
   const clientBreakdown = Array.from(byClient.entries()).sort((a, b) => b[1].amount - a[1].amount)
+
+  // Datos para la gráfica (orden cronológico)
+  const chartData = [...periodHistory]
+    .reverse()
+    .map(pg => ({
+      label: new Date(pg.period.startDate).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' }),
+      bruto: pg.grossAmount,
+      neto:  pg.netAmount,
+    }))
 
   return (
     <div className="space-y-5">
@@ -256,6 +294,112 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         )}
       </div>
 
+      {/* 1. Gráfica de ingresos por período */}
+      {chartData.length > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-zinc-800">
+            <h2 className="text-white font-semibold text-sm">Ingresos por período</h2>
+            <p className="text-zinc-500 text-xs mt-0.5">Bruto vs neto — últimos {chartData.length} períodos</p>
+          </div>
+          <div className="px-4 py-4">
+            <AfiliadoChart data={chartData} />
+          </div>
+        </div>
+      )}
+
+      {/* 2. Comparativo por camión */}
+      {truckComparison.some(tc => tc.curr || tc.prev) && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-zinc-800">
+            <h2 className="text-white font-semibold text-sm">Comparativo por camión</h2>
+            <p className="text-zinc-500 text-xs mt-0.5">Período actual vs anterior</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs">Placa</th>
+                  <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs">Chofer</th>
+                  <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs">Neto actual</th>
+                  <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs">Neto anterior</th>
+                  <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs">Diferencia</th>
+                </tr>
+              </thead>
+              <tbody>
+                {truckComparison.map(({ truck, curr, prev }) => {
+                  const diff = (curr?.netAmount ?? 0) - (prev?.netAmount ?? 0)
+                  return (
+                    <tr key={truck.id} className="border-b border-zinc-800/50 last:border-0">
+                      <td className="px-4 py-3 text-white font-mono font-semibold text-xs">{truck.plate}</td>
+                      <td className="px-4 py-3 text-zinc-400 text-xs">{truck.driver?.name ?? '—'}</td>
+                      <td className="px-4 py-3 text-right text-amber-400 font-semibold text-xs">
+                        {curr ? `$${curr.netAmount.toFixed(0)}` : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right text-zinc-400 text-xs">
+                        {prev ? `$${prev.netAmount.toFixed(0)}` : '—'}
+                      </td>
+                      <td className={`px-4 py-3 text-right font-semibold text-xs ${diff > 0 ? 'text-emerald-400' : diff < 0 ? 'text-red-400' : 'text-zinc-500'}`}>
+                        {curr && prev ? `${diff > 0 ? '+' : ''}$${diff.toFixed(0)}` : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Alertas de mantenimiento */}
+      {maintenanceAlerts.length > 0 && (
+        <div className="bg-red-500/5 border border-red-500/20 rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-red-500/20 flex items-center gap-2">
+            <span className="text-red-400 text-base">⚠</span>
+            <h2 className="text-white font-semibold text-sm">Alertas de mantenimiento</h2>
+            <span className="ml-auto text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full">{maintenanceAlerts.length}</span>
+          </div>
+          <div className="divide-y divide-red-500/10">
+            {maintenanceAlerts.map(alert => (
+              <div key={alert.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-mono text-sm font-semibold">{alert.truck.plate}</span>
+                    <span className="text-red-300 text-xs">{alert.type.replace(/_/g, ' ')}</span>
+                  </div>
+                  <p className="text-zinc-500 text-xs mt-0.5">Vence: {new Date(alert.dueDate).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })}</p>
+                </div>
+                <span className="text-zinc-600 text-xs whitespace-nowrap">
+                  {new Date(alert.createdAt).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 4. Préstamos pendientes de choferes */}
+      {driverLoans.length > 0 && (
+        <div className="bg-zinc-900 border border-amber-500/20 rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-amber-500/20 flex items-center gap-2">
+            <h2 className="text-white font-semibold text-sm">Préstamos activos — choferes</h2>
+            <span className="ml-auto text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full">
+              ${driverLoans.reduce((s, l) => s + l.balance, 0).toFixed(0)} pendiente
+            </span>
+          </div>
+          <div className="divide-y divide-zinc-800/50">
+            {driverLoans.map(loan => (
+              <div key={loan.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-white text-sm font-medium">{loan.driverName}</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">Descuento: ${loan.deductAmount}/período</p>
+                </div>
+                <p className="text-amber-400 font-semibold text-sm">${loan.balance.toFixed(0)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Desglose por cliente — período actual */}
       {clientBreakdown.length > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
@@ -286,13 +430,11 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
       {/* Historial de nómina + Últimos viajes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* Historial de nómina */}
+        {/* 5. Historial de nómina con enlace a relación completa */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
             <h2 className="text-white font-semibold text-sm">Historial de pagos</h2>
-            <Link href="/nomina" className="text-zinc-500 hover:text-amber-400 text-xs transition-colors">
-              Ver todos →
-            </Link>
+            <Link href="/nomina" className="text-zinc-500 hover:text-amber-400 text-xs transition-colors">Ver todos →</Link>
           </div>
           {periodHistory.length === 0 ? (
             <p className="text-zinc-500 text-sm text-center py-10">Sin nóminas registradas</p>
@@ -303,9 +445,9 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                   <tr className="border-b border-zinc-800">
                     <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs">Período</th>
                     <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs">Ton</th>
-                    <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs">Bruto</th>
                     <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs">Neto</th>
                     <th className="text-center text-zinc-500 font-medium px-4 py-3 text-xs">Estado</th>
+                    <th className="text-center text-zinc-500 font-medium px-4 py-3 text-xs">Ver</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -315,16 +457,15 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                         {fmt(pg.period.startDate)} — {fmt(pg.period.endDate)}
                       </td>
                       <td className="px-4 py-3 text-right text-zinc-400 text-xs">{pg.tons.toFixed(1)}</td>
-                      <td className="px-4 py-3 text-right text-zinc-300 text-xs">${pg.grossAmount.toFixed(0)}</td>
                       <td className="px-4 py-3 text-right text-amber-400 font-semibold text-xs">${pg.netAmount.toFixed(0)}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                          pg.period.status === 'CLOSED'
-                            ? 'text-emerald-400 bg-emerald-400/10'
-                            : 'text-amber-400 bg-amber-400/10'
-                        }`}>
-                          {pg.period.status === 'CLOSED' ? 'Cerrado' : 'Abierto'}
-                        </span>
+                          pg.period.status === 'CLOSED' ? 'text-emerald-400 bg-emerald-400/10' : 'text-amber-400 bg-amber-400/10'
+                        }`}>{pg.period.status === 'CLOSED' ? 'Cerrado' : 'Abierto'}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Link href={`/nomina/${pg.period.id}`}
+                          className="text-zinc-500 hover:text-amber-400 text-xs transition-colors">→</Link>
                       </td>
                     </tr>
                   ))}
@@ -334,38 +475,56 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
           )}
         </div>
 
-        {/* Últimos viajes */}
+        {/* 6. Historial completo de viajes */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-zinc-800">
+          <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
             <h2 className="text-white font-semibold text-sm">Últimos viajes</h2>
+            <span className="text-zinc-600 text-xs">{recentTrips.length} más recientes</span>
           </div>
           {recentTrips.length === 0 ? (
             <p className="text-zinc-500 text-sm text-center py-10">Sin viajes registrados</p>
           ) : (
-            <div className="divide-y divide-zinc-800/50">
-              {recentTrips.map(trip => (
-                <div key={trip.id} className="px-4 py-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-white text-sm font-mono font-semibold">{trip.truck.plate}</span>
-                      <span className="text-zinc-500 text-xs truncate">{trip.route.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                        trip.route.clientName === 'LUIS PEÑA'
-                          ? 'bg-blue-500/10 text-blue-400'
-                          : 'bg-amber-500/10 text-amber-400'
-                      }`}>{trip.route.clientName}</span>
-                    </div>
-                    <p className="text-zinc-600 text-xs mt-0.5">{fmt(trip.date)}</p>
-                  </div>
-                  {trip.netWeightKg && (
-                    <p className="text-zinc-300 text-xs font-mono flex-shrink-0">
-                      {(trip.netWeightKg / 1000).toFixed(3)} t
-                    </p>
-                  )}
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-800">
+                    <th className="text-left text-zinc-500 font-medium px-4 py-2 text-xs">Fecha</th>
+                    <th className="text-left text-zinc-500 font-medium px-4 py-2 text-xs">Placa</th>
+                    <th className="text-left text-zinc-500 font-medium px-4 py-2 text-xs">Ruta</th>
+                    <th className="text-right text-zinc-500 font-medium px-4 py-2 text-xs">Ton</th>
+                    <th className="text-right text-zinc-500 font-medium px-4 py-2 text-xs">Monto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentTrips.map(trip => (
+                    <tr key={trip.id} className="border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/20 transition-colors">
+                      <td className="px-4 py-2 text-zinc-500 text-xs whitespace-nowrap">{fmt(trip.date)}</td>
+                      <td className="px-4 py-2 text-white font-mono font-semibold text-xs">{trip.truck.plate}</td>
+                      <td className="px-4 py-2 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-zinc-400 truncate max-w-[100px]">{trip.route.name}</span>
+                          <span className={`text-[9px] px-1 py-0.5 rounded font-medium flex-shrink-0 ${
+                            trip.route.clientName === 'LUIS PEÑA' ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'
+                          }`}>{trip.route.clientName === 'LUIS PEÑA' ? 'LP' : 'AU'}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-right text-zinc-400 text-xs">
+                        {trip.netWeightKg ? (trip.netWeightKg / 1000).toFixed(2) : '—'}
+                      </td>
+                      <td className="px-4 py-2 text-right text-amber-400 font-semibold text-xs">
+                        ${trip.amount.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
+          <div className="px-5 py-3 border-t border-zinc-800">
+            <Link href="/nomina" className="text-zinc-500 hover:text-amber-400 text-xs transition-colors">
+              Ver relación completa en Nómina →
+            </Link>
+          </div>
         </div>
 
       </div>
