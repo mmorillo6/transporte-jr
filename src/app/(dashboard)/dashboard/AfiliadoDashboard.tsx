@@ -461,7 +461,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                       <td className="px-4 py-3 text-center">
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                           pg.period.status === 'CLOSED' ? 'text-emerald-400 bg-emerald-400/10' : 'text-amber-400 bg-amber-400/10'
-                        }`}>{pg.period.status === 'CLOSED' ? 'Cerrado' : 'Abierto'}</span>
+                        }`}>{pg.period.status === 'CLOSED' ? 'Pagado' : 'En curso'}</span>
                       </td>
                       <td className="px-4 py-3 text-center">
                         <Link href={`/nomina/${pg.period.id}`}
