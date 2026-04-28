@@ -2,8 +2,8 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { parseRomana, confirmarImport } from '@/app/actions/importarRomana'
-import type { RomanaPreview, RomanaTrip } from '@/app/actions/importarRomana'
+import { parseRomana, confirmarImport, crearRutaDesdeRomana } from '@/app/actions/importarRomana'
+import type { RomanaPreview, RomanaTrip, UnknownProveedorRow } from '@/app/actions/importarRomana'
 
 // ─── Utilidades de similitud de placas ────────────────────────────────────────
 
@@ -81,6 +81,7 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
     const file = e.target.files?.[0]
     if (!file) return
     setLoading(true); setError(''); setPreview(null); setResultado(null); setIgnorarDuplicado(false)
+    setProveedorClassifications({}); setProveedorMode({}); setRutaForms({}); setNewRoutes([])
     try {
       const base64 = await new Promise<string>((res, rej) => {
         const reader = new FileReader()
@@ -110,7 +111,9 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
         }
         return trip
       })
-      const res = await confirmarImport(tripsConRemapeo, openPeriodId)
+      // Incluir viajes de proveedores clasificados como horario
+      const todosLosViajes = [...tripsConRemapeo, ...resolvedUnknownTrips]
+      const res = await confirmarImport(todosLosViajes, openPeriodId)
       setResultado(res)
       router.refresh()
     } catch (e: unknown) {
@@ -129,6 +132,95 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
   const [conductorMappings, setConductorMappings] = useState<Record<string, string>>({})
   const [conductoresSugerRechazadas, setConductoresSugerRechazadas] = useState<Set<string>>(new Set())
   const [ignorarDuplicado, setIgnorarDuplicado] = useState(false)
+  // proveedorClassifications: proveedor → routeId (ruta existente o recién creada)
+  const [proveedorClassifications, setProveedorClassifications] = useState<Record<string, string>>({})
+  // proveedorMode: qué opción seleccionó el encargado ('mine' | 'hourly') → muestra el formulario
+  const [proveedorMode, setProveedorMode] = useState<Record<string, 'mine' | 'hourly'>>({})
+  // rutas recién creadas desde el formulario inline
+  const [newRoutes, setNewRoutes] = useState<{ id: string; name: string; rate: number; rateType: string }[]>([])
+  // estado del formulario inline por proveedor
+  type RutaForm = {
+    name: string; rateType: 'PER_TON' | 'PER_TRIP'
+    rate: string; driverWage: string; fuelLitersPerTrip: string
+    bidirectional: boolean; hasViatico: boolean
+    viaticoSingle: string; viaticoDouble: string
+    saving: boolean; error: string
+  }
+  const [rutaForms, setRutaForms] = useState<Record<string, RutaForm>>({})
+
+  function initForm(proveedor: string, mode: 'mine' | 'hourly') {
+    setProveedorMode(prev => ({ ...prev, [proveedor]: mode }))
+    setRutaForms(prev => ({
+      ...prev,
+      [proveedor]: {
+        name: mode === 'hourly' ? `DIAS INTERNOS (${proveedor})` : proveedor,
+        rateType: mode === 'hourly' ? 'PER_TRIP' : 'PER_TON',
+        rate: '', driverWage: '', fuelLitersPerTrip: '',
+        bidirectional: false, hasViatico: false,
+        viaticoSingle: '', viaticoDouble: '',
+        saving: false, error: '',
+      },
+    }))
+  }
+
+  function updateForm(proveedor: string, patch: Partial<RutaForm>) {
+    setRutaForms(prev => ({ ...prev, [proveedor]: { ...prev[proveedor], ...patch } }))
+  }
+
+  async function submitRutaForm(proveedor: string) {
+    const f = rutaForms[proveedor]
+    if (!f) return
+    updateForm(proveedor, { saving: true, error: '' })
+    try {
+      const route = await crearRutaDesdeRomana({
+        name:              f.name.trim(),
+        rateType:          f.rateType,
+        rate:              parseFloat(f.rate) || 0,
+        driverWage:        parseFloat(f.driverWage) || 0,
+        fuelLitersPerTrip: parseFloat(f.fuelLitersPerTrip) || 0,
+        bidirectional:     f.bidirectional,
+        hasViatico:        f.hasViatico,
+        viaticoSingle:     parseFloat(f.viaticoSingle) || 0,
+        viaticoDouble:     parseFloat(f.viaticoDouble) || 0,
+      })
+      setNewRoutes(prev => [...prev, route])
+      setProveedorClassifications(prev => ({ ...prev, [proveedor]: route.id }))
+      updateForm(proveedor, { saving: false })
+    } catch (e: unknown) {
+      updateForm(proveedor, { saving: false, error: e instanceof Error ? e.message : 'Error al crear la ruta' })
+    }
+  }
+
+  // Todas las rutas disponibles (existentes + recién creadas)
+  const allRoutes = [...(preview?.diasInternosRoutes ?? []), ...newRoutes]
+
+  function resolveUnknownRows(rows: UnknownProveedorRow[], routeId: string): RomanaTrip[] {
+    const route = allRoutes.find(r => r.id === routeId)
+    if (!route) return []
+    return rows.filter(row => !row.duplicate).map(row => ({
+      ...row,
+      routeName: route.name,
+      routeId: route.id,
+      rateType: route.rateType,
+      rate: route.rate,
+      amount: route.rateType === 'PER_TON'
+        ? Math.round((row.netWeightKg / 1000) * route.rate * 100) / 100
+        : route.rate,
+      clientLabel: 'INTERNO',
+    }))
+  }
+
+  const resolvedUnknownTrips: RomanaTrip[] = preview
+    ? preview.unknownProveedores.flatMap(up => {
+        const cls = proveedorClassifications[up.name]
+        if (!cls) return []
+        return resolveUnknownRows(up.rows, cls)
+      })
+    : []
+
+  const unknownPendientes = preview
+    ? preview.unknownProveedores.filter(up => !proveedorClassifications[up.name]).length
+    : 0
 
   return (
     <div className="space-y-6">
@@ -596,11 +688,207 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
             </div>
           )}
 
+          {/* Proveedores desconocidos */}
+          {preview.unknownProveedores.length > 0 && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl px-4 py-4 space-y-3">
+              <div>
+                <p className="text-yellow-400 text-sm font-medium">
+                  {preview.unknownProveedores.length} {preview.unknownProveedores.length === 1 ? 'proveedor nuevo' : 'proveedores nuevos'} detectados en el archivo
+                </p>
+                <p className="text-zinc-500 text-xs mt-0.5">
+                  No están registrados en el sistema. Defínelos para que la nómina calcule correctamente.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {preview.unknownProveedores.map(up => {
+                  const cls    = proveedorClassifications[up.name]
+                  const mode   = proveedorMode[up.name]
+                  const f      = rutaForms[up.name]
+                  const resolved = cls ? allRoutes.find(r => r.id === cls) : null
+                  const newCount = up.rows.filter(r => !r.duplicate).length
+
+                  return (
+                    <div key={up.name} className={`border rounded-xl p-3 space-y-3 transition-colors ${
+                      resolved ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-zinc-900/60 border-yellow-500/20'
+                    }`}>
+                      {/* Encabezado */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-white font-medium text-sm">{up.name}</span>
+                        <span className="text-zinc-500 text-xs">· {up.count} {up.count === 1 ? 'viaje' : 'viajes'}</span>
+                        {newCount < up.count && <span className="text-zinc-600 text-xs">({newCount} nuevos)</span>}
+                        {resolved && (
+                          <span className="text-emerald-400 text-xs font-medium ml-auto">
+                            ✓ ruta creada: {resolved.name}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Clasificado → solo cambiar */}
+                      {resolved ? (
+                        <button
+                          onClick={() => {
+                            setProveedorClassifications(prev => { const n = { ...prev }; delete n[up.name]; return n })
+                            setProveedorMode(prev => { const n = { ...prev }; delete n[up.name]; return n })
+                          }}
+                          className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors"
+                        >
+                          Cambiar →
+                        </button>
+
+                      ) : !mode ? (
+                        /* Paso 1: elegir tipo */
+                        <div className="space-y-2">
+                          <p className="text-zinc-400 text-xs">¿Qué tipo de viaje es?</p>
+                          <div className="flex flex-wrap gap-2">
+                            <button onClick={() => initForm(up.name, 'mine')}
+                              className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors border border-amber-500/20">
+                              Mina nueva (por tonelada)
+                            </button>
+                            <button onClick={() => initForm(up.name, 'hourly')}
+                              className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors border border-blue-500/20">
+                              Viaje por horario (por viaje)
+                            </button>
+                          </div>
+                        </div>
+
+                      ) : f ? (
+                        /* Paso 2: formulario de ruta */
+                        <div className="space-y-3 pt-1">
+                          <p className="text-zinc-400 text-xs font-medium">
+                            {mode === 'mine' ? 'Datos de la mina nueva' : 'Datos del viaje por horario'}
+                          </p>
+
+                          <div className="grid grid-cols-1 gap-2.5">
+                            {/* Nombre */}
+                            <div>
+                              <label className="text-zinc-500 text-xs block mb-1">Nombre de la ruta</label>
+                              <input
+                                value={f.name}
+                                onChange={e => updateForm(up.name, { name: e.target.value })}
+                                className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2.5">
+                              {/* Tarifa */}
+                              <div>
+                                <label className="text-zinc-500 text-xs block mb-1">
+                                  Tarifa ({mode === 'mine' ? '$/ton' : '$/viaje'})
+                                </label>
+                                <input
+                                  type="number" min="0" step="0.01"
+                                  value={f.rate}
+                                  onChange={e => updateForm(up.name, { rate: e.target.value })}
+                                  placeholder="0.00"
+                                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                                />
+                              </div>
+                              {/* Sueldo chofer */}
+                              <div>
+                                <label className="text-zinc-500 text-xs block mb-1">Sueldo chofer ($/viaje)</label>
+                                <input
+                                  type="number" min="0" step="0.01"
+                                  value={f.driverWage}
+                                  onChange={e => updateForm(up.name, { driverWage: e.target.value })}
+                                  placeholder="0.00"
+                                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Gasoil */}
+                            <div>
+                              <label className="text-zinc-500 text-xs block mb-1">Litros gasoil por viaje</label>
+                              <input
+                                type="number" min="0" step="1"
+                                value={f.fuelLitersPerTrip}
+                                onChange={e => updateForm(up.name, { fuelLitersPerTrip: e.target.value })}
+                                placeholder="0"
+                                className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                              />
+                            </div>
+
+                            {/* Opcionales */}
+                            <div className="flex flex-wrap gap-4">
+                              {mode === 'mine' && (
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input type="checkbox" checked={f.bidirectional}
+                                    onChange={e => updateForm(up.name, { bidirectional: e.target.checked })}
+                                    className="accent-amber-500" />
+                                  <span className="text-zinc-400 text-xs">Bidireccional (tarifa × 2)</span>
+                                </label>
+                              )}
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={f.hasViatico}
+                                  onChange={e => updateForm(up.name, { hasViatico: e.target.checked })}
+                                  className="accent-amber-500" />
+                                <span className="text-zinc-400 text-xs">Tiene viático</span>
+                              </label>
+                            </div>
+
+                            {f.hasViatico && (
+                              <div className="grid grid-cols-2 gap-2.5">
+                                <div>
+                                  <label className="text-zinc-500 text-xs block mb-1">Viático sencillo ($)</label>
+                                  <input type="number" min="0" step="0.01" value={f.viaticoSingle}
+                                    onChange={e => updateForm(up.name, { viaticoSingle: e.target.value })}
+                                    placeholder="0.00"
+                                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+                                </div>
+                                <div>
+                                  <label className="text-zinc-500 text-xs block mb-1">Viático doble ($)</label>
+                                  <input type="number" min="0" step="0.01" value={f.viaticoDouble}
+                                    onChange={e => updateForm(up.name, { viaticoDouble: e.target.value })}
+                                    placeholder="0.00"
+                                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {f.error && <p className="text-red-400 text-xs">{f.error}</p>}
+
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => submitRutaForm(up.name)}
+                              disabled={f.saving || !f.name.trim() || !f.rate}
+                              className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-lg px-4 py-2 text-xs transition-colors"
+                            >
+                              {f.saving ? 'Guardando...' : 'Guardar ruta e incluir viajes'}
+                            </button>
+                            <button
+                              onClick={() => setProveedorMode(prev => { const n = { ...prev }; delete n[up.name]; return n })}
+                              className="text-zinc-500 hover:text-zinc-300 text-xs px-3 py-2 rounded-lg hover:bg-zinc-800 transition-colors"
+                            >
+                              Volver
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {unknownPendientes > 0 && (
+                <p className="text-yellow-500/70 text-xs">
+                  Define todos los proveedores antes de importar.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Acción */}
           <div className="flex gap-3">
-            <button onClick={handleImportar} disabled={saving || preview.newTrips === 0}
-              className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-xl px-5 py-2.5 text-sm transition-colors">
-              {saving ? 'Importando...' : `Importar ${preview.newTrips} viajes nuevos`}
+            <button
+              onClick={handleImportar}
+              disabled={saving || (preview.newTrips === 0 && resolvedUnknownTrips.length === 0) || unknownPendientes > 0}
+              className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-xl px-5 py-2.5 text-sm transition-colors"
+            >
+              {saving
+                ? 'Importando...'
+                : `Importar ${preview.newTrips + resolvedUnknownTrips.length} viajes nuevos`}
             </button>
             <button onClick={() => { setPreview(null); if (fileRef.current) fileRef.current.value = '' }}
               className="px-5 py-2.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl text-sm transition-colors border border-zinc-800">

@@ -36,47 +36,48 @@ async function main() {
 
   // ── Usuarios de acceso ───────────────────────────────────────────────────
   const pwAdmin = await hash('admin123')
-  const pwEnc   = await hash('fernando123')
+  const pwEnc   = await hash('Transporte2024!')
 
   await prisma.user.upsert({
     where: { email: 'admin@transportejr.com' },
-    update: {},
+    update: { password: pwAdmin },
     create: { email: 'admin@transportejr.com', name: 'José Rodríguez', password: pwAdmin, role: 'DUENO', ownerId: 'owner-jose' },
   })
   await prisma.user.upsert({
     where: { email: 'encargado@transportejr.com' },
-    update: {},
+    update: { password: pwEnc },
     create: { email: 'encargado@transportejr.com', name: 'Fernando Pérez', password: pwEnc, role: 'ENCARGADO' },
   })
   console.log('✓ 2 usuarios de acceso')
 
   // ── Choferes ─────────────────────────────────────────────────────────────
   const pwChofer = await hash('chofer123')
+  const pwLeo    = await hash('leorodriguez')
   const choferes = [
-    { email: 'michel.rojas@chofer.com',      name: 'MICHEL ROJAS' },
-    { email: 'naudy.gonzalez@chofer.com',     name: 'NAUDY GONZALEZ' },
-    { email: 'amandio.neto@chofer.com',       name: 'AMANDIO NETO' },
-    { email: 'richard.garcia@chofer.com',     name: 'RICHARD GARCIA' },
-    { email: 'leonardo.gutierrez@chofer.com', name: 'LEONARDO GUTIERREZ' },
-    { email: 'gustavo.carrasquel@chofer.com', name: 'GUSTAVO CARRASQUEL' },
-    { email: 'johan.linarez@chofer.com',      name: 'JOHAN LINAREZ' },
-    { email: 'joaquin.neto@chofer.com',       name: 'JOAQUIN NETO' },
-    { email: 'larry.narcise@chofer.com',      name: 'LARRY NARCISE' },
-    { email: 'marcos.castillo@chofer.com',    name: 'MARCOS CASTILLO' },
-    { email: 'alexander.pinango@chofer.com',  name: 'ALEXANDER PIÑANGO' },
-    { email: 'eduardo.garcia@chofer.com',     name: 'EDUARDO GARCIA' },
-    { email: 'jesus.bravo@chofer.com',        name: 'JESUS BRAVO' },
-    { email: 'juan.garcia@chofer.com',        name: 'JUAN GARCIA' },
-    { email: 'richard.rebolledo@chofer.com',  name: 'RICHARD REBOLLEDO' },
-    { email: 'esnaldo.mendoza@chofer.com',    name: 'ESNALDO MENDOZA' },
-    { email: 'miguel.gonzalez@chofer.com',    name: 'MIGUEL GONZALEZ' },
+    { email: 'michel.rojas@chofer.com',      name: 'MICHEL ROJAS',       phone: null,           pw: pwChofer },
+    { email: 'naudy.gonzalez@chofer.com',     name: 'NAUDY GONZALEZ',     phone: null,           pw: pwChofer },
+    { email: 'amandio.neto@chofer.com',       name: 'AMANDIO NETO',       phone: null,           pw: pwChofer },
+    { email: 'richard.garcia@chofer.com',     name: 'RICHARD GARCIA',     phone: null,           pw: pwChofer },
+    { email: 'leonardo.gutierrez@chofer.com', name: 'LEONARDO GUTIERREZ', phone: '04244613650',  pw: pwLeo    },
+    { email: 'gustavo.carrasquel@chofer.com', name: 'GUSTAVO CARRASQUEL',  phone: null, pw: pwChofer },
+    { email: 'johan.linarez@chofer.com',      name: 'JOHAN LINAREZ',        phone: null, pw: pwChofer },
+    { email: 'joaquin.neto@chofer.com',       name: 'JOAQUIN NETO',         phone: null, pw: pwChofer },
+    { email: 'larry.narcise@chofer.com',      name: 'LARRY NARCISE',        phone: null, pw: pwChofer },
+    { email: 'marcos.castillo@chofer.com',    name: 'MARCOS CASTILLO',      phone: null, pw: pwChofer },
+    { email: 'alexander.pinango@chofer.com',  name: 'ALEXANDER PIÑANGO',    phone: null, pw: pwChofer },
+    { email: 'eduardo.garcia@chofer.com',     name: 'EDUARDO GARCIA',       phone: null, pw: pwChofer },
+    { email: 'jesus.bravo@chofer.com',        name: 'JESUS BRAVO',          phone: null, pw: pwChofer },
+    { email: 'juan.garcia@chofer.com',        name: 'JUAN GARCIA',          phone: null, pw: pwChofer },
+    { email: 'richard.rebolledo@chofer.com',  name: 'RICHARD REBOLLEDO',    phone: null, pw: pwChofer },
+    { email: 'esnaldo.mendoza@chofer.com',    name: 'ESNALDO MENDOZA',      phone: null, pw: pwChofer },
+    { email: 'miguel.gonzalez@chofer.com',    name: 'MIGUEL GONZALEZ',      phone: null, pw: pwChofer },
   ]
   const choferMap: Record<string, string> = {}
   for (const c of choferes) {
     const u = await prisma.user.upsert({
       where: { email: c.email },
-      update: { name: c.name },
-      create: { email: c.email, name: c.name, password: pwChofer, role: 'CHOFER', active: true },
+      update: { name: c.name, password: c.pw, ...(c.phone ? { phone: c.phone } : {}) },
+      create: { email: c.email, name: c.name, password: c.pw, role: 'CHOFER', active: true, ...(c.phone ? { phone: c.phone } : {}) },
     })
     choferMap[c.name] = u.id
   }
@@ -274,8 +275,9 @@ Seed completado.
 
 Credenciales de acceso:
   Dueño:      admin@transportejr.com     / admin123
-  Encargado:  encargado@transportejr.com / fernando123
+  Encargado:  encargado@transportejr.com / Transporte2024!
   Choferes:   [nombre]@chofer.com        / chofer123
+  Leo:        04244613650                / leorodriguez
   `)
 }
 

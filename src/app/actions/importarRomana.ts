@@ -23,6 +23,21 @@ export type RomanaTrip = {
   duplicate: boolean
 }
 
+/** Fila sin ruta resuelta — para que el encargado la clasifique */
+export type UnknownProveedorRow = {
+  ticketNo: string
+  date: string
+  procedencia: string
+  proveedor: string
+  conductor: string
+  plate: string
+  material: string
+  netWeightKg: number
+  truckId: string | null
+  driverId: string | null
+  duplicate: boolean
+}
+
 export type RomanaPreview = {
   period: string
   totalTrips: number
@@ -44,6 +59,10 @@ export type RomanaPreview = {
   registeredDrivers: { id: string; name: string }[]
   /** Conductores de la romana que no coinciden exactamente con ningún chofer registrado */
   unknownConductors: string[]
+  /** Proveedores del archivo que no son ni mina conocida ni viaje por horario */
+  unknownProveedores: { name: string; count: number; rows: UnknownProveedorRow[] }[]
+  /** Rutas DIAS INTERNOS disponibles para clasificar viajes por horario */
+  diasInternosRoutes: { id: string; name: string; rate: number; rateType: string }[]
 }
 
 // Mapa PROVEEDOR → nombre de ruta en el sistema
@@ -59,14 +78,26 @@ const PROVEEDOR_TO_ROUTE: Record<string, string> = {
   'LAS CLARITAS':           'LAS CLARITAS (SAN LUIS)',
 }
 
-// Si proveedor es Operaciones del Centro, procedencia LA FE → ruta LA FE
-function resolveRoute(proveedor: string, procedencia: string): string {
+// Palabras clave en PROCEDENCIA que identifican viajes internos por horario
+const HOURLY_KEYWORDS = ['TRONCAL', 'H66', 'PLANTA']
+
+/**
+ * Resuelve el nombre de ruta dado proveedor y procedencia.
+ * Retorna null si el proveedor no es una mina conocida ni un viaje por horario.
+ */
+function resolveRoute(proveedor: string, procedencia: string): string | null {
   const prov = proveedor.trim().toUpperCase()
   const proc = procedencia.trim().toUpperCase()
+
+  // Viaje por horario interno (TRONCAL, H66, PLANTA en procedencia)
+  if (HOURLY_KEYWORDS.some(kw => proc === kw || proc.includes(kw))) {
+    return 'DIAS INTERNOS (PLANTA)'
+  }
+
   if (prov === 'OPERACIONES DEL CENTRO') {
     return proc.includes('FE') ? 'LA FE' : 'NUEVO CALLAO'
   }
-  return PROVEEDOR_TO_ROUTE[prov] ?? prov
+  return PROVEEDOR_TO_ROUTE[prov] ?? null
 }
 
 function clientOf(proveedor: string): string {
@@ -141,12 +172,12 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
   const ticketSet = new Set(existingTickets.map(t => t.ticketNo))
 
   const trips: RomanaTrip[] = []
+  const unknownProveedorMap = new Map<string, UnknownProveedorRow[]>()
   let dateMin = '', dateMax = ''
 
   for (let i = headerRowIdx + 1; i < rows.length; i++) {
     const r = rows[i]
     const codi = r[COL.ticket]
-    // Aceptar ticket numérico o texto, siempre que tenga valor
     if (!codi && codi !== 0) continue
     const ticketNo = String(codi).trim()
     if (!ticketNo) continue
@@ -161,14 +192,31 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
 
     if (!procedencia || !proveedor || !plate) continue
 
+    const date = typeof dateSerial === 'number' ? excelDate(dateSerial) : new Date(String(dateSerial))
+    if (isNaN(date.getTime())) continue
+    const dateStr = date.toISOString()
+    const dateKey = date.toISOString().slice(0, 10)
+
+    const truck    = truckMap.get(plate)
+    const truckId  = truck?.id ?? null
+    const driverId = truck?.driver?.id ?? null
+    const isDup    = ticketSet.has(ticketNo)
+
     const routeName = resolveRoute(proveedor, procedencia)
-    const route     = routeMap.get(routeName.toUpperCase())
+
+    if (routeName === null) {
+      // Proveedor desconocido — guardar para que el encargado lo clasifique
+      if (!unknownProveedorMap.has(proveedor)) unknownProveedorMap.set(proveedor, [])
+      unknownProveedorMap.get(proveedor)!.push({
+        ticketNo, date: dateStr, procedencia, proveedor, conductor,
+        plate, material, netWeightKg: netoKg, truckId, driverId, duplicate: isDup,
+      })
+      continue
+    }
+
+    const route = routeMap.get(routeName.toUpperCase())
     if (!route) continue
 
-    const date     = typeof dateSerial === 'number' ? excelDate(dateSerial) : new Date(String(dateSerial))
-    if (isNaN(date.getTime())) continue
-    const dateStr  = date.toISOString()
-    const dateKey  = date.toISOString().slice(0, 10)
     if (!dateMin || dateKey < dateMin) dateMin = dateKey
     if (!dateMax || dateKey > dateMax) dateMax = dateKey
 
@@ -176,10 +224,6 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     const amount = route.rateType === 'PER_TON'
       ? Math.round(tons * route.rate * 100) / 100
       : route.rate
-
-    const truck    = truckMap.get(plate)
-    const truckId  = truck?.id ?? null
-    const driverId = truck?.driver?.id ?? null
 
     trips.push({
       ticketNo,
@@ -198,7 +242,7 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
       clientLabel: clientOf(proveedor),
       truckId,
       driverId,
-      duplicate: ticketSet.has(ticketNo),
+      duplicate: isDup,
     })
   }
 
@@ -214,8 +258,8 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     entry.amount += t.amount
   }
 
-  const byClient = Array.from(clientMap.entries()).map(([client, routeMap]) => {
-    const routes = Array.from(routeMap.entries()).map(([name, d]) => ({
+  const byClient = Array.from(clientMap.entries()).map(([client, rm]) => {
+    const clientRoutes = Array.from(rm.entries()).map(([name, d]) => ({
       name,
       trips: d.trips,
       tons: Math.round(d.tons * 100) / 100,
@@ -223,20 +267,29 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     }))
     return {
       client,
-      routes,
-      totalTrips:  routes.reduce((s, r) => s + r.trips, 0),
-      totalTons:   Math.round(routes.reduce((s, r) => s + r.tons, 0) * 100) / 100,
-      totalAmount: Math.round(routes.reduce((s, r) => s + r.amount, 0) * 100) / 100,
+      routes: clientRoutes,
+      totalTrips:  clientRoutes.reduce((s, r) => s + r.trips, 0),
+      totalTons:   Math.round(clientRoutes.reduce((s, r) => s + r.tons, 0) * 100) / 100,
+      totalAmount: Math.round(clientRoutes.reduce((s, r) => s + r.amount, 0) * 100) / 100,
     }
   })
 
   const duplicates = trips.filter(t => t.duplicate).length
   const likelyAlreadyImported = trips.length > 0 && (duplicates / trips.length) >= 0.7
 
-  // Detectar conductores de la romana que no coinciden exactamente con un chofer registrado
   const registeredNameSet = new Set(registeredDrivers.map(d => d.name.toUpperCase().trim()))
   const uniqueConductors = [...new Set(trips.map(t => t.conductor).filter(Boolean))]
   const unknownConductors = uniqueConductors.filter(c => !registeredNameSet.has(c.toUpperCase().trim()))
+
+  const unknownProveedores = Array.from(unknownProveedorMap.entries()).map(([name, rows]) => ({
+    name,
+    count: rows.length,
+    rows,
+  }))
+
+  const diasInternosRoutes = routes
+    .filter(r => r.name.toUpperCase().includes('DIAS INTERNOS'))
+    .map(r => ({ id: r.id, name: r.name, rate: r.rate, rateType: r.rateType }))
 
   return {
     period: `${dateMin} al ${dateMax}`,
@@ -249,7 +302,27 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     registeredTrucks: trucks.map(t => ({ id: t.id, plate: t.plate })).sort((a, b) => a.plate.localeCompare(b.plate)),
     registeredDrivers: registeredDrivers.sort((a, b) => a.name.localeCompare(b.name)),
     unknownConductors,
+    unknownProveedores,
+    diasInternosRoutes,
   }
+}
+
+export async function crearRutaDesdeRomana(data: {
+  name: string
+  rateType: 'PER_TON' | 'PER_TRIP'
+  rate: number
+  driverWage: number
+  fuelLitersPerTrip: number
+  bidirectional: boolean
+  hasViatico: boolean
+  viaticoSingle: number
+  viaticoDouble: number
+}) {
+  const route = await prisma.route.create({
+    data: { ...data, active: true },
+  })
+  revalidatePath('/rutas')
+  return { id: route.id, name: route.name, rate: route.rate, rateType: route.rateType }
 }
 
 export async function confirmarImport(trips: RomanaTrip[], openPeriodId?: string) {
