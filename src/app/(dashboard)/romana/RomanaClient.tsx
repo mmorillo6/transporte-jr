@@ -121,10 +121,15 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
     } finally { setSaving(false) }
   }
 
-  const sinCamion = preview?.trips.filter(t => !t.truckId && !t.duplicate).length ?? 0
-  const placasSinRegistrar = preview
-    ? [...new Set(preview.trips.filter(t => !t.truckId && !t.duplicate).map(t => t.plate))]
-    : []
+  // Incluye también filas de proveedores desconocidos (clasificados o no)
+  const sinCamion = preview
+    ? (preview.trips.filter(t => !t.truckId && !t.duplicate).length +
+       preview.unknownProveedores.flatMap(up => up.rows).filter(r => !r.truckId && !r.duplicate).length)
+    : 0
+  const placasSinRegistrar = preview ? [...new Set([
+    ...preview.trips.filter(t => !t.truckId && !t.duplicate).map(t => t.plate),
+    ...preview.unknownProveedores.flatMap(up => up.rows).filter(r => !r.truckId && !r.duplicate).map(r => r.plate),
+  ])] : []
   // plateMappings: placa errónea → truckId del camión correcto
   const [plateMappings, setPlateMappings] = useState<Record<string, string>>({})
   const [sugerenciasRechazadas, setSugerenciasRechazadas] = useState<Set<string>>(new Set())
@@ -199,6 +204,7 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
     if (!route) return []
     return rows.filter(row => !row.duplicate).map(row => ({
       ...row,
+      truckId: row.truckId ?? plateMappings[row.plate] ?? null,
       routeName: route.name,
       routeId: route.id,
       rateType: route.rateType,
@@ -390,7 +396,9 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
 
           {/* Warning sin camión */}
           {sinCamion > 0 && (() => {
-            const viajesSinResolver = preview.trips.filter(t => !t.truckId && !t.duplicate && !plateMappings[t.plate]).length
+            const viajesSinResolver =
+              preview.trips.filter(t => !t.truckId && !t.duplicate && !plateMappings[t.plate]).length +
+              preview.unknownProveedores.flatMap(up => up.rows).filter(r => !r.truckId && !r.duplicate && !plateMappings[r.plate]).length
             return (
             <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl px-4 py-4 space-y-3">
               <div>
