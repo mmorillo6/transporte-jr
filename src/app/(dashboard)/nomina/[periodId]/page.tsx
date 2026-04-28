@@ -56,7 +56,8 @@ async function getPeriodData(periodId: string, role: string, ownerId: string | n
 }
 
 function formatDate(d: Date | string) {
-  return new Date(d).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const [y, m, day] = new Date(d).toISOString().slice(0, 10).split('-').map(Number)
+  return new Date(y, m - 1, day, 12).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 export default async function PeriodDetailPage({

@@ -20,7 +20,7 @@ export async function exportPeriodExcel(periodId: string): Promise<{ error: stri
   })
   const truckMap = new Map(trucks.map(t => [t.id, t]))
 
-  const fmt = (d: Date) => d.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const fmt = (d: Date) => { const [y,m,day] = new Date(d).toISOString().slice(0,10).split('-').map(Number); return new Date(y,m-1,day,12).toLocaleDateString('es-VE',{day:'2-digit',month:'2-digit',year:'numeric'}) }
   const periodLabel = `${fmt(period.startDate)} al ${fmt(period.endDate)}`
 
   // Build rows

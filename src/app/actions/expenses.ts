@@ -35,8 +35,10 @@ export async function createExpense(formData: FormData) {
   const month = date.getMonth()
   const year = date.getFullYear()
   const isFirstHalf = day <= 15
-  const startDate = new Date(year, month, isFirstHalf ? 1 : 16)
-  const endDate = new Date(year, month, isFirstHalf ? 15 : new Date(year, month + 1, 0).getDate())
+  const startDay = isFirstHalf ? 1 : 16
+  const endDay   = isFirstHalf ? 15 : new Date(year, month + 1, 0).getDate()
+  const startDate = new Date(Date.UTC(year, month, startDay, 0, 0, 0))
+  const endDate   = new Date(Date.UTC(year, month, endDay,   23, 59, 59))
 
   let period = await prisma.period.findFirst({
     where: { startDate: { lte: date }, endDate: { gte: date }, status: 'OPEN' },
