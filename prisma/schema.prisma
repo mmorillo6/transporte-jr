@@ -86,6 +86,7 @@ model Truck {
   oilUsages       OilUsage[]
   tireRepairs     TireRepair[]
   cashEntries     CashEntry[]
+  almacenItems    AlmacenItem[]
 }
 
 // ─── RUTAS / MINAS ────────────────────────────────────────────────────────────
@@ -521,4 +522,21 @@ model DispatchEntry {
   plannedTrips Int      @default(0)
   notes        String?
   createdAt    DateTime @default(now())
+}
+
+// ─── ALMACÉN — REPUESTOS NO DESCONTADOS ──────────────────────────────────────
+// Compras en bulk guardadas en almacén. Cuando se usa un ítem en un carro,
+// se asigna (usedByTruckId) y se descuenta de la nómina de ese período.
+// El total no asignado reduce la deuda de Aurumin.
+
+model AlmacenItem {
+  id            String    @id @default(cuid())
+  name          String
+  amount        Float
+  notes         String?
+  usedByTruckId String?
+  usedByTruck   Truck?    @relation(fields: [usedByTruckId], references: [id])
+  usedDate      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }

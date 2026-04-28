@@ -93,8 +93,11 @@ export async function generatePayroll(periodId: string) {
     gastosByTruck.set(e.truckId, (gastosByTruck.get(e.truckId) ?? 0) + e.amount)
   }
 
-  // ── Préstamos por conductor ───────────────────────────────────────────────────
+  // ── Préstamos por conductor o por dueño ──────────────────────────────────────
   const loans = await prisma.loan.findMany({ where: { balance: { gt: 0 } } })
+  // Préstamos cuyo driverName coincide con el nombre del DUEÑO se descuentan
+  // solo al PRIMER camión de ese dueño (para no duplicar la deducción).
+  const ownerLoanApplied = new Set<string>()
 
   // ── Saldo inicial: netAmount del período anterior por camión ──────────────────
   // Solo se hereda si era negativo (deuda) o si era positivo y no se ha pagado
@@ -147,11 +150,16 @@ export async function generatePayroll(periodId: string) {
     // Gastos operativos (Expense records) + viáticos de ruta
     const gastosOp = (gastosByTruck.get(truckId) ?? 0) + viaticos
 
-    // Préstamos
-    const driverName    = truck.driver?.name ?? ''
-    const loanDeductions = loans
-      .filter(l => l.driverName.toLowerCase().trim() === driverName.toLowerCase().trim())
-      .reduce((s, l) => s + l.deductAmount, 0)
+    // Préstamos: match por nombre del chofer O por nombre del dueño
+    const driverName  = truck.driver?.name ?? ''
+    const ownerName   = truck.owner.name.toLowerCase().trim()
+    const driverLoans = loans.filter(l => l.driverName.toLowerCase().trim() === driverName.toLowerCase().trim())
+    const ownerLoans  = loans.filter(l => {
+      const lname = l.driverName.toLowerCase().trim()
+      return lname === ownerName && !ownerLoanApplied.has(l.id)
+    })
+    ownerLoans.forEach(l => ownerLoanApplied.add(l.id))
+    const loanDeductions = [...driverLoans, ...ownerLoans].reduce((s, l) => s + l.deductAmount, 0)
 
     // Saldo inicial: negativo si debe, positivo si le deben y no pagaron
     const prev = prevByTruck.get(truckId)

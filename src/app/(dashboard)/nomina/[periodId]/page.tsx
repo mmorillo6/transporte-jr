@@ -4,6 +4,7 @@ import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
 import PeriodActions from './PeriodActions'
 import PayrollTableClient from './PayrollTableClient'
+import { getTotalAlmacenPendiente } from '@/app/actions/almacen'
 
 async function getPeriodData(periodId: string, role: string, ownerId: string | null) {
   const period = await prisma.period.findUnique({
@@ -80,7 +81,11 @@ export default async function PeriodDetailPage({
     ownerId = user?.ownerId ?? null
   }
 
-  const period = await getPeriodData(periodId, session.role, ownerId)
+  const [period, totalAlmacenPendiente, loansData] = await Promise.all([
+    getPeriodData(periodId, session.role, ownerId),
+    getTotalAlmacenPendiente(),
+    prisma.loan.findMany({ where: { balance: { gt: 0 } }, select: { balance: true } }),
+  ])
   if (!period) notFound()
 
   const payroll = period.payroll as any[]
@@ -99,6 +104,12 @@ export default async function PeriodDetailPage({
   const totalAbono = payroll.reduce((s, e) => s + (e.abono ?? 0), 0)
   const totalNet = payroll.reduce((s, e) => s + e.netAmount, 0)
   const totalTons = payroll.reduce((s, e) => s + e.totalTons, 0)
+
+  // Cálculo Aurumin — solo netAmounts positivos, menos préstamos y almacén
+  const totalLoansPendientes = loansData.reduce((s, l) => s + l.balance, 0)
+  const sumPositivos = payroll.filter(e => e.netAmount > 0).reduce((s, e) => s + e.netAmount, 0)
+  const sumNegativos = payroll.filter(e => e.netAmount < 0).reduce((s, e) => s + e.netAmount, 0)
+  const auruminDebe = sumPositivos - totalLoansPendientes - totalAlmacenPendiente
 
   // Group trips by truck for detail view
   const tripsByTruck = new Map<string, typeof trips>()
@@ -177,6 +188,37 @@ export default async function PeriodDetailPage({
         </div>
       ) : (
         <>
+          {/* Cuenta Aurumin — cálculo automático */}
+          {session.role !== 'AFILIADO' && payroll.length > 0 && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
+              <p className="text-white font-semibold text-sm">Cuenta de cobro — Aurumin</p>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-zinc-400">Suma de carros positivos</span>
+                  <span className="text-white font-mono">${sumPositivos.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                </div>
+                {sumNegativos < 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500 text-xs">Carros en negativo (caja chica — no se cobran a Aurumin)</span>
+                    <span className="text-zinc-500 font-mono text-xs">${sumNegativos.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-red-400">
+                  <span>Préstamos pendientes</span>
+                  <span className="font-mono">-${totalLoansPendientes.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between text-red-400">
+                  <span>Almacén (repuestos no asignados)</span>
+                  <span className="font-mono">-${totalAlmacenPendiente.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="border-t border-zinc-700 pt-2 flex justify-between">
+                  <span className="text-amber-300 font-semibold">Aurumin nos debe</span>
+                  <span className="text-amber-400 font-bold font-mono text-base">${auruminDebe.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Summary KPIs */}
           {(() => {
             const totalPending = payroll.reduce((s: number, e: any) => s + (e.paidAt ? 0 : e.netAmount), 0)
