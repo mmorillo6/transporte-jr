@@ -15,6 +15,7 @@ const navItems = [
   { href: '/mantenimiento', label: 'Mantenim.',     icon: '⚙', roles: ['DUENO', 'ENCARGADO', 'MECANICO'] },
   { href: '/despacho',      label: 'Despacho',      icon: '◈', roles: ['DUENO', 'ENCARGADO'] },
   { href: '/caja',          label: 'Finanzas',      icon: '◎', roles: ['DUENO', 'ENCARGADO'] },
+  { href: '/almacen',       label: 'Almacén',       icon: '▣', roles: ['DUENO', 'ENCARGADO'] },
   { href: '/relaciones',    label: 'Relaciones',    icon: '◎', roles: ['DUENO', 'ENCARGADO'] },
   { href: '/reportes',      label: 'Reportes',      icon: '◈', roles: ['DUENO', 'ENCARGADO'] },
   { href: '/rutas',         label: 'Minas',         icon: '◉', roles: ['DUENO', 'ENCARGADO'] },
