@@ -98,17 +98,23 @@ export async function previewRelacion(client: string, startDate: string, endDate
     })
   }
 
-  // DIAS INTERNOS: cobrar $20 por bloque (placa + fecha + hora), no por viaje
+  // DIAS INTERNOS: cobrar $20 por hora trabajada — span primer→último viaje por placa+día
   for (const entry of routeMap.values()) {
     if (entry.routeName.toUpperCase().includes('DIAS INTERNOS')) {
-      const hourBuckets = new Set<string>()
+      const plateDateTimes = new Map<string, number[]>()
       for (const trip of entry.trips) {
         const d = new Date(trip.date)
-        const bucket = `${trip.plate}|${d.toISOString().slice(0, 13)}`
-        hourBuckets.add(bucket)
+        const key = `${trip.plate}|${d.toISOString().slice(0, 10)}`
+        if (!plateDateTimes.has(key)) plateDateTimes.set(key, [])
+        plateDateTimes.get(key)!.push(d.getTime())
       }
-      entry.quantity = hourBuckets.size
-      entry.amount   = Math.round(hourBuckets.size * entry.rate * 100) / 100
+      let totalHours = 0
+      for (const times of plateDateTimes.values()) {
+        const span = Math.max(...times) - Math.min(...times)
+        totalHours += Math.max(1, Math.ceil(span / 3600000))
+      }
+      entry.quantity = totalHours
+      entry.amount   = Math.round(totalHours * entry.rate * 100) / 100
       entry.unit     = 'Hora'
     }
   }

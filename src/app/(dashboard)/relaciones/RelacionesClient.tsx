@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { previewRelacion, registrarRelacion, updateTripInline } from '@/app/actions/generarRelacion'
 import type { RelacionPreview, RelacionTrip } from '@/app/actions/generarRelacion'
@@ -94,6 +94,109 @@ function TripRow({ trip, isPerton, onSaved }: {
   )
 }
 
+// ── Días Internos: tabla editable por placa+día ───────────────────────────────
+function DiasInternosSection({
+  route: initial,
+  onAmountChange,
+}: {
+  route: RelacionPreview['byRoute'][0]
+  onAmountChange: (routeName: string, amount: number, qty: number) => void
+}) {
+  const groups = useMemo(() => {
+    const map = new Map<string, { key: string; plate: string; conductor: string; date: string; times: number[] }>()
+    for (const trip of initial.trips) {
+      const d = new Date(trip.date)
+      const dateKey = d.toISOString().slice(0, 10)
+      const key = `${trip.plate}|${dateKey}`
+      if (!map.has(key)) map.set(key, { key, plate: trip.plate, conductor: trip.conductor, date: dateKey, times: [] })
+      map.get(key)!.times.push(d.getTime())
+    }
+    return Array.from(map.values()).map(g => ({
+      key: g.key,
+      plate: g.plate,
+      conductor: g.conductor,
+      date: g.date,
+      calculatedHours: Math.max(1, Math.ceil((Math.max(...g.times) - Math.min(...g.times)) / 3600000)),
+    }))
+  }, [initial.trips])
+
+  const [hoursMap, setHoursMap] = useState<Record<string, number>>(() =>
+    Object.fromEntries(groups.map(g => [g.key, g.calculatedHours]))
+  )
+
+  const totalHours = Object.values(hoursMap).reduce((s, h) => s + h, 0)
+  const rate = initial.rate
+  const totalAmt = Math.round(totalHours * rate * 100) / 100
+
+  useEffect(() => {
+    onAmountChange(initial.routeName, totalAmt, totalHours)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalHours])
+
+  return (
+    <div className="border-b border-zinc-800 last:border-0">
+      <div className="w-full flex items-center gap-3 px-4 py-3">
+        <span className="text-white font-semibold text-sm flex-1">{initial.routeName}</span>
+        <span className="text-zinc-500 text-xs">{initial.trips.length} viajes</span>
+        <span className="text-zinc-400 text-xs w-24 text-right">{totalHours} h</span>
+        <span className="text-amber-400 font-bold text-sm w-24 text-right">{fmt$(totalAmt)}</span>
+      </div>
+      <div className="overflow-x-auto border-t border-zinc-800/50">
+        <p className="px-4 pt-2 pb-1 text-xs text-zinc-500">
+          Horas calculadas del primer al último viaje. Ajusta si las horas reales son distintas.
+        </p>
+        <table className="w-full">
+          <thead>
+            <tr className="bg-zinc-800/40">
+              <th className="text-left text-zinc-500 font-medium px-3 py-2 text-xs">Placa</th>
+              <th className="text-left text-zinc-500 font-medium px-3 py-2 text-xs">Conductor</th>
+              <th className="text-left text-zinc-500 font-medium px-3 py-2 text-xs">Fecha</th>
+              <th className="text-right text-zinc-500 font-medium px-3 py-2 text-xs">Auto</th>
+              <th className="text-right text-zinc-500 font-medium px-3 py-2 text-xs">Horas reales</th>
+              <th className="text-right text-zinc-500 font-medium px-3 py-2 text-xs">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map(g => {
+              const hours = hoursMap[g.key] ?? g.calculatedHours
+              const rowAmt = Math.round(hours * rate * 100) / 100
+              const isEdited = hours !== g.calculatedHours
+              return (
+                <tr key={g.key} className="border-b border-zinc-800/40 hover:bg-zinc-800/20">
+                  <td className="px-3 py-2 font-mono text-xs text-zinc-300">{g.plate}</td>
+                  <td className="px-3 py-2 text-xs text-white">{g.conductor}</td>
+                  <td className="px-3 py-2 text-xs text-zinc-400">{fmtDate(g.date + 'T12:00:00Z')}</td>
+                  <td className="px-3 py-2 text-right text-xs text-zinc-600">{g.calculatedHours}h</td>
+                  <td className="px-3 py-2 text-right">
+                    <input
+                      type="number" min="1" step="1" value={hours}
+                      onChange={e => {
+                        const v = Math.max(1, parseInt(e.target.value) || 1)
+                        setHoursMap(prev => ({ ...prev, [g.key]: v }))
+                      }}
+                      className={`w-16 bg-zinc-700 border rounded px-1.5 py-0.5 text-xs text-right focus:outline-none focus:border-amber-500 ${
+                        isEdited ? 'border-amber-500 text-amber-400' : 'border-zinc-600 text-white'
+                      }`}
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right text-xs text-amber-400 font-semibold">{fmt$(rowAmt)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-zinc-700 bg-zinc-800/20">
+              <td colSpan={4} className="px-3 py-2 text-xs text-zinc-500">Total Días Internos</td>
+              <td className="px-3 py-2 text-xs text-right text-zinc-300">{totalHours}h</td>
+              <td className="px-3 py-2 text-xs text-right text-amber-400 font-bold">{fmt$(totalAmt)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // ── Sección de ruta colapsable ────────────────────────────────────────────────
 function RouteSection({ route: initial }: { route: RelacionPreview['byRoute'][0] }) {
   const [open, setOpen]   = useState(false)
@@ -171,15 +274,27 @@ export default function RelacionesClient({ defaultStart, defaultEnd }: { default
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState('')
   const [saved, setSaved]         = useState(false)
+  const [routeOverrides, setRouteOverrides] = useState<Record<string, { amount: number; qty: number }>>({})
+
+  function handleRouteAmountChange(routeName: string, amount: number, qty: number) {
+    setRouteOverrides(prev => ({ ...prev, [routeName]: { amount, qty } }))
+  }
 
   const tipo  = TIPOS.find(t => t.id === tipoId)!
-  const saldo = preview ? Math.max(0, preview.subTotal - abono) : 0
+
+  const adjustedByRoute = preview?.byRoute.map(r => {
+    const ov = routeOverrides[r.routeName]
+    return ov ? { ...r, amount: ov.amount, quantity: ov.qty } : r
+  }) ?? []
+  const adjustedTotal    = Math.round(adjustedByRoute.reduce((s, r) => s + r.amount, 0) * 100) / 100
+  const adjustedSubTotal = Math.round((adjustedTotal + (preview?.acumulado ?? 0)) * 100) / 100
+  const saldo = preview ? Math.max(0, adjustedSubTotal - abono) : 0
   const hasData = (preview?.byRoute.length ?? 0) > 0
 
   async function handlePreview(e: React.FormEvent) {
     e.preventDefault()
     if (!startDate || !endDate) return
-    setLoading(true); setError(''); setPreview(null); setSaved(false); setAbono(0)
+    setLoading(true); setError(''); setPreview(null); setSaved(false); setAbono(0); setRouteOverrides({})
     try {
       setPreview(await previewRelacion(tipo.client, startDate, endDate, tipo.destinatario))
     } catch (e: unknown) {
@@ -206,9 +321,15 @@ export default function RelacionesClient({ defaultStart, defaultEnd }: { default
 
   async function handleRegistrar() {
     if (!preview || saved) return
+    const adjustedPreview = {
+      ...preview,
+      byRoute:        adjustedByRoute,
+      totalFacturado: adjustedTotal,
+      subTotal:       adjustedSubTotal,
+    }
     setSaving(true); setError('')
     try {
-      await registrarRelacion(preview, abono)
+      await registrarRelacion(adjustedPreview, abono)
       setSaved(true); router.refresh()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al registrar')
@@ -270,7 +391,7 @@ export default function RelacionesClient({ defaultStart, defaultEnd }: { default
       <div className="print-hide grid grid-cols-2 lg:grid-cols-4 gap-2.5">
         {TIPOS.map((t, i) => (
           <button key={t.id}
-            onClick={() => { setTipoId(t.id); setPreview(null); setSaved(false); setAbono(0) }}
+            onClick={() => { setTipoId(t.id); setPreview(null); setSaved(false); setAbono(0); setRouteOverrides({}) }}
             className={`text-left rounded-xl p-3.5 border transition-all ${
               tipoId === t.id
                 ? 'border-amber-500 bg-amber-500/10'
@@ -328,7 +449,7 @@ export default function RelacionesClient({ defaultStart, defaultEnd }: { default
             {loading ? 'Calculando…' : 'Ver relación'}
           </button>
           {saved && (
-            <button type="button" onClick={() => { setPreview(null); setSaved(false); setAbono(0) }}
+            <button type="button" onClick={() => { setPreview(null); setSaved(false); setAbono(0); setRouteOverrides({}) }}
               className="text-zinc-400 hover:text-white text-sm transition-colors">
               Nueva relación →
             </button>
@@ -433,7 +554,7 @@ export default function RelacionesClient({ defaultStart, defaultEnd }: { default
               <div className="print-hide grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
                   <p className="text-zinc-500 text-xs mb-1">Facturado este período</p>
-                  <p className="text-2xl font-bold text-amber-400">{fmt$(preview.totalFacturado)}</p>
+                  <p className="text-2xl font-bold text-amber-400">{fmt$(adjustedTotal)}</p>
                   <p className="text-zinc-600 text-xs mt-1">{totalViajes} viajes · {preview.byRoute.length} rutas</p>
                 </div>
                 <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
@@ -443,7 +564,7 @@ export default function RelacionesClient({ defaultStart, defaultEnd }: { default
                 </div>
                 <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
                   <p className="text-zinc-500 text-xs mb-1">Sub-total</p>
-                  <p className="text-2xl font-bold text-white">{fmt$(preview.subTotal)}</p>
+                  <p className="text-2xl font-bold text-white">{fmt$(adjustedSubTotal)}</p>
                   <p className="text-zinc-600 text-xs mt-1">Período + acumulado</p>
                 </div>
                 <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
@@ -501,14 +622,14 @@ export default function RelacionesClient({ defaultStart, defaultEnd }: { default
                     </tr>
                   </thead>
                   <tbody>
-                    {preview.byRoute.map((r, i) => (
+                    {adjustedByRoute.map((r, i) => (
                       <tr key={r.routeName} className="border-b border-zinc-800/50">
                         <td className="px-4 py-2.5">
                           <span className="text-zinc-500 text-xs mr-2">{i + 1}.</span>
                           <span className="text-white font-medium text-sm">{r.routeName}</span>
                         </td>
                         <td className="px-4 py-2.5 text-right text-zinc-400 text-xs">{r.unit}</td>
-                        <td className="px-4 py-2.5 text-right text-zinc-300 text-sm">{r.quantity.toFixed(3)}</td>
+                        <td className="px-4 py-2.5 text-right text-zinc-300 text-sm">{r.quantity.toFixed(r.unit === 'Hora' ? 0 : 3)}</td>
                         <td className="px-4 py-2.5 text-right text-zinc-400 text-xs">${r.rate.toFixed(2)}/{r.unit.toLowerCase()}</td>
                         <td className="px-4 py-2.5 text-right text-amber-400 font-semibold">{fmt$(r.amount)}</td>
                       </tr>
@@ -517,7 +638,7 @@ export default function RelacionesClient({ defaultStart, defaultEnd }: { default
                   <tfoot>
                     <tr className="border-t border-zinc-700 bg-zinc-800/40">
                       <td colSpan={4} className="px-4 py-3 text-white font-bold text-right">Total a Cancelar</td>
-                      <td className="px-4 py-3 text-right text-amber-400 font-bold text-base">{fmt$(preview.totalFacturado)}</td>
+                      <td className="px-4 py-3 text-right text-amber-400 font-bold text-base">{fmt$(adjustedTotal)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -529,9 +650,11 @@ export default function RelacionesClient({ defaultStart, defaultEnd }: { default
                   <h3 className="text-white font-semibold text-sm">Detalle de viajes por ruta</h3>
                   <p className="text-zinc-500 text-xs mt-0.5">Clic en ▶ para expandir · Pasa el cursor sobre un viaje para editarlo</p>
                 </div>
-                {preview.byRoute.map(route => (
-                  <RouteSection key={route.routeName} route={route} />
-                ))}
+                {preview.byRoute.map(route =>
+                  route.routeName.toUpperCase().includes('DIAS INTERNOS')
+                    ? <DiasInternosSection key={route.routeName} route={route} onAmountChange={handleRouteAmountChange} />
+                    : <RouteSection key={route.routeName} route={route} />
+                )}
               </div>
 
               {/* Estado de cuenta */}
