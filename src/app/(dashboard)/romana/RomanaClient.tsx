@@ -81,7 +81,7 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
     const file = e.target.files?.[0]
     if (!file) return
     setLoading(true); setError(''); setPreview(null); setResultado(null); setIgnorarDuplicado(false)
-    setProveedorClassifications({}); setProveedorMode({}); setRutaForms({}); setNewRoutes([])
+    setProveedorClassifications({}); setProveedorMode({}); setRutaForms({}); setNewRoutes([]); setProveedorSugerRechazadas(new Set())
     try {
       const base64 = await new Promise<string>((res, rej) => {
         const reader = new FileReader()
@@ -139,10 +139,12 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
   const [ignorarDuplicado, setIgnorarDuplicado] = useState(false)
   // proveedorClassifications: proveedor → routeId (ruta existente o recién creada)
   const [proveedorClassifications, setProveedorClassifications] = useState<Record<string, string>>({})
-  // proveedorMode: qué opción seleccionó el encargado ('mine' | 'hourly') → muestra el formulario
-  const [proveedorMode, setProveedorMode] = useState<Record<string, 'mine' | 'hourly'>>({})
+  // proveedorMode: qué opción seleccionó el encargado ('mine' | 'hourly' | 'existing') → muestra el formulario
+  const [proveedorMode, setProveedorMode] = useState<Record<string, 'mine' | 'hourly' | 'existing'>>({})
   // rutas recién creadas desde el formulario inline
-  const [newRoutes, setNewRoutes] = useState<{ id: string; name: string; rate: number; rateType: string }[]>([])
+  const [newRoutes, setNewRoutes] = useState<{ id: string; name: string; rate: number; rateType: string; clientName: string }[]>([])
+  // sugerencias de proveedor rechazadas
+  const [proveedorSugerRechazadas, setProveedorSugerRechazadas] = useState<Set<string>>(new Set())
   // estado del formulario inline por proveedor
   type RutaForm = {
     name: string; rateType: 'PER_TON' | 'PER_TRIP'
@@ -188,7 +190,7 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
         viaticoSingle:     parseFloat(f.viaticoSingle) || 0,
         viaticoDouble:     parseFloat(f.viaticoDouble) || 0,
       })
-      setNewRoutes(prev => [...prev, route])
+      setNewRoutes(prev => [...prev, { ...route, clientName: 'AURUM' }])
       setProveedorClassifications(prev => ({ ...prev, [proveedor]: route.id }))
       updateForm(proveedor, { saving: false })
     } catch (e: unknown) {
@@ -197,7 +199,7 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
   }
 
   // Todas las rutas disponibles (existentes + recién creadas)
-  const allRoutes = [...(preview?.diasInternosRoutes ?? []), ...newRoutes]
+  const allRoutes = [...(preview?.allRoutes ?? []), ...newRoutes]
 
   function resolveUnknownRows(rows: UnknownProveedorRow[], routeId: string): RomanaTrip[] {
     const route = allRoutes.find(r => r.id === routeId)
@@ -212,7 +214,7 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
       amount: route.rateType === 'PER_TON'
         ? Math.round((row.netWeightKg / 1000) * route.rate * 100) / 100
         : route.rate,
-      clientLabel: 'INTERNO',
+      clientLabel: route.clientName || 'INTERNO',
     }))
   }
 
@@ -715,6 +717,7 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
                   const f      = rutaForms[up.name]
                   const resolved = cls ? allRoutes.find(r => r.id === cls) : null
                   const newCount = up.rows.filter(r => !r.duplicate).length
+                  const sugerRechazada = proveedorSugerRechazadas.has(up.name)
 
                   return (
                     <div key={up.name} className={`border rounded-xl p-3 space-y-3 transition-colors ${
@@ -725,9 +728,14 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
                         <span className="text-white font-medium text-sm">{up.name}</span>
                         <span className="text-zinc-500 text-xs">· {up.count} {up.count === 1 ? 'viaje' : 'viajes'}</span>
                         {newCount < up.count && <span className="text-zinc-600 text-xs">({newCount} nuevos)</span>}
+                        {up.likelyHourly && !resolved && (
+                          <span className="text-blue-400 text-xs bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                            ¿Día interno?
+                          </span>
+                        )}
                         {resolved && (
                           <span className="text-emerald-400 text-xs font-medium ml-auto">
-                            ✓ ruta creada: {resolved.name}
+                            ✓ asignado a: {resolved.name}
                           </span>
                         )}
                       </div>
@@ -738,6 +746,7 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
                           onClick={() => {
                             setProveedorClassifications(prev => { const n = { ...prev }; delete n[up.name]; return n })
                             setProveedorMode(prev => { const n = { ...prev }; delete n[up.name]; return n })
+                            setProveedorSugerRechazadas(prev => { const n = new Set(prev); n.delete(up.name); return n })
                           }}
                           className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors"
                         >
@@ -745,19 +754,82 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
                         </button>
 
                       ) : !mode ? (
-                        /* Paso 1: elegir tipo */
+                        <div className="space-y-3">
+                          {/* Sugerencias fuzzy de rutas similares */}
+                          {up.suggestedRoutes.length > 0 && !sugerRechazada && (
+                            <div className="bg-zinc-800/80 border border-zinc-700 rounded-lg px-3 py-2.5 space-y-2">
+                              <p className="text-zinc-400 text-xs">
+                                Nombre similar a {up.suggestedRoutes.length === 1 ? 'una ruta registrada' : 'rutas registradas'} — ¿es alguna de estas?
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {up.suggestedRoutes.map(s => (
+                                  <button key={s.id}
+                                    onClick={() => setProveedorClassifications(prev => ({ ...prev, [up.name]: s.id }))}
+                                    className="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+                                    Sí, es {s.name}
+                                    <span className="text-emerald-600 ml-1.5">({s.distance} {s.distance === 1 ? 'car.' : 'car.'})</span>
+                                  </button>
+                                ))}
+                              </div>
+                              <button
+                                onClick={() => setProveedorSugerRechazadas(prev => new Set([...prev, up.name]))}
+                                className="text-zinc-500 hover:text-zinc-300 text-xs transition-colors">
+                                No es ninguna →
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Opciones de clasificación (cuando no hay sugerencias o fueron rechazadas) */}
+                          {(!up.suggestedRoutes.length || sugerRechazada) && (
+                            <div className="space-y-2">
+                              {up.likelyHourly && (
+                                <p className="text-blue-400 text-xs bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
+                                  La procedencia parece un viaje interno (¿TRONCAL/H66/PLANTA mal escrito?)
+                                </p>
+                              )}
+                              <p className="text-zinc-400 text-xs">¿Qué tipo de viaje es?</p>
+                              <div className="flex flex-wrap gap-2">
+                                <button onClick={() => initForm(up.name, 'mine')}
+                                  className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors border border-amber-500/20">
+                                  Mina nueva (por tonelada)
+                                </button>
+                                <button onClick={() => initForm(up.name, 'hourly')}
+                                  className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors border ${
+                                    up.likelyHourly
+                                      ? 'bg-blue-500/25 hover:bg-blue-500/35 text-blue-300 border-blue-500/40'
+                                      : 'bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border-blue-500/20'
+                                  }`}>
+                                  {up.likelyHourly ? '⬆ Viaje por horario (por viaje)' : 'Viaje por horario (por viaje)'}
+                                </button>
+                                <button onClick={() => setProveedorMode(prev => ({ ...prev, [up.name]: 'existing' }))}
+                                  className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+                                  Ya existe con otro nombre
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                      ) : mode === 'existing' ? (
+                        /* Asignar a ruta ya existente */
                         <div className="space-y-2">
-                          <p className="text-zinc-400 text-xs">¿Qué tipo de viaje es?</p>
-                          <div className="flex flex-wrap gap-2">
-                            <button onClick={() => initForm(up.name, 'mine')}
-                              className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors border border-amber-500/20">
-                              Mina nueva (por tonelada)
-                            </button>
-                            <button onClick={() => initForm(up.name, 'hourly')}
-                              className="bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors border border-blue-500/20">
-                              Viaje por horario (por viaje)
-                            </button>
-                          </div>
+                          <label className="text-zinc-400 text-xs block">Selecciona la ruta a la que corresponde:</label>
+                          <select
+                            defaultValue=""
+                            onChange={e => {
+                              if (e.target.value) setProveedorClassifications(prev => ({ ...prev, [up.name]: e.target.value }))
+                            }}
+                            className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
+                            <option value="">Seleccionar ruta...</option>
+                            {preview.allRoutes.map(r => (
+                              <option key={r.id} value={r.id}>{r.name}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => setProveedorMode(prev => { const n = { ...prev }; delete n[up.name]; return n })}
+                            className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors">
+                            ← Volver
+                          </button>
                         </div>
 
                       ) : f ? (

@@ -60,9 +60,19 @@ export type RomanaPreview = {
   /** Conductores de la romana que no coinciden exactamente con ningún chofer registrado */
   unknownConductors: string[]
   /** Proveedores del archivo que no son ni mina conocida ni viaje por horario */
-  unknownProveedores: { name: string; count: number; rows: UnknownProveedorRow[] }[]
+  unknownProveedores: {
+    name: string
+    count: number
+    rows: UnknownProveedorRow[]
+    /** Rutas existentes con nombre similar al proveedor desconocido */
+    suggestedRoutes: { id: string; name: string; distance: number }[]
+    /** true si alguna fila tiene procedencia parecida a TRONCAL/H66/PLANTA */
+    likelyHourly: boolean
+  }[]
   /** Rutas DIAS INTERNOS disponibles para clasificar viajes por horario */
   diasInternosRoutes: { id: string; name: string; rate: number; rateType: string }[]
+  /** Todas las rutas activas — para asignar proveedor a una ruta ya existente */
+  allRoutes: { id: string; name: string; rate: number; rateType: string; clientName: string }[]
 }
 
 // Mapa PROVEEDOR → nombre de ruta en el sistema
@@ -80,6 +90,16 @@ const PROVEEDOR_TO_ROUTE: Record<string, string> = {
 
 // Palabras clave en PROCEDENCIA que identifican viajes internos por horario
 const HOURLY_KEYWORDS = ['TRONCAL', 'H66', 'PLANTA']
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)])
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
+  return dp[m][n]
+}
 
 /**
  * Resuelve el nombre de ruta dado proveedor y procedencia.
@@ -281,11 +301,42 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
   const uniqueConductors = [...new Set(trips.map(t => t.conductor).filter(Boolean))]
   const unknownConductors = uniqueConductors.filter(c => !registeredNameSet.has(c.toUpperCase().trim()))
 
-  const unknownProveedores = Array.from(unknownProveedorMap.entries()).map(([name, rows]) => ({
-    name,
-    count: rows.length,
-    rows,
-  }))
+  const unknownProveedores = Array.from(unknownProveedorMap.entries()).map(([name, rows]) => {
+    const nameNorm = name.toUpperCase().trim()
+    const threshold = Math.max(2, Math.floor(nameNorm.length * 0.3))
+
+    // Fuzzy match contra nombres de proveedores conocidos
+    const seen = new Set<string>()
+    const provSuggestions = Object.entries(PROVEEDOR_TO_ROUTE)
+      .map(([prov, routeName]) => {
+        const route = routeMap.get(routeName.toUpperCase())
+        if (!route) return null
+        return { id: route.id, name: prov, distance: levenshtein(nameNorm, prov.toUpperCase()) }
+      })
+      .filter((s): s is { id: string; name: string; distance: number } =>
+        s !== null && s.distance <= threshold && s.distance > 0
+      )
+
+    // Fuzzy match contra nombres de rutas
+    const routeSuggestions = routes
+      .map(r => ({ id: r.id, name: r.name, distance: levenshtein(nameNorm, r.name.toUpperCase()) }))
+      .filter(s => s.distance <= threshold && s.distance > 0)
+
+    const suggestedRoutes = [...provSuggestions, ...routeSuggestions]
+      .sort((a, b) => a.distance - b.distance)
+      .filter(s => { if (seen.has(s.id)) return false; seen.add(s.id); return true })
+      .slice(0, 3)
+
+    // Detectar si alguna procedencia parece TRONCAL/H66/PLANTA (fuzzy)
+    const likelyHourly = rows.some(row => {
+      const proc = row.procedencia.toUpperCase().replace(/\s+/g, '')
+      return ['TRONCAL', 'H66', 'PLANTA'].some(kw =>
+        proc.includes(kw) || levenshtein(proc, kw) <= 2
+      )
+    })
+
+    return { name, count: rows.length, rows, suggestedRoutes, likelyHourly }
+  })
 
   const diasInternosRoutes = routes
     .filter(r => r.name.toUpperCase().includes('DIAS INTERNOS'))
@@ -304,6 +355,7 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     unknownConductors,
     unknownProveedores,
     diasInternosRoutes,
+    allRoutes: routes.map(r => ({ id: r.id, name: r.name, rate: r.rate, rateType: r.rateType, clientName: r.clientName })),
   }
 }
 
