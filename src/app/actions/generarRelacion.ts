@@ -98,6 +98,21 @@ export async function previewRelacion(client: string, startDate: string, endDate
     })
   }
 
+  // DIAS INTERNOS: cobrar $20 por bloque (placa + fecha + hora), no por viaje
+  for (const entry of routeMap.values()) {
+    if (entry.routeName.toUpperCase().includes('DIAS INTERNOS')) {
+      const hourBuckets = new Set<string>()
+      for (const trip of entry.trips) {
+        const d = new Date(trip.date)
+        const bucket = `${trip.plate}|${d.toISOString().slice(0, 13)}`
+        hourBuckets.add(bucket)
+      }
+      entry.quantity = hourBuckets.size
+      entry.amount   = Math.round(hourBuckets.size * entry.rate * 100) / 100
+      entry.unit     = 'Hora'
+    }
+  }
+
   const byRoute = Array.from(routeMap.values())
   const totalFacturado = byRoute.reduce((s, r) => s + r.amount, 0)
 

@@ -266,6 +266,25 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     })
   }
 
+  // DIAS INTERNOS: cobrar $20 por bloque (placa + fecha + hora), no por viaje
+  // Solo el primer viaje de cada bloque lleva el monto; los demás van en $0
+  const _diasInternosNames = new Set(
+    routes.filter(r => r.name.toUpperCase().includes('DIAS INTERNOS')).map(r => r.name.toUpperCase())
+  )
+  const _hourBucketSeen = new Set<string>()
+  for (const trip of trips) {
+    if (_diasInternosNames.has(trip.routeName.toUpperCase())) {
+      const d = new Date(trip.date)
+      const bucket = `${trip.plate}|${d.toISOString().slice(0, 13)}`
+      if (_hourBucketSeen.has(bucket)) {
+        trip.amount = 0
+      } else {
+        _hourBucketSeen.add(bucket)
+        trip.amount = trip.rate
+      }
+    }
+  }
+
   // Group by client
   const clientMap = new Map<string, Map<string, { trips: number; tons: number; amount: number }>>()
   for (const t of trips) {
