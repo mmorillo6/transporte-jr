@@ -273,9 +273,12 @@ export default async function DashboardPage() {
       {/* ── Por empresa: Aurumin vs Chino Peña ─────────────────────────────── */}
       {showFinancials && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {(['AURUMIN', 'CHINO PEÑA (LUIS PEÑA)'] as const).map(client => {
+          {(['AURUMIN', 'LUIS PEÑA'] as const).map(client => {
             const period = stats.clientPeriodStats.get(client) ?? { trips: 0, tons: 0, amount: 0 }
-            const cobrar = stats.cxcByClient.get(client) ?? 0
+            // cuentas por cobrar pueden estar guardadas con el nombre largo
+            const cobrar = stats.cxcByClient.get(client)
+              ?? stats.cxcByClient.get('CHINO PEÑA (LUIS PEÑA)')
+              ?? 0
             const label  = client === 'AURUMIN' ? 'Aurumin' : 'Chino Peña (Luis Peña)'
             const isAurumin = client === 'AURUMIN'
             return (
