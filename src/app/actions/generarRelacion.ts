@@ -43,21 +43,23 @@ export type RelacionPreview = {
   negativeTrucks: { plate: string; netAmount: number }[]
 }
 
-// Rutas que pertenecen a cada cliente
-const AURUMIN_ROUTES = ['FOSFORITO', 'CHARLIE RICHARD', 'SOSA MENDEZ', 'LAS CLARITAS (SAN LUIS)', 'LA GARRAPATA', 'CH.R. - RUBEN MARIN', 'DIAS INTERNOS', 'MACKENCI', 'POZO AURUVEN', 'ROSCIO SUR']
-const CHINO_ROUTES   = ['LA FE', 'NUEVO CALLAO']
+// Nombre del clientName en DB para cada cliente
+const CLIENT_NAME_MAP: Record<string, string> = {
+  'AURUMIN':               'AURUMIN',
+  'CHINO PEÑA (LUIS PEÑA)': 'LUIS PEÑA',
+}
 
 export async function previewRelacion(client: string, startDate: string, endDate: string, destinatario: 'EMPRESA' | 'JOSE' = 'JOSE') {
   const start = new Date(startDate + 'T00:00:00')
   const end   = new Date(endDate + 'T00:00:00')
   end.setHours(23, 59, 59, 999)
 
-  const routeNames = client === 'AURUMIN' ? AURUMIN_ROUTES : CHINO_ROUTES
+  const clientName = CLIENT_NAME_MAP[client] ?? client
 
   const trips = await prisma.trip.findMany({
     where: {
       date: { gte: start, lte: end },
-      route: { name: { in: routeNames } },
+      route: { clientName },
     },
     include: {
       route: true,
