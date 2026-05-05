@@ -47,11 +47,11 @@ async function getStats() {
     paidCount: number; totalCount: number
   } | null = null
 
-  let periodTrips: { route: { name: string }; amount: number; netWeightKg: number | null }[] = []
+  let periodTrips: { route: { name: string; clientName?: string }; amount: number; netWeightKg: number | null }[] = []
   let recentTrips: {
     id: string; date: Date; amount: number; netWeightKg: number | null
     truck: { plate: string; driver: { name: string } | null }
-    route: { name: string }
+    route: { name: string; clientName?: string }
   }[] = []
 
   if (openPeriod) {
@@ -61,7 +61,7 @@ async function getStats() {
         where: { periodId: openPeriod.id },
         include: {
           truck: { select: { plate: true, driver: { select: { name: true } } } },
-          route: { select: { name: true } },
+          route: { select: { name: true, clientName: true } },
         },
         orderBy: { date: 'desc' },
       }),
@@ -106,6 +106,18 @@ async function getStats() {
   const routeData = Array.from(tonsByRoute.entries())
     .sort((a, b) => b[1] - a[1])
     .map(([name, tons]) => ({ name: name.split(' ')[0], tons: Math.round(tons * 100) / 100 }))
+
+  // ── Facturación del período por cliente (Aurumin / Chino Peña) ───────────────
+  const clientPeriodStats = new Map<string, { trips: number; tons: number; amount: number }>()
+  for (const t of periodTrips) {
+    const client = t.route.clientName || 'AURUMIN'
+    const ex = clientPeriodStats.get(client) ?? { trips: 0, tons: 0, amount: 0 }
+    clientPeriodStats.set(client, {
+      trips:  ex.trips + 1,
+      tons:   ex.tons + (t.netWeightKg ?? 0) / 1000,
+      amount: ex.amount + t.amount,
+    })
+  }
 
   // ── Tendencia últimos 6 meses (por período) ────────────────────────────────
   const allPeriods = await prisma.period.findMany({
@@ -188,6 +200,7 @@ async function getStats() {
     topTrucks,
     cxcByClient, totalPorCobrar,
     joseTrucksPayroll,
+    clientPeriodStats,
   }
 }
 
@@ -254,6 +267,43 @@ export default async function DashboardPage() {
               Ver detalle →
             </Link>
           </div>
+        </div>
+      )}
+
+      {/* ── Por empresa: Aurumin vs Chino Peña ─────────────────────────────── */}
+      {showFinancials && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {(['AURUMIN', 'CHINO PEÑA (LUIS PEÑA)'] as const).map(client => {
+            const period = stats.clientPeriodStats.get(client) ?? { trips: 0, tons: 0, amount: 0 }
+            const cobrar = stats.cxcByClient.get(client) ?? 0
+            const label  = client === 'AURUMIN' ? 'Aurumin' : 'Chino Peña (Luis Peña)'
+            const isAurumin = client === 'AURUMIN'
+            return (
+              <div key={client} className={`bg-zinc-900 border rounded-2xl p-5 ${isAurumin ? 'border-amber-500/25' : 'border-blue-500/20'}`}>
+                <p className={`text-xs font-bold uppercase tracking-widest mb-4 ${isAurumin ? 'text-amber-500' : 'text-blue-400'}`}>
+                  {label}
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-zinc-500 text-xs mb-1">Facturado este período</p>
+                    <p className={`text-2xl font-bold ${isAurumin ? 'text-amber-400' : 'text-blue-400'}`}>
+                      ${period.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-zinc-600 text-xs mt-1">{period.trips} viajes · {period.tons.toFixed(1)} ton</p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500 text-xs mb-1">Pendiente por cobrar</p>
+                    <p className="text-2xl font-bold text-white">
+                      ${cobrar.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <Link href="/cuentas-por-cobrar" className="text-xs text-zinc-600 hover:text-zinc-400 mt-1 block transition-colors">
+                      Ver estado de cuenta →
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 

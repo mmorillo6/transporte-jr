@@ -164,7 +164,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
   // Desglose por cliente en el período actual
   const byClient = new Map<string, { trips: number; tons: number; amount: number }>()
   for (const t of periodTrips) {
-    const client = (t as any).route?.clientName ?? 'AURIM'
+    const client = (t as any).route?.clientName ?? 'AURUMIN'
     const ex = byClient.get(client) ?? { trips: 0, tons: 0, amount: 0 }
     byClient.set(client, {
       trips:  ex.trips + 1,

@@ -102,7 +102,7 @@ model Route {
   viaticoDouble Float    @default(0)
   driverWage        Float    @default(0)
   fuelLitersPerTrip Float    @default(0)
-  clientName        String   @default("AURIM")
+  clientName        String   @default("AURUMIN")
   active            Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
