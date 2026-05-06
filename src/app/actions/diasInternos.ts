@@ -35,8 +35,9 @@ export async function createDiasInternosEntry(data: FormData) {
   if (!truckId || !conductor || !fecha || !horaInicio || !horaFin)
     return { error: 'Todos los campos son requeridos' }
 
-  const totalHoras = calcHoras(horaInicio, horaFin)
-  if (totalHoras <= 0) return { error: 'La hora fin debe ser mayor a la hora inicio' }
+  const descanso   = parseFloat(data.get('descanso') as string) || 0
+  const totalHoras = Math.max(0, calcHoras(horaInicio, horaFin) - descanso)
+  if (totalHoras <= 0) return { error: 'Las horas resultantes deben ser mayores a 0' }
 
   await prisma.diasInternosEntry.create({
     data: {
@@ -50,19 +51,24 @@ export async function createDiasInternosEntry(data: FormData) {
 
 export async function updateDiasInternosEntry(id: string, data: FormData) {
   const conductor   = (data.get('conductor') as string)?.trim()
+  const fecha       = data.get('fecha')       as string
   const horaInicio  = data.get('horaInicio') as string
   const horaFin     = data.get('horaFin')    as string
+  const descanso    = parseFloat(data.get('descanso') as string) || 0
   const descripcion = (data.get('descripcion') as string)?.trim() || 'INTERNO TRONCAL A PLANTA'
   const actividad   = (data.get('actividad')  as string)?.trim() || 'ACARREO DE ÑUMA DE TRONCAL A PLANTA'
 
   if (!conductor || !horaInicio || !horaFin) return { error: 'Campos requeridos' }
 
-  const totalHoras = calcHoras(horaInicio, horaFin)
-  if (totalHoras <= 0) return { error: 'La hora fin debe ser mayor a la hora inicio' }
+  const totalHoras = Math.max(0, calcHoras(horaInicio, horaFin) - descanso)
+  if (totalHoras <= 0) return { error: 'Las horas resultantes deben ser mayores a 0' }
 
   await prisma.diasInternosEntry.update({
     where: { id },
-    data: { conductor, descripcion, actividad, horaInicio, horaFin, totalHoras },
+    data: {
+      conductor, descripcion, actividad, horaInicio, horaFin, totalHoras,
+      ...(fecha ? { fecha: new Date(fecha + 'T12:00:00') } : {}),
+    },
   })
   revalidatePath('/dias-internos')
   return {}

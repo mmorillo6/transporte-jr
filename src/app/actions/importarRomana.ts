@@ -117,6 +117,15 @@ function resolveRoute(proveedor: string, procedencia: string): string | null {
   if (prov === 'OPERACIONES DEL CENTRO') {
     return proc.includes('FE') ? 'LA FE' : 'NUEVO CALLAO'
   }
+
+  // CHARLIE RICHARD: distinguir La Tomy vs Rubén Marín por procedencia
+  if (prov === 'CHARLIE RICHARD') {
+    if (proc.includes('RUBEN') || proc.includes('MARIN') || proc.includes('R.MARIN') || proc.includes('R. MARIN')) {
+      return 'CH.R. - RUBEN MARIN'
+    }
+    return 'CHARLIE RICHARD'
+  }
+
   return PROVEEDOR_TO_ROUTE[prov] ?? null
 }
 

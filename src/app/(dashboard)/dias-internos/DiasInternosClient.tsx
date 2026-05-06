@@ -41,6 +41,7 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
   const [fecha, setFecha]             = useState(todayStr())
   const [horaInicio, setHoraInicio]   = useState('07:30')
   const [horaFin, setHoraFin]         = useState('17:00')
+  const [descanso, setDescanso]       = useState(1)
   const [descripcion, setDescripcion] = useState('INTERNO TRONCAL A PLANTA')
   const [actividad, setActividad]     = useState('ACARREO DE ÑUMA DE TRONCAL A PLANTA')
   const [saving, setSaving]           = useState(false)
@@ -49,7 +50,7 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
     if (!horaInicio || !horaFin) return 0
     const [hi, mi] = horaInicio.split(':').map(Number)
     const [hf, mf] = horaFin.split(':').map(Number)
-    const h = ((hf * 60 + mf) - (hi * 60 + mi)) / 60
+    const h = ((hf * 60 + mf) - (hi * 60 + mi)) / 60 - descanso
     return h > 0 ? Math.round(h * 100) / 100 : 0
   })()
 
@@ -81,7 +82,7 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
   function openNew() {
     setEditing(null)
     setTruckId(''); setConductor(''); setFecha(todayStr())
-    setHoraInicio('07:30'); setHoraFin('17:00')
+    setHoraInicio('07:30'); setHoraFin('17:00'); setDescanso(1)
     setDescripcion('INTERNO TRONCAL A PLANTA')
     setActividad('ACARREO DE ÑUMA DE TRONCAL A PLANTA')
     setError(''); setShowForm(true)
@@ -90,7 +91,7 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
   function openFromDetection(d: Detection) {
     setEditing(null)
     setTruckId(d.truckId); setConductor(d.conductor); setFecha(d.date)
-    setHoraInicio('07:30'); setHoraFin('17:00')
+    setHoraInicio('07:30'); setHoraFin('17:00'); setDescanso(1)
     setDescripcion('INTERNO TRONCAL A PLANTA')
     setActividad('ACARREO DE ÑUMA DE TRONCAL A PLANTA')
     setError(''); setShowForm(true)
@@ -101,6 +102,11 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
     setEditing(e)
     setTruckId(e.truckId); setConductor(e.conductor); setFecha(new Date(e.fecha).toISOString().slice(0, 10))
     setHoraInicio(e.horaInicio); setHoraFin(e.horaFin)
+    // Calcular descanso como diferencia entre span y totalHoras almacenado
+    const [hi, mi] = e.horaInicio.split(':').map(Number)
+    const [hf, mf] = e.horaFin.split(':').map(Number)
+    const span = ((hf * 60 + mf) - (hi * 60 + mi)) / 60
+    setDescanso(Math.max(0, Math.round((span - e.totalHoras) * 100) / 100))
     setDescripcion(e.descripcion); setActividad(e.actividad)
     setError(''); setShowForm(true)
   }
@@ -111,8 +117,8 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
     const fd = new FormData()
     fd.append('truckId', truckId); fd.append('conductor', conductor)
     fd.append('fecha', fecha); fd.append('horaInicio', horaInicio)
-    fd.append('horaFin', horaFin); fd.append('descripcion', descripcion)
-    fd.append('actividad', actividad)
+    fd.append('horaFin', horaFin); fd.append('descanso', String(descanso))
+    fd.append('descripcion', descripcion); fd.append('actividad', actividad)
     const res = editing
       ? await updateDiasInternosEntry(editing.id, fd)
       : await createDiasInternosEntry(fd)
@@ -205,9 +211,21 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
               </div>
             </div>
 
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1.5">Descanso / Almuerzo (horas)</label>
+              <input type="number" min="0" step="0.5" value={descanso}
+                onChange={e => setDescanso(parseFloat(e.target.value) || 0)}
+                className="w-32 bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500" />
+              <p className="text-zinc-600 text-xs mt-1">Se resta del total — por defecto 1h de almuerzo</p>
+            </div>
+
             {totalHoras > 0 && (
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-2.5 flex items-center justify-between">
-                <span className="text-amber-400 text-sm font-medium">Total: {totalHoras}h × $20 = <span className="font-bold">${(totalHoras * 20).toFixed(2)}</span></span>
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-2.5">
+                <span className="text-amber-400 text-sm font-medium">
+                  Span: {(() => { const [hi,mi]=horaInicio.split(':').map(Number); const [hf,mf]=horaFin.split(':').map(Number); return Math.round(((hf*60+mf)-(hi*60+mi))/60*100)/100 })()}h
+                  {descanso > 0 && ` − ${descanso}h almuerzo`}
+                  {' = '}<span className="font-bold">{totalHoras}h × $20 = ${(totalHoras * 20).toFixed(2)}</span>
+                </span>
               </div>
             )}
 
