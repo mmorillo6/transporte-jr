@@ -252,6 +252,55 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         </div>
       </div>
 
+      {/* Desglose por cliente — Aurumin vs Chino Peña */}
+      {clientBreakdown.length > 0 && (
+        <div>
+          <h2 className="text-white font-semibold text-sm mb-3">Facturación por cliente — período actual</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {clientBreakdown.map(([cn, d]) => {
+              const isAurumin = cn === 'AURUMIN'
+              const nprFee    = Math.round(d.amount * (owner.nprPercent / 100) * 100) / 100
+              const base      = Math.round((d.amount - nprFee) * 100) / 100
+              const pago      = Math.round(base * 0.20 * 100) / 100
+              const label     = isAurumin ? 'Aurumin' : 'Chino Peña (Luis Peña)'
+              return (
+                <div key={cn}
+                  className={`border rounded-2xl p-4 ${isAurumin ? 'border-amber-500/25 bg-amber-500/5' : 'border-blue-500/20 bg-blue-500/5'}`}>
+                  <p className={`text-xs font-bold uppercase tracking-widest mb-3 ${isAurumin ? 'text-amber-500' : 'text-blue-400'}`}>
+                    {label}
+                  </p>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-zinc-400">Facturado</span>
+                      <span className={`font-bold text-base ${isAurumin ? 'text-amber-400' : 'text-blue-400'}`}>
+                        ${d.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-zinc-500">
+                      <span>{d.trips} viajes · {(d.tons / 1000).toFixed(1)} ton</span>
+                    </div>
+                    <div className="border-t border-zinc-700 pt-1.5 mt-1.5 space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-zinc-500">− {owner.nprPercent}% NPR (José)</span>
+                        <span className="text-red-400">− ${nprFee.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-zinc-500">Base × 20%</span>
+                        <span className="text-zinc-400">${base.toFixed(2)} × 20%</span>
+                      </div>
+                      <div className="flex justify-between font-semibold">
+                        <span className="text-white">Su pago</span>
+                        <span className="text-emerald-400 text-base">${pago.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Mis camiones — tarjetas */}
       <div>
         <h2 className="text-white font-semibold text-sm mb-3">Mis unidades</h2>
