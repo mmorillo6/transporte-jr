@@ -86,7 +86,8 @@ model Truck {
   oilUsages       OilUsage[]
   tireRepairs     TireRepair[]
   cashEntries     CashEntry[]
-  almacenItems    AlmacenItem[]
+  almacenItems       AlmacenItem[]
+  diasInternosEntries DiasInternosEntry[]
 }
 
 // ─── RUTAS / MINAS ────────────────────────────────────────────────────────────
@@ -539,4 +540,20 @@ model AlmacenItem {
   usedDate      DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+// ─── DÍAS INTERNOS ────────────────────────────────────────────────────────────
+model DiasInternosEntry {
+  id          String   @id @default(cuid())
+  fecha       DateTime
+  truckId     String
+  truck       Truck    @relation(fields: [truckId], references: [id])
+  conductor   String
+  descripcion String   @default("INTERNO TRONCAL A PLANTA")
+  actividad   String   @default("ACARREO DE ÑUMA DE TRONCAL A PLANTA")
+  horaInicio  String
+  horaFin     String
+  totalHoras  Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

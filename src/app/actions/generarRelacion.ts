@@ -100,24 +100,56 @@ export async function previewRelacion(client: string, startDate: string, endDate
     })
   }
 
-  // DIAS INTERNOS: cobrar $20 por hora trabajada — span primer→último viaje por placa+día
+  // DIAS INTERNOS: usar registros manuales de DiasInternosEntry (fuente de verdad)
+  // Los trips de la romana se ignoran para billing; solo los registros manuales cuentan
+  const diasInternosEntries = await prisma.diasInternosEntry.findMany({
+    where: { fecha: { gte: start, lte: end } },
+    include: { truck: { select: { plate: true, driver: { select: { name: true } } } } },
+    orderBy: [{ fecha: 'asc' }, { horaInicio: 'asc' }],
+  })
+  const totalHorasManual = diasInternosEntries.reduce((s, e) => s + e.totalHoras, 0)
+
   for (const entry of routeMap.values()) {
     if (entry.routeName.toUpperCase().includes('DIAS INTERNOS')) {
-      const plateDateTimes = new Map<string, number[]>()
-      for (const trip of entry.trips) {
-        const d = new Date(trip.date)
-        const key = `${trip.plate}|${d.toISOString().slice(0, 10)}`
-        if (!plateDateTimes.has(key)) plateDateTimes.set(key, [])
-        plateDateTimes.get(key)!.push(d.getTime())
-      }
-      let totalHours = 0
-      for (const times of plateDateTimes.values()) {
-        const span = Math.max(...times) - Math.min(...times)
-        totalHours += Math.max(1, Math.ceil(span / 3600000))
-      }
-      entry.quantity = totalHours
-      entry.amount   = Math.round(totalHours * entry.rate * 100) / 100
+      // Representar cada registro manual como un "trip" en el detalle
+      entry.trips = diasInternosEntries.map(e => ({
+        tripId:      e.id,
+        date:        e.fecha.toISOString(),
+        ticketNo:    `${e.horaInicio}–${e.horaFin}`,
+        plate:       e.truck.plate,
+        conductor:   e.truck.driver?.name ?? e.conductor,
+        netWeightKg: null,
+        amount:      Math.round(e.totalHoras * entry.rate * 100) / 100,
+      }))
+      entry.quantity = Math.round(totalHorasManual * 100) / 100
+      entry.amount   = Math.round(totalHorasManual * entry.rate * 100) / 100
       entry.unit     = 'Hora'
+    }
+  }
+
+  // Si hay entradas manuales pero no hay trips de romana, crear la entrada DIAS INTERNOS
+  if (totalHorasManual > 0 && !Array.from(routeMap.keys()).some(k => k.toUpperCase().includes('DIAS INTERNOS'))) {
+    const diasRoute = await prisma.route.findFirst({
+      where: { name: { contains: 'DIAS INTERNOS' }, clientName },
+    })
+    if (diasRoute) {
+      routeMap.set(diasRoute.name, {
+        routeName: diasRoute.name,
+        rateType:  diasRoute.rateType,
+        rate:      diasRoute.rate,
+        unit:      'Hora',
+        quantity:  Math.round(totalHorasManual * 100) / 100,
+        amount:    Math.round(totalHorasManual * diasRoute.rate * 100) / 100,
+        trips:     diasInternosEntries.map(e => ({
+          tripId:      e.id,
+          date:        e.fecha.toISOString(),
+          ticketNo:    `${e.horaInicio}–${e.horaFin}`,
+          plate:       e.truck.plate,
+          conductor:   e.truck.driver?.name ?? e.conductor,
+          netWeightKg: null,
+          amount:      Math.round(e.totalHoras * diasRoute.rate * 100) / 100,
+        })),
+      })
     }
   }
 
