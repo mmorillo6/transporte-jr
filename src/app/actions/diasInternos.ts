@@ -72,3 +72,38 @@ export async function deleteDiasInternosEntry(id: string) {
   await prisma.diasInternosEntry.delete({ where: { id } })
   revalidatePath('/dias-internos')
 }
+
+/** Detecta camiones con DIAS INTERNOS en la romana para el período dado */
+export async function getDiasInternosDetections(startDate: string, endDate: string) {
+  const start = new Date(startDate + 'T00:00:00')
+  const end   = new Date(endDate   + 'T23:59:59')
+
+  const trips = await prisma.trip.findMany({
+    where: {
+      date: { gte: start, lte: end },
+      route: { name: { contains: 'DIAS INTERNOS' } },
+    },
+    include: {
+      truck: { select: { id: true, plate: true, driver: { select: { name: true } } } },
+    },
+    orderBy: [{ date: 'asc' }],
+  })
+
+  // Agrupar por truckId + fecha
+  const map = new Map<string, { truckId: string; plate: string; conductor: string; date: string; tripCount: number }>()
+  for (const t of trips) {
+    const dateKey = t.date.toISOString().slice(0, 10)
+    const key = `${t.truckId}|${dateKey}`
+    if (!map.has(key)) {
+      map.set(key, {
+        truckId:   t.truck.id,
+        plate:     t.truck.plate,
+        conductor: t.truck.driver?.name ?? t.conductor ?? '—',
+        date:      dateKey,
+        tripCount: 0,
+      })
+    }
+    map.get(key)!.tripCount++
+  }
+  return Array.from(map.values())
+}

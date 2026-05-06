@@ -224,9 +224,6 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
 
     const routeName = resolveRoute(proveedor, procedencia)
 
-    // DIAS INTERNOS se registran manualmente — ignorar de la romana
-    if (routeName !== null && routeName.toUpperCase().includes('DIAS INTERNOS')) continue
-
     if (routeName === null) {
       // Proveedor desconocido — guardar para que el encargado lo clasifique
       if (!unknownProveedorMap.has(proveedor)) unknownProveedorMap.set(proveedor, [])
@@ -244,9 +241,12 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     if (!dateMax || dateKey > dateMax) dateMax = dateKey
 
     const tons   = netoKg / 1000
-    const amount = route.rateType === 'PER_TON'
-      ? Math.round(tons * route.rate * 100) / 100
-      : route.rate
+    // DIAS INTERNOS: $0 en romana — el billing viene del módulo manual de horas
+    const isDiasInternos = route.name.toUpperCase().includes('DIAS INTERNOS')
+    const amount = isDiasInternos ? 0
+      : route.rateType === 'PER_TON'
+        ? Math.round(tons * route.rate * 100) / 100
+        : route.rate
 
     trips.push({
       ticketNo,

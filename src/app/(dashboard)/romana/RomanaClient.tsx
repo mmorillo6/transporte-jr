@@ -341,12 +341,12 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
               {/* Routes summary */}
               <div className="divide-y divide-zinc-800/50">
                 {client.routes.map(r => (
-                  <div key={r.name} className="flex items-center justify-between px-4 py-2.5">
-                    <span className="text-zinc-300 text-sm font-medium">{r.name}</span>
-                    <div className="flex items-center gap-6 text-xs text-right">
-                      <span className="text-zinc-500">{r.trips} viajes</span>
-                      <span className="text-zinc-400">{r.tons.toFixed(2)} ton</span>
-                      <span className="text-amber-400 font-semibold w-24">${r.amount.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                  <div key={r.name} className="flex items-center justify-between px-4 py-2.5 gap-2">
+                    <span className="text-zinc-300 text-sm font-medium flex-1 min-w-0">{r.name}</span>
+                    <div className="flex items-center gap-3 text-xs text-right shrink-0">
+                      <span className="text-zinc-500 whitespace-nowrap">{r.trips} v.</span>
+                      <span className="text-zinc-400 whitespace-nowrap hidden sm:inline">{r.tons.toFixed(2)} t</span>
+                      <span className="text-amber-400 font-semibold whitespace-nowrap">${r.amount.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                 ))}

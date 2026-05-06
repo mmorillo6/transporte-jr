@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { getDiasInternosEntries, createDiasInternosEntry, updateDiasInternosEntry, deleteDiasInternosEntry } from '@/app/actions/diasInternos'
+import { getDiasInternosEntries, createDiasInternosEntry, updateDiasInternosEntry, deleteDiasInternosEntry, getDiasInternosDetections } from '@/app/actions/diasInternos'
 
 type Truck = { id: string; plate: string; driver: { name: string } | null }
 type Entry = {
@@ -9,6 +9,7 @@ type Entry = {
   descripcion: string; actividad: string; horaInicio: string; horaFin: string
   totalHoras: number; truck: { plate: string }
 }
+type Detection = { truckId: string; plate: string; conductor: string; date: string; tripCount: number }
 
 function fmt(d: Date) {
   return new Date(d).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'UTC' })
@@ -27,8 +28,9 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
   const router = useRouter()
   const [startDate, setStartDate] = useState(firstOfMonth())
   const [endDate, setEndDate]     = useState(todayStr())
-  const [entries, setEntries]     = useState<Entry[]>([])
-  const [loading, setLoading]     = useState(false)
+  const [entries, setEntries]       = useState<Entry[]>([])
+  const [detections, setDetections] = useState<Detection[]>([])
+  const [loading, setLoading]       = useState(false)
   const [showForm, setShowForm]   = useState(false)
   const [editing, setEditing]     = useState<Entry | null>(null)
   const [error, setError]         = useState('')
@@ -56,8 +58,16 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
 
   async function cargar() {
     setLoading(true)
-    const data = await getDiasInternosEntries(startDate, endDate)
+    const [data, dets] = await Promise.all([
+      getDiasInternosEntries(startDate, endDate),
+      getDiasInternosDetections(startDate, endDate),
+    ])
     setEntries(data as Entry[])
+    // Filtrar detecciones que ya tienen entrada manual
+    const registered = new Set((data as Entry[]).map(e =>
+      `${e.truckId}|${new Date(e.fecha).toISOString().slice(0, 10)}`
+    ))
+    setDetections((dets as Detection[]).filter(d => !registered.has(`${d.truckId}|${d.date}`)))
     setLoading(false)
   }
 
@@ -75,6 +85,16 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
     setDescripcion('INTERNO TRONCAL A PLANTA')
     setActividad('ACARREO DE ÑUMA DE TRONCAL A PLANTA')
     setError(''); setShowForm(true)
+  }
+
+  function openFromDetection(d: Detection) {
+    setEditing(null)
+    setTruckId(d.truckId); setConductor(d.conductor); setFecha(d.date)
+    setHoraInicio('07:30'); setHoraFin('17:00')
+    setDescripcion('INTERNO TRONCAL A PLANTA')
+    setActividad('ACARREO DE ÑUMA DE TRONCAL A PLANTA')
+    setError(''); setShowForm(true)
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50)
   }
 
   function openEdit(e: Entry) {
@@ -216,6 +236,33 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Detectados en romana — pendientes de horario */}
+      {detections.length > 0 && (
+        <div className="bg-zinc-900 border border-amber-500/20 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-800 flex items-center gap-2">
+            <span className="text-amber-400 text-sm">⚡</span>
+            <div>
+              <h3 className="text-white font-semibold text-sm">Detectados en romana — sin horario</h3>
+              <p className="text-zinc-500 text-xs mt-0.5">La romana registró estos camiones trabajando internamente. Agrega la hora inicio y fin.</p>
+            </div>
+          </div>
+          <div className="divide-y divide-zinc-800/50">
+            {detections.map(d => (
+              <div key={`${d.truckId}|${d.date}`} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <p className="text-white text-sm font-medium">{d.plate} <span className="text-zinc-500 font-normal">— {d.conductor}</span></p>
+                  <p className="text-zinc-500 text-xs">{new Date(d.date + 'T12:00:00Z').toLocaleDateString('es-VE', { day:'2-digit', month:'2-digit', year:'2-digit' })} · {d.tripCount} ticket{d.tripCount !== 1 ? 's' : ''} en romana</p>
+                </div>
+                <button onClick={() => openFromDetection(d)}
+                  className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold rounded-xl px-3 py-1.5 text-xs transition-colors whitespace-nowrap">
+                  + Agregar horario
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
