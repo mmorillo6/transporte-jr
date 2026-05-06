@@ -187,6 +187,8 @@ export async function createUser(formData: FormData) {
   })
 
   revalidatePath('/usuarios')
+  revalidatePath('/camiones')
+  revalidatePath('/dias-internos')
   return { ok: true }
 }
 
@@ -206,6 +208,8 @@ export async function updateUser(id: string, formData: FormData) {
 
   await prisma.user.update({ where: { id }, data })
   revalidatePath('/usuarios')
+  revalidatePath('/camiones')
+  revalidatePath('/dias-internos')
   return { ok: true }
 }
 
