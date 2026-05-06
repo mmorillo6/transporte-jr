@@ -208,6 +208,12 @@ export default function CamionesClient({
                       <option value="">Sin chofer</option>
                       {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </select>
+                    <p className="text-zinc-600 text-xs mt-1">
+                      ¿El chofer no aparece?{' '}
+                      <a href="/usuarios" className="text-amber-400 hover:text-amber-300 underline">
+                        Créalo primero en Usuarios
+                      </a>
+                    </p>
                   </div>
                   {editingTruck && (
                     <div>

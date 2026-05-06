@@ -650,11 +650,9 @@ export default function RelacionesClient({ defaultStart, defaultEnd }: { default
                   <h3 className="text-white font-semibold text-sm">Detalle de viajes por ruta</h3>
                   <p className="text-zinc-500 text-xs mt-0.5">Clic en ▶ para expandir · Pasa el cursor sobre un viaje para editarlo</p>
                 </div>
-                {preview.byRoute.map(route =>
-                  route.routeName.toUpperCase().includes('DIAS INTERNOS')
-                    ? <DiasInternosSection key={route.routeName} route={route} onAmountChange={handleRouteAmountChange} />
-                    : <RouteSection key={route.routeName} route={route} />
-                )}
+                {preview.byRoute.map(route => (
+                  <RouteSection key={route.routeName} route={route} />
+                ))}
               </div>
 
               {/* Estado de cuenta */}
