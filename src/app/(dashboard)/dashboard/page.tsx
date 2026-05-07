@@ -119,6 +119,23 @@ async function getStats() {
     })
   }
 
+  // Sumar DiasInternosEntry al total de Aurumin (no están en trip.amount)
+  if (openPeriod) {
+    const [diasRoute, diasEntries] = await Promise.all([
+      prisma.route.findFirst({ where: { name: { contains: 'DIAS INTERNOS' }, clientName: 'AURUMIN' }, select: { rate: true } }),
+      prisma.diasInternosEntry.findMany({
+        where: { fecha: { gte: openPeriod.startDate, lte: openPeriod.endDate } },
+        select: { totalHoras: true },
+      }),
+    ])
+    const diasRate  = diasRoute?.rate ?? 20
+    const diasTotal = Math.round(diasEntries.reduce((s, e) => s + e.totalHoras, 0) * diasRate * 100) / 100
+    if (diasTotal > 0) {
+      const ex = clientPeriodStats.get('AURUMIN') ?? { trips: 0, tons: 0, amount: 0 }
+      clientPeriodStats.set('AURUMIN', { ...ex, amount: ex.amount + diasTotal })
+    }
+  }
+
   // ── Tendencia últimos 6 meses (por período) ────────────────────────────────
   const allPeriods = await prisma.period.findMany({
     where: { startDate: { gte: sixMonthsAgo } },
