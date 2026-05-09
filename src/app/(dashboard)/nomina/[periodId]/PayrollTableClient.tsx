@@ -258,27 +258,33 @@ export default function PayrollTableClient({
                             value={abonoEditing[entry.id]}
                             onChange={e => setAbonoEditing(prev => ({ ...prev, [entry.id]: e.target.value }))}
                             className="w-20 bg-zinc-800 border border-zinc-600 text-white rounded px-1.5 py-1 text-xs focus:outline-none focus:border-amber-500 text-right"
+                            autoFocus
                           />
                           <button
                             onClick={() => handleAbonoSave(entry.id)}
                             disabled={abonoLoading === entry.id}
-                            className="text-xs bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded px-1.5 py-1"
+                            className="text-xs bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded px-2 py-1"
                           >
-                            {abonoLoading === entry.id ? '...' : 'OK'}
+                            {abonoLoading === entry.id ? '...' : 'Guardar'}
                           </button>
                           <button
                             onClick={() => setAbonoEditing(prev => { const n = { ...prev }; delete n[entry.id]; return n })}
-                            className="text-zinc-500 hover:text-white"
+                            className="text-zinc-500 hover:text-white text-xs"
                           >✕</button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => setAbonoEditing(prev => ({ ...prev, [entry.id]: entry.abono.toString() }))}
-                          className="text-right text-zinc-400 hover:text-amber-400 underline-offset-2 hover:underline whitespace-nowrap"
-                          title="Editar abono"
-                        >
-                          {entry.abono > 0 ? `-${fmt(entry.abono)}` : <span className="text-zinc-600">—</span>}
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          {entry.abono > 0 && (
+                            <span className="text-emerald-400 font-mono">-{fmt(entry.abono)}</span>
+                          )}
+                          <button
+                            onClick={() => setAbonoEditing(prev => ({ ...prev, [entry.id]: entry.abono.toString() }))}
+                            className="text-xs bg-zinc-800 hover:bg-amber-500/20 border border-zinc-700 hover:border-amber-500/40 text-zinc-400 hover:text-amber-400 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap"
+                            title="Registrar abono para este camión"
+                          >
+                            {entry.abono > 0 ? 'Editar' : '+ Abono'}
+                          </button>
+                        </div>
                       )
                     ) : (
                       <span className="text-zinc-400">

@@ -22,7 +22,9 @@ export type TruckAnalysis = {
   mechanicFee:  number
   adminFee:     number
   deductions:   number
-  netAmount:    number
+  saldoInicial: number   // carry-over del período anterior
+  netAmount:    number   // netAmount YA incluye saldoInicial
+  netoSoloPeriodo: number // netAmount SIN saldoInicial
   // Préstamos
   loans:        number
 }
@@ -34,12 +36,14 @@ export type OwnerAnalysis = {
     type:       string
     nprPercent: number
   }
-  trucks:           TruckAnalysis[]
-  totalBilling:     number
-  totalByClient:    ClientStats[]
-  totalNet:         number
-  totalLoans:       number
-  periodLabel:      string
+  trucks:              TruckAnalysis[]
+  totalBilling:        number
+  totalByClient:       ClientStats[]
+  totalNet:            number
+  totalNetoSoloPeriodo: number
+  totalSaldoAnterior:  number
+  totalLoans:          number
+  periodLabel:         string
 }
 
 export async function getOwnerAnalysis(
@@ -136,13 +140,15 @@ export async function getOwnerAnalysis(
       driverName:   truck.driver?.name ?? '—',
       byClient,
       totalBilling: Math.round(totalBilling * 100) / 100,
-      driverWage:   payrollEntry?.driverWage   ?? 0,
-      nprFee:       payrollEntry?.nprFee       ?? 0,
-      mechanicFee:  payrollEntry?.mechanicFee  ?? 0,
-      adminFee:     payrollEntry?.adminFee     ?? 0,
-      deductions:   payrollEntry?.deductions   ?? 0,
-      netAmount:    payrollEntry?.netAmount     ?? 0,
-      loans:        Math.round(truckLoans * 100) / 100,
+      driverWage:      payrollEntry?.driverWage   ?? 0,
+      nprFee:          payrollEntry?.nprFee       ?? 0,
+      mechanicFee:     payrollEntry?.mechanicFee  ?? 0,
+      adminFee:        payrollEntry?.adminFee     ?? 0,
+      deductions:      payrollEntry?.deductions   ?? 0,
+      saldoInicial:    payrollEntry?.saldoInicial ?? 0,
+      netAmount:       payrollEntry?.netAmount     ?? 0,
+      netoSoloPeriodo: Math.round(((payrollEntry?.netAmount ?? 0) - (payrollEntry?.saldoInicial ?? 0)) * 100) / 100,
+      loans:           Math.round(truckLoans * 100) / 100,
     }
   })
 
@@ -165,21 +171,25 @@ export async function getOwnerAnalysis(
     }
   }
 
-  const totalBilling = trucksAnalysis.reduce((s, t) => s + t.totalBilling, 0)
-  const totalNet     = trucksAnalysis.reduce((s, t) => s + t.netAmount, 0)
-  const totalLoans   = trucksAnalysis.reduce((s, t) => s + t.loans, 0)
+  const totalBilling        = trucksAnalysis.reduce((s, t) => s + t.totalBilling, 0)
+  const totalNet            = trucksAnalysis.reduce((s, t) => s + t.netAmount, 0)
+  const totalNetoSoloPeriodo = trucksAnalysis.reduce((s, t) => s + t.netoSoloPeriodo, 0)
+  const totalSaldoAnterior  = trucksAnalysis.reduce((s, t) => s + t.saldoInicial, 0)
+  const totalLoans          = trucksAnalysis.reduce((s, t) => s + t.loans, 0)
 
   const fmt = (d: Date) =>
     new Date(d).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 
   return {
-    owner:         { id: owner.id, name: owner.name, type: owner.type, nprPercent: owner.nprPercent },
-    trucks:        trucksAnalysis,
-    totalBilling:  Math.round(totalBilling * 100) / 100,
-    totalByClient: Array.from(totalClientMap.values()).sort((a, b) => b.billing - a.billing),
-    totalNet:      Math.round(totalNet * 100) / 100,
-    totalLoans:    Math.round(totalLoans * 100) / 100,
-    periodLabel:   `${fmt(period.startDate)} al ${fmt(period.endDate)}`,
+    owner:               { id: owner.id, name: owner.name, type: owner.type, nprPercent: owner.nprPercent },
+    trucks:              trucksAnalysis,
+    totalBilling:        Math.round(totalBilling * 100) / 100,
+    totalByClient:       Array.from(totalClientMap.values()).sort((a, b) => b.billing - a.billing),
+    totalNet:            Math.round(totalNet * 100) / 100,
+    totalNetoSoloPeriodo: Math.round(totalNetoSoloPeriodo * 100) / 100,
+    totalSaldoAnterior:  Math.round(totalSaldoAnterior * 100) / 100,
+    totalLoans:          Math.round(totalLoans * 100) / 100,
+    periodLabel:         `${fmt(period.startDate)} al ${fmt(period.endDate)}`,
   }
 }
 

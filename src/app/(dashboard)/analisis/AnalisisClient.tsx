@@ -179,11 +179,21 @@ export default function AnalisisClient({ owners, periods }: { owners: Owner[]; p
                 <p className="text-white font-bold text-lg mt-0.5">{data.owner.name}</p>
                 <p className="text-zinc-500 text-sm">{data.owner.type} · {data.owner.nprPercent}% NPR · {data.periodLabel}</p>
               </div>
-              <div className="text-right">
-                <p className="text-zinc-500 text-xs">Facturación total</p>
+              <div className="text-right space-y-1">
+                <p className="text-zinc-500 text-xs">Facturación bruta</p>
                 <p className="text-2xl font-bold text-amber-400">{fmt$(data.totalBilling)}</p>
                 {!isAfiliado && (
-                  <p className="text-sm text-emerald-400 font-semibold mt-1">Neto: {fmt$(data.totalNet)}</p>
+                  <>
+                    <p className="text-xs text-zinc-500">Neto este período: <span className="text-white font-semibold">{fmt$(data.totalNetoSoloPeriodo)}</span></p>
+                    {data.totalSaldoAnterior !== 0 && (
+                      <p className="text-xs text-zinc-500">
+                        + Saldo anterior: <span className={`font-semibold ${data.totalSaldoAnterior > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmt$(data.totalSaldoAnterior)}</span>
+                      </p>
+                    )}
+                    <p className="text-sm font-bold text-emerald-400 border-t border-zinc-700 pt-1 mt-1">
+                      Total a cobrar: {fmt$(data.totalNet)}
+                    </p>
+                  </>
                 )}
               </div>
             </div>
@@ -234,9 +244,19 @@ export default function AnalisisClient({ owners, periods }: { owners: Owner[]; p
                 </div>
                 <div className="text-right">
                   <p className="text-amber-400 font-semibold">{fmt$(truck.totalBilling)}</p>
-                  {!isAfiliado && truck.netAmount !== 0 && (
-                    <p className={`text-xs font-semibold ${truck.netAmount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                      Neto: {fmt$(truck.netAmount)}
+                  {!isAfiliado && (
+                    <p className={`text-xs font-semibold ${truck.netoSoloPeriodo >= 0 ? 'text-white' : 'text-red-400'}`}>
+                      Neto período: {fmt$(truck.netoSoloPeriodo)}
+                    </p>
+                  )}
+                  {!isAfiliado && truck.saldoInicial !== 0 && (
+                    <p className={`text-xs ${truck.saldoInicial > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {truck.saldoInicial > 0 ? '+ ' : ''}Saldo ant.: {fmt$(truck.saldoInicial)}
+                    </p>
+                  )}
+                  {!isAfiliado && truck.saldoInicial !== 0 && (
+                    <p className={`text-xs font-bold ${truck.netAmount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      = Total: {fmt$(truck.netAmount)}
                     </p>
                   )}
                 </div>
@@ -302,11 +322,27 @@ export default function AnalisisClient({ owners, periods }: { owners: Owner[]; p
                         <span className="text-red-400 font-mono">− {fmt$(truck.loans)}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-sm border-t border-zinc-700 pt-2 mt-2">
-                      <span className="text-white font-semibold">Neto</span>
-                      <span className={`font-bold font-mono ${truck.netAmount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {fmt$(truck.netAmount)}
-                      </span>
+                    <div className="border-t border-zinc-700 pt-2 mt-2 space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-zinc-400">Neto este período</span>
+                        <span className={`font-semibold font-mono ${truck.netoSoloPeriodo >= 0 ? 'text-white' : 'text-red-400'}`}>
+                          {fmt$(truck.netoSoloPeriodo)}
+                        </span>
+                      </div>
+                      {truck.saldoInicial !== 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-zinc-400">Saldo anterior</span>
+                          <span className={`font-semibold font-mono ${truck.saldoInicial > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {truck.saldoInicial > 0 ? '+ ' : ''}{fmt$(truck.saldoInicial)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm border-t border-zinc-800 pt-1">
+                        <span className="text-white font-bold">Total a cobrar</span>
+                        <span className={`font-bold font-mono ${truck.netAmount >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {fmt$(truck.netAmount)}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -339,18 +375,27 @@ export default function AnalisisClient({ owners, periods }: { owners: Owner[]; p
 
           {/* Saldo final propios */}
           {!isAfiliado && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between">
-              <div>
-                <p className="text-white font-semibold">Saldo final — {data.owner.name}</p>
-                <p className="text-zinc-500 text-xs mt-0.5">{data.periodLabel}</p>
-              </div>
-              <div className="text-right">
-                <p className={`text-2xl font-bold ${data.totalNet >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {fmt$(data.totalNet)}
-                </p>
-                {data.totalLoans > 0 && (
-                  <p className="text-red-400 text-xs mt-0.5">Préstamos: − {fmt$(data.totalLoans)}</p>
-                )}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+              <div className="flex items-start justify-between flex-wrap gap-3">
+                <div>
+                  <p className="text-white font-semibold">Resumen — {data.owner.name}</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">{data.periodLabel}</p>
+                </div>
+                <div className="text-right space-y-0.5">
+                  <p className="text-zinc-500 text-xs">Neto este período: <span className="text-white font-semibold">{fmt$(data.totalNetoSoloPeriodo)}</span></p>
+                  {data.totalSaldoAnterior !== 0 && (
+                    <p className="text-zinc-500 text-xs">
+                      + Saldo anterior: <span className={`font-semibold ${data.totalSaldoAnterior > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmt$(data.totalSaldoAnterior)}</span>
+                    </p>
+                  )}
+                  <p className={`text-2xl font-bold ${data.totalNet >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {fmt$(data.totalNet)}
+                  </p>
+                  <p className="text-zinc-600 text-xs">Total a cobrar</p>
+                  {data.totalLoans > 0 && (
+                    <p className="text-red-400 text-xs mt-0.5">Préstamos: − {fmt$(data.totalLoans)}</p>
+                  )}
+                </div>
               </div>
             </div>
           )}
