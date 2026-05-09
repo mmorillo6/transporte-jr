@@ -195,7 +195,10 @@ export type OwnerSummaryRow = {
 }
 
 export async function getAllOwnersSummary(periodId: string): Promise<OwnerSummaryRow[]> {
-  const [owners, trips, payrollEntries] = await Promise.all([
+  const period = await prisma.period.findUnique({ where: { id: periodId } })
+  if (!period) return []
+
+  const [owners, trips, payrollEntries, diasRoute, diasEntries] = await Promise.all([
     prisma.owner.findMany({ where: { active: true }, orderBy: { name: 'asc' } }),
     prisma.trip.findMany({
       where: { periodId },
@@ -210,11 +213,19 @@ export async function getAllOwnersSummary(periodId: string): Promise<OwnerSummar
       where: { periodId },
       select: { truckId: true, netAmount: true, saldoInicial: true, truck: { select: { ownerId: true } } },
     }),
+    prisma.route.findFirst({ where: { name: { contains: 'DIAS INTERNOS' }, clientName: 'AURUMIN' }, select: { rate: true } }),
+    prisma.diasInternosEntry.findMany({
+      where: { fecha: { gte: period.startDate, lte: period.endDate } },
+      select: { totalHoras: true, truckId: true, truck: { select: { ownerId: true } } },
+    }),
   ])
 
+  const diasRate = diasRoute?.rate ?? 20
+
   return owners.map(owner => {
-    const ownerTrips = trips.filter(t => t.truck.ownerId === owner.id)
+    const ownerTrips   = trips.filter(t => t.truck.ownerId === owner.id)
     const ownerEntries = payrollEntries.filter(e => e.truck.ownerId === owner.id)
+    const ownerDias    = diasEntries.filter((d: any) => d.truck.ownerId === owner.id)
 
     let aurumin = 0, chinoPane = 0, otherClients = 0
     for (const t of ownerTrips) {
@@ -223,6 +234,10 @@ export async function getAllOwnersSummary(periodId: string): Promise<OwnerSummar
       else if (cn === 'LUIS PEÑA')  chinoPane    += t.amount
       else                          otherClients += t.amount
     }
+
+    // DiasInternos se facturan a Aurumin
+    const diasTotal = ownerDias.reduce((s: number, d: any) => s + d.totalHoras * diasRate, 0)
+    aurumin += diasTotal
 
     const saldoAnterior = ownerEntries.reduce((s, e) => s + (e.saldoInicial ?? 0), 0)
     const netAmount     = ownerEntries.reduce((s, e) => s + e.netAmount, 0)

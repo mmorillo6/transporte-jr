@@ -151,7 +151,7 @@ async function getStats() {
   const monthlyData = allPeriods.map(p => {
     const gross = p.payroll.reduce((s, e) => s + e.grossAmount, 0)
     const net   = p.payroll.reduce((s, e) => s + e.netAmount, 0)
-    const label = `${new Date(p.startDate).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' })}`
+    const label = `${new Date(p.startDate).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })}`
     return { month: label, revenue: Math.round(gross * 100) / 100, net: Math.round(net * 100) / 100, trips: p.payroll.length }
   })
 
@@ -271,9 +271,9 @@ export default async function DashboardPage() {
         {stats.openPeriod && (
           <Link href="/nomina"
             className="text-xs bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl px-3 py-2 hover:bg-amber-500/20 transition-colors">
-            Período {new Date(stats.openPeriod.startDate).toLocaleDateString('es-VE',{day:'2-digit',month:'2-digit'})}
+            Período {new Date(stats.openPeriod.startDate).toLocaleDateString('es-VE',{day:'2-digit',month:'2-digit',timeZone:'UTC'})}
             {' — '}
-            {new Date(stats.openPeriod.endDate).toLocaleDateString('es-VE',{day:'2-digit',month:'2-digit',year:'2-digit'})}
+            {new Date(stats.openPeriod.endDate).toLocaleDateString('es-VE',{day:'2-digit',month:'2-digit',year:'2-digit',timeZone:'UTC'})}
             {' → Ver nómina'}
           </Link>
         )}
@@ -291,7 +291,7 @@ export default async function DashboardPage() {
             </p>
             <p className="text-zinc-500 text-xs mt-1">
               {stats.periodsSinCxC.map(p =>
-                `${new Date(p.startDate).toLocaleDateString('es-VE',{day:'2-digit',month:'2-digit'})} al ${new Date(p.endDate).toLocaleDateString('es-VE',{day:'2-digit',month:'2-digit',year:'2-digit'})}`
+                `${new Date(p.startDate).toLocaleDateString('es-VE',{day:'2-digit',month:'2-digit',timeZone:'UTC'})} al ${new Date(p.endDate).toLocaleDateString('es-VE',{day:'2-digit',month:'2-digit',year:'2-digit',timeZone:'UTC'})}`
               ).join(' · ')}
             </p>
             <p className="text-zinc-600 text-xs mt-1">El "Por Cobrar" del dashboard no refleja estos períodos hasta que se registren en Cuentas por Cobrar.</p>
