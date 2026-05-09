@@ -183,6 +183,63 @@ export async function getOwnerAnalysis(
   }
 }
 
+export type OwnerSummaryRow = {
+  ownerId:      string
+  ownerName:    string
+  ownerType:    string
+  aurumin:      number
+  chinoPane:    number
+  otherClients: number
+  saldoAnterior: number
+  netAmount:    number
+}
+
+export async function getAllOwnersSummary(periodId: string): Promise<OwnerSummaryRow[]> {
+  const [owners, trips, payrollEntries] = await Promise.all([
+    prisma.owner.findMany({ where: { active: true }, orderBy: { name: 'asc' } }),
+    prisma.trip.findMany({
+      where: { periodId },
+      select: {
+        amount:  true,
+        truckId: true,
+        route:   { select: { clientName: true } },
+        truck:   { select: { ownerId: true } },
+      },
+    }),
+    prisma.payrollEntry.findMany({
+      where: { periodId },
+      select: { truckId: true, netAmount: true, saldoInicial: true, truck: { select: { ownerId: true } } },
+    }),
+  ])
+
+  return owners.map(owner => {
+    const ownerTrips = trips.filter(t => t.truck.ownerId === owner.id)
+    const ownerEntries = payrollEntries.filter(e => e.truck.ownerId === owner.id)
+
+    let aurumin = 0, chinoPane = 0, otherClients = 0
+    for (const t of ownerTrips) {
+      const cn = t.route?.clientName ?? 'AURUMIN'
+      if (cn === 'AURUMIN')         aurumin      += t.amount
+      else if (cn === 'LUIS PEÑA')  chinoPane    += t.amount
+      else                          otherClients += t.amount
+    }
+
+    const saldoAnterior = ownerEntries.reduce((s, e) => s + (e.saldoInicial ?? 0), 0)
+    const netAmount     = ownerEntries.reduce((s, e) => s + e.netAmount, 0)
+
+    return {
+      ownerId:       owner.id,
+      ownerName:     owner.name,
+      ownerType:     owner.type,
+      aurumin:       Math.round(aurumin      * 100) / 100,
+      chinoPane:     Math.round(chinoPane    * 100) / 100,
+      otherClients:  Math.round(otherClients * 100) / 100,
+      saldoAnterior: Math.round(saldoAnterior * 100) / 100,
+      netAmount:     Math.round(netAmount    * 100) / 100,
+    }
+  }).filter(r => r.aurumin > 0 || r.chinoPane > 0 || r.netAmount !== 0)
+}
+
 export async function getOwnersAndPeriods() {
   const [owners, periods] = await Promise.all([
     prisma.owner.findMany({ where: { active: true }, orderBy: { name: 'asc' } }),

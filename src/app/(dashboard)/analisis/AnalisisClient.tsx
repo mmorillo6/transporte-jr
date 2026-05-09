@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
-import { getOwnerAnalysis } from '@/app/actions/analisis'
-import type { OwnerAnalysis } from '@/app/actions/analisis'
+import { getOwnerAnalysis, getAllOwnersSummary } from '@/app/actions/analisis'
+import type { OwnerAnalysis, OwnerSummaryRow } from '@/app/actions/analisis'
 
 type Owner  = { id: string; name: string; type: string; nprPercent: number }
 type Period = { id: string; startDate: Date; endDate: Date; status: string }
@@ -23,9 +23,11 @@ const CLIENT_LABEL: Record<string, string> = {
 }
 
 export default function AnalisisClient({ owners, periods }: { owners: Owner[]; periods: Period[] }) {
+  const [tab,      setTab]      = useState<'individual' | 'resumen'>('resumen')
   const [ownerId,  setOwnerId]  = useState('')
   const [periodId, setPeriodId] = useState(periods[0]?.id ?? '')
   const [data,     setData]     = useState<OwnerAnalysis | null>(null)
+  const [summary,  setSummary]  = useState<OwnerSummaryRow[] | null>(null)
   const [loading,  setLoading]  = useState(false)
 
   async function handleLoad() {
@@ -38,21 +40,41 @@ export default function AnalisisClient({ owners, periods }: { owners: Owner[]; p
 
   const isAfiliado = data?.owner.type === 'AFILIADO'
 
+  async function handleLoadSummary() {
+    if (!periodId) return
+    setLoading(true)
+    const res = await getAllOwnersSummary(periodId)
+    setSummary(res)
+    setLoading(false)
+  }
+
   return (
     <div className="space-y-4">
 
-      {/* Selectores */}
+      {/* Tab switcher */}
+      <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 w-fit">
+        {(['resumen', 'individual'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`px-5 py-1.5 rounded-lg text-sm font-medium transition-colors ${tab === t ? 'bg-zinc-700 text-white' : 'text-zinc-400 hover:text-white'}`}>
+            {t === 'resumen' ? 'Resumen todos los dueños' : 'Detalle por dueño'}
+          </button>
+        ))}
+      </div>
+
+      {/* Selector de período (siempre visible) */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-end gap-4 flex-wrap">
-        <div>
-          <label className="block text-xs text-zinc-400 mb-1.5">Propietario</label>
-          <select value={ownerId} onChange={e => setOwnerId(e.target.value)}
-            className="bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500 min-w-48">
-            <option value="">Seleccionar...</option>
-            {owners.map(o => (
-              <option key={o.id} value={o.id}>{o.name} — {o.type}</option>
-            ))}
-          </select>
-        </div>
+        {tab === 'individual' && (
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1.5">Propietario</label>
+            <select value={ownerId} onChange={e => setOwnerId(e.target.value)}
+              className="bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500 min-w-48">
+              <option value="">Seleccionar...</option>
+              {owners.map(o => (
+                <option key={o.id} value={o.id}>{o.name} — {o.type}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="block text-xs text-zinc-400 mb-1.5">Período</label>
           <select value={periodId} onChange={e => setPeriodId(e.target.value)}
@@ -64,13 +86,89 @@ export default function AnalisisClient({ owners, periods }: { owners: Owner[]; p
             ))}
           </select>
         </div>
-        <button onClick={handleLoad} disabled={!ownerId || loading}
-          className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-xl px-5 py-2 text-sm transition-colors">
-          {loading ? 'Calculando…' : 'Ver análisis'}
-        </button>
+        {tab === 'individual' ? (
+          <button onClick={handleLoad} disabled={!ownerId || loading}
+            className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-xl px-5 py-2 text-sm transition-colors">
+            {loading ? 'Calculando…' : 'Ver detalle'}
+          </button>
+        ) : (
+          <button onClick={handleLoadSummary} disabled={!periodId || loading}
+            className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-xl px-5 py-2 text-sm transition-colors">
+            {loading ? 'Calculando…' : 'Ver resumen'}
+          </button>
+        )}
       </div>
 
-      {data && (
+      {/* ── RESUMEN TODOS LOS DUEÑOS ─────────────────────────────────────────── */}
+      {tab === 'resumen' && summary && (
+        <div className="space-y-3">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-zinc-800">
+              <p className="text-white font-semibold text-sm">Desglose por dueño — Aurumin vs Chino Peña</p>
+              <p className="text-zinc-500 text-xs mt-0.5">Lo que se le debe a cada dueño separado por cliente. El "Total a cobrar" incluye saldo anterior.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-800 bg-zinc-800/30">
+                    <th className="text-left px-4 py-2.5 text-zinc-400 font-medium text-xs">Dueño</th>
+                    <th className="text-left px-4 py-2.5 text-zinc-400 font-medium text-xs">Tipo</th>
+                    <th className="text-right px-4 py-2.5 text-amber-400 font-medium text-xs">Aurumin</th>
+                    <th className="text-right px-4 py-2.5 text-blue-400 font-medium text-xs">Chino Peña</th>
+                    <th className="text-right px-4 py-2.5 text-zinc-400 font-medium text-xs">Saldo ant.</th>
+                    <th className="text-right px-4 py-2.5 text-white font-medium text-xs">Total a cobrar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.map((r, i) => (
+                    <tr key={r.ownerId} className={`border-b border-zinc-800/50 ${i % 2 === 1 ? 'bg-zinc-800/10' : ''}`}>
+                      <td className="px-4 py-2.5 text-white font-medium">{r.ownerName}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${r.ownerType === 'PROPIO' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                          {r.ownerType}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        {r.aurumin > 0 ? <span className="text-amber-400 font-mono">{fmt$(r.aurumin)}</span> : <span className="text-zinc-600">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        {r.chinoPane > 0 ? <span className="text-blue-400 font-mono">{fmt$(r.chinoPane)}</span> : <span className="text-zinc-600">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        {r.saldoAnterior !== 0
+                          ? <span className={`font-mono text-xs ${r.saldoAnterior > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmt$(r.saldoAnterior)}</span>
+                          : <span className="text-zinc-600">—</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <span className={`font-bold font-mono ${r.netAmount < 0 ? 'text-red-400' : 'text-white'}`}>{fmt$(r.netAmount)}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-zinc-700 bg-zinc-800/30">
+                    <td colSpan={2} className="px-4 py-2.5 text-white font-semibold text-xs">Total</td>
+                    <td className="px-4 py-2.5 text-right text-amber-400 font-bold font-mono text-xs">
+                      {fmt$(summary.reduce((s, r) => s + r.aurumin, 0))}
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-blue-400 font-bold font-mono text-xs">
+                      {fmt$(summary.reduce((s, r) => s + r.chinoPane, 0))}
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-zinc-400 font-bold font-mono text-xs">
+                      {fmt$(summary.reduce((s, r) => s + r.saldoAnterior, 0))}
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-white font-bold font-mono">
+                      {fmt$(summary.reduce((s, r) => s + r.netAmount, 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'individual' && data && (
         <div className="space-y-4">
 
           {/* Header dueño */}
@@ -259,9 +357,15 @@ export default function AnalisisClient({ owners, periods }: { owners: Owner[]; p
         </div>
       )}
 
-      {!data && !loading && (
+      {tab === 'individual' && !data && !loading && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl py-16 text-center">
           <p className="text-zinc-500 text-sm">Selecciona un propietario y período para ver el análisis</p>
+        </div>
+      )}
+
+      {tab === 'resumen' && !summary && !loading && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl py-16 text-center">
+          <p className="text-zinc-500 text-sm">Selecciona un período y presiona "Ver resumen"</p>
         </div>
       )}
     </div>
