@@ -81,6 +81,7 @@ const PROVEEDOR_TO_ROUTE: Record<string, string> = {
   'SOSA MENDEZ':            'SOSA MENDEZ',
   'FOSFORITO':              'FOSFORITO',
   'CHARLIE RICHARD':        'CHARLIE RICHARD',
+  'RUBEN MARIN':            'CH.R. - RUBEN MARIN', // proveedor directo = misma ruta
   'LA GARRAPATA':           'LA GARRAPATA',
   'ROSCIO SUR':             'ROSCIO SUR',
   'MACKENCI':               'MACKENCI',
