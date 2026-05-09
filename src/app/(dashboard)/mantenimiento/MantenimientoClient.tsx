@@ -53,7 +53,7 @@ type MechanicWork = {
 }
 
 export default function MantenimientoClient({
-  trucks, alerts, logs, mechanics, parts, mechanicWorks, tireRepairs, truckTotals, canManage, initialTab,
+  trucks, alerts, logs, mechanics, parts, mechanicWorks, tireRepairs, truckTotals, tireDebts, canManage, initialTab,
 }: {
   trucks: Truck[]
   alerts: Alert[]
@@ -63,6 +63,7 @@ export default function MantenimientoClient({
   mechanicWorks: MechanicWork[]
   tireRepairs: any[]
   truckTotals: Record<string, { count: number; cost: number }>
+  tireDebts: any[]
   canManage: boolean
   initialTab?: string
 }) {
@@ -746,6 +747,7 @@ export default function MantenimientoClient({
           repairs={tireRepairs}
           trucks={trucks.map(t => ({ id: t.id, plate: t.plate, driver: t.driver }))}
           truckTotals={truckTotals}
+          tireDebts={tireDebts}
         />
       )}
     </div>

@@ -15,7 +15,7 @@ export default async function MantenimientoPage({
   const params = await searchParams
   const initialTab = params.tab ?? 'flota'
 
-  const [trucks, alerts, logs, mechanics, parts, mechanicWorks, tireRepairs] = await Promise.all([
+  const [trucks, alerts, logs, mechanics, parts, mechanicWorks, tireRepairs, tireDebts] = await Promise.all([
     prisma.truck.findMany({
       where: { active: true },
       orderBy: { plate: 'asc' },
@@ -61,6 +61,10 @@ export default async function MantenimientoPage({
         truck: { select: { plate: true, driver: { select: { name: true } } } },
       },
     }),
+    prisma.tireDebt.findMany({
+      orderBy: { date: 'desc' },
+      include: { payments: { orderBy: { date: 'asc' } } },
+    }),
   ])
 
   const truckTotals: Record<string, { count: number; cost: number }> = {}
@@ -91,6 +95,7 @@ export default async function MantenimientoPage({
         mechanicWorks={mechanicWorks as any}
         tireRepairs={tireRepairs as any}
         truckTotals={truckTotals}
+        tireDebts={tireDebts as any}
         canManage={canManage}
         initialTab={initialTab}
       />

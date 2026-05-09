@@ -20,11 +20,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  ownerId      String?
-  owner        Owner?         @relation(fields: [ownerId], references: [id])
-  drivenTrucks Truck[]        @relation("TruckDriver")
-  clockEntries ClockEntry[]
-  mechanicWork MechanicWork[]
+  ownerId         String?
+  owner           Owner?           @relation(fields: [ownerId], references: [id])
+  drivenTrucks    Truck[]          @relation("TruckDriver")
+  clockEntries    ClockEntry[]
+  mechanicWork    MechanicWork[]
   maintenanceLogs MaintenanceLog[]
 }
 
@@ -43,7 +43,7 @@ model Owner {
   name           String
   type           OwnerType
   commissionRate Float     @default(0)
-  nprPercent     Float     @default(5)   // 5% transporte, 10% afiliados
+  nprPercent     Float     @default(5) // 5% transporte, 10% afiliados
   isNPROwner     Boolean   @default(false) // true solo para José (su 5% acumula, no se descuenta)
   phone          String?
   active         Boolean   @default(true)
@@ -72,35 +72,35 @@ model Truck {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  trips           Trip[]
-  payrollEntries  PayrollEntry[]
-  expenses        Expense[]
-  maintenanceLogs MaintenanceLog[]
-  mechanicWork    MechanicWork[]
-  clockEntries    ClockEntry[]
-  alerts          MaintenanceAlert[]
-  status          TruckStatus?
-  parts           Part[]
-  dispatches      DispatchEntry[]
-  fuelEntries     FuelEntry[]
-  oilUsages       OilUsage[]
-  tireRepairs     TireRepair[]
-  cashEntries     CashEntry[]
-  almacenItems       AlmacenItem[]
+  trips               Trip[]
+  payrollEntries      PayrollEntry[]
+  expenses            Expense[]
+  maintenanceLogs     MaintenanceLog[]
+  mechanicWork        MechanicWork[]
+  clockEntries        ClockEntry[]
+  alerts              MaintenanceAlert[]
+  status              TruckStatus?
+  parts               Part[]
+  dispatches          DispatchEntry[]
+  fuelEntries         FuelEntry[]
+  oilUsages           OilUsage[]
+  tireRepairs         TireRepair[]
+  cashEntries         CashEntry[]
+  almacenItems        AlmacenItem[]
   diasInternosEntries DiasInternosEntry[]
 }
 
 // ─── RUTAS / MINAS ────────────────────────────────────────────────────────────
 
 model Route {
-  id            String   @id @default(cuid())
-  name          String   @unique
-  rateType      RateType @default(PER_TON)
-  rate          Float
-  bidirectional Boolean  @default(false) // si es true: tarifa × 2 por viaje (ida y vuelta cargados)
-  hasViatico    Boolean  @default(false)
-  viaticoSingle Float    @default(0)
-  viaticoDouble Float    @default(0)
+  id                String   @id @default(cuid())
+  name              String   @unique
+  rateType          RateType @default(PER_TON)
+  rate              Float
+  bidirectional     Boolean  @default(false) // si es true: tarifa × 2 por viaje (ida y vuelta cargados)
+  hasViatico        Boolean  @default(false)
+  viaticoSingle     Float    @default(0)
+  viaticoDouble     Float    @default(0)
   driverWage        Float    @default(0)
   fuelLitersPerTrip Float    @default(0)
   clientName        String   @default("AURUMIN")
@@ -164,29 +164,29 @@ enum PeriodStatus {
 // ─── NÓMINA ───────────────────────────────────────────────────────────────────
 
 model PayrollEntry {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   periodId      String
-  period        Period   @relation(fields: [periodId], references: [id])
+  period        Period    @relation(fields: [periodId], references: [id])
   truckId       String
-  truck         Truck    @relation(fields: [truckId], references: [id])
-  totalTons     Float    @default(0)
-  grossAmount   Float    @default(0)   // facturación bruta del camión
-  viaticos      Float    @default(0)
-  driverWage    Float    @default(0)   // nómina chofer
-  deductions    Float    @default(0)
-  commissionFee Float    @default(0)
-  nprFee        Float    @default(0)   // 5% o 10% NPR según owner
-  mechanicFee   Float    @default(0)   // nómina mecánicos
-  adminFee      Float    @default(0)   // $50 × total_carros ÷ carros_activos
-  saldoInicial  Float    @default(0)   // deuda pendiente de quincena anterior
-  abono         Float    @default(0)   // pago recibido esta quincena
-  netAmount     Float    @default(0)   // saldo final (puede ser negativo)
-  cashEntryId   String?                // CashEntry auto-creado si netAmount < 0
+  truck         Truck     @relation(fields: [truckId], references: [id])
+  totalTons     Float     @default(0)
+  grossAmount   Float     @default(0) // facturación bruta del camión
+  viaticos      Float     @default(0)
+  driverWage    Float     @default(0) // nómina chofer
+  deductions    Float     @default(0)
+  commissionFee Float     @default(0)
+  nprFee        Float     @default(0) // 5% o 10% NPR según owner
+  mechanicFee   Float     @default(0) // nómina mecánicos
+  adminFee      Float     @default(0) // $50 × total_carros ÷ carros_activos
+  saldoInicial  Float     @default(0) // deuda pendiente de quincena anterior
+  abono         Float     @default(0) // pago recibido esta quincena
+  netAmount     Float     @default(0) // saldo final (puede ser negativo)
+  cashEntryId   String? // CashEntry auto-creado si netAmount < 0
   notes         String?
   paidAt        DateTime?
   paymentMethod String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 // ─── GASTOS ───────────────────────────────────────────────────────────────────
@@ -250,17 +250,17 @@ enum MaintenanceType {
 // ─── TRABAJO DE MECÁNICOS ─────────────────────────────────────────────────────
 
 model MechanicWork {
-  id           String   @id @default(cuid())
-  truckId      String
-  truck        Truck    @relation(fields: [truckId], references: [id])
-  mechanicId   String
-  mechanic     User     @relation(fields: [mechanicId], references: [id])
-  description  String
-  cost         Float    @default(0)
-  workshopCut  Float    @default(0)
-  mechanicCut  Float    @default(0)
-  date         DateTime
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  truckId     String
+  truck       Truck    @relation(fields: [truckId], references: [id])
+  mechanicId  String
+  mechanic    User     @relation(fields: [mechanicId], references: [id])
+  description String
+  cost        Float    @default(0)
+  workshopCut Float    @default(0)
+  mechanicCut Float    @default(0)
+  date        DateTime
+  createdAt   DateTime @default(now())
 }
 
 // ─── CLOCK IN / CLOCK OUT ─────────────────────────────────────────────────────
@@ -301,14 +301,14 @@ enum DeductType {
 // ─── ALERTAS DE MANTENIMIENTO ─────────────────────────────────────────────────
 
 model MaintenanceAlert {
-  id        String        @id @default(cuid())
+  id        String          @id @default(cuid())
   truckId   String
-  truck     Truck         @relation(fields: [truckId], references: [id])
+  truck     Truck           @relation(fields: [truckId], references: [id])
   type      MaintenanceType
   dueDate   DateTime
-  status    AlertStatus   @default(PENDING)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  status    AlertStatus     @default(PENDING)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
 }
 
 enum AlertStatus {
@@ -403,6 +403,37 @@ model TireRepair {
   createdAt DateTime  @default(now())
 }
 
+// ─── DEUDAS DE CAUCHO ─────────────────────────────────────────────────────────
+// Deudas de dueños/encargados por cauchos entregados. Soporta abonos parciales.
+
+model TireDebt {
+  id          String   @id @default(cuid())
+  ownerName   String
+  truckPlate  String?
+  tireType    String   @default("1200r24")
+  quantity    Int
+  unitCost    Float
+  totalAmount Float
+  amountPaid  Float    @default(0)
+  balance     Float
+  status      String   @default("PENDING")
+  date        DateTime @default(now())
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  payments    TireDebtPayment[]
+}
+
+model TireDebtPayment {
+  id        String   @id @default(cuid())
+  debtId    String
+  debt      TireDebt @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  amount    Float
+  date      DateTime @default(now())
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
 // ─── GASOIL ───────────────────────────────────────────────────────────────────
 
 model FuelTank {
@@ -417,14 +448,14 @@ model FuelTank {
 }
 
 model FuelIntake {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   date      DateTime
   tankId    String
-  tank      FuelTank  @relation(fields: [tankId], references: [id], onDelete: Cascade)
+  tank      FuelTank @relation(fields: [tankId], references: [id], onDelete: Cascade)
   liters    Float
   source    String?
   notes     String?
-  createdAt DateTime  @default(now())
+  createdAt DateTime @default(now())
 }
 
 model FuelEntry {
@@ -450,7 +481,7 @@ model CashEntry {
   concept   String
   source    String?
   notes     String?
-  truckId   String?                          // si es préstamo a camión negativo
+  truckId   String? // si es préstamo a camión negativo
   truck     Truck?        @relation(fields: [truckId], references: [id])
   createdAt DateTime      @default(now())
 }
