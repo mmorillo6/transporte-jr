@@ -12,7 +12,7 @@ async function getStats() {
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
   // ── Datos básicos ─────────────────────────────────────────────────────────
-  const [totalTrucks, activeTrucks, openAlerts, truckStatuses, openPeriod, cashEntries, loans, cuentasPorCobrar] = await Promise.all([
+  const [totalTrucks, activeTrucks, openAlerts, truckStatuses, openPeriod, cashEntries, loans, cuentasPorCobrar, recentClosedPeriods] = await Promise.all([
     prisma.truck.count(),
     prisma.truck.count({ where: { active: true } }),
     prisma.maintenanceAlert.count({ where: { status: 'PENDING' } }),
@@ -25,6 +25,12 @@ async function getStats() {
     prisma.cuentaPorCobrar.findMany({
       where: { status: { not: 'PAID' } },
       orderBy: { date: 'desc' },
+    }),
+    prisma.period.findMany({
+      where: { status: 'CLOSED' },
+      orderBy: { endDate: 'desc' },
+      take: 6,
+      select: { id: true, startDate: true, endDate: true },
     }),
   ])
 
@@ -189,6 +195,15 @@ async function getStats() {
   }
   const totalPorCobrar = Array.from(cxcByClient.values()).reduce((s, v) => s + v, 0)
 
+  // Períodos cerrados sin CxC registrada — alerta para Fernando
+  // Un período "sin CxC" es aquel que tiene viajes pero ninguna CxC con fecha dentro de su rango
+  const allCxcDates = (await prisma.cuentaPorCobrar.findMany({ select: { date: true } })).map(c => c.date)
+  const periodsSinCxC = recentClosedPeriods.filter(p => {
+    const start = new Date(p.startDate).getTime()
+    const end   = new Date(p.endDate).getTime()
+    return !allCxcDates.some(d => d.getTime() >= start && d.getTime() <= end)
+  })
+
   // Camiones de José en el período actual (para su cuenta personal)
   const joseOwner = await prisma.owner.findFirst({ where: { id: 'owner-jose' } })
   let joseTrucksPayroll: {
@@ -218,6 +233,7 @@ async function getStats() {
     cxcByClient, totalPorCobrar,
     joseTrucksPayroll,
     clientPeriodStats,
+    periodsSinCxC,
   }
 }
 
@@ -262,6 +278,30 @@ export default async function DashboardPage() {
           </Link>
         )}
       </div>
+
+      {/* ── Alerta: períodos cerrados sin CxC ───────────────────────────────── */}
+      {showFinancials && stats.periodsSinCxC.length > 0 && (
+        <div className="bg-red-500/5 border border-red-500/30 rounded-2xl p-4 flex items-start gap-3">
+          <span className="text-red-400 text-lg flex-shrink-0">⚠</span>
+          <div className="flex-1">
+            <p className="text-red-400 font-semibold text-sm">
+              {stats.periodsSinCxC.length === 1
+                ? 'Hay 1 período cerrado sin Cuenta por Cobrar registrada'
+                : `Hay ${stats.periodsSinCxC.length} períodos cerrados sin Cuenta por Cobrar registrada`}
+            </p>
+            <p className="text-zinc-500 text-xs mt-1">
+              {stats.periodsSinCxC.map(p =>
+                `${new Date(p.startDate).toLocaleDateString('es-VE',{day:'2-digit',month:'2-digit'})} al ${new Date(p.endDate).toLocaleDateString('es-VE',{day:'2-digit',month:'2-digit',year:'2-digit'})}`
+              ).join(' · ')}
+            </p>
+            <p className="text-zinc-600 text-xs mt-1">El "Por Cobrar" del dashboard no refleja estos períodos hasta que se registren en Cuentas por Cobrar.</p>
+          </div>
+          <Link href="/cuentas-por-cobrar"
+            className="text-xs bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-medium rounded-xl px-3 py-2 transition-colors flex-shrink-0 whitespace-nowrap">
+            Registrar CxC →
+          </Link>
+        </div>
+      )}
 
       {/* ── Por cobrar — banner destacado ───────────────────────────────────── */}
       {showFinancials && stats.totalPorCobrar > 0 && (
