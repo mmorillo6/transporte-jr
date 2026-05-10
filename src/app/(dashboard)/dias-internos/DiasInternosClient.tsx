@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { getDiasInternosEntries, createDiasInternosEntry, updateDiasInternosEntry, deleteDiasInternosEntry, getDiasInternosDetections } from '@/app/actions/diasInternos'
+import { getDiasInternosEntries, createDiasInternosEntry, updateDiasInternosEntry, deleteDiasInternosEntry, getDiasInternosDetections, createDiasInternosBulk } from '@/app/actions/diasInternos'
 
 type Truck = { id: string; plate: string; driver: { name: string } | null }
 type Entry = {
@@ -45,6 +45,51 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
   const [descripcion, setDescripcion] = useState('INTERNO TRONCAL A PLANTA')
   const [actividad, setActividad]     = useState('ACARREO DE ÑUMA DE TRONCAL A PLANTA')
   const [saving, setSaving]           = useState(false)
+
+  // Bulk state
+  const [showBulk, setShowBulk]         = useState(false)
+  const [bulkFecha, setBulkFecha]       = useState(todayStr())
+  const [bulkInicio, setBulkInicio]     = useState('07:30')
+  const [bulkFin, setBulkFin]           = useState('17:00')
+  const [bulkDescanso, setBulkDescanso] = useState(1)
+  const [bulkDescripcion, setBulkDescripcion] = useState('INTERNO TRONCAL A PLANTA')
+  const [bulkActividad, setBulkActividad]     = useState('ACARREO DE ÑUMA DE TRONCAL A PLANTA')
+  const [bulkSelected, setBulkSelected] = useState<Record<string, string>>({}) // truckId → conductor
+  const [bulkSaving, setBulkSaving]     = useState(false)
+  const [bulkError, setBulkError]       = useState('')
+
+  const bulkHoras = (() => {
+    if (!bulkInicio || !bulkFin) return 0
+    const [hi, mi] = bulkInicio.split(':').map(Number)
+    const [hf, mf] = bulkFin.split(':').map(Number)
+    const h = ((hf * 60 + mf) - (hi * 60 + mi)) / 60 - bulkDescanso
+    return h > 0 ? Math.round(h * 100) / 100 : 0
+  })()
+
+  async function handleBulkSubmit(ev: React.FormEvent) {
+    ev.preventDefault()
+    const truckList = Object.entries(bulkSelected).map(([truckId, conductor]) => ({ truckId, conductor }))
+    if (truckList.length === 0) { setBulkError('Selecciona al menos un camión'); return }
+    setBulkSaving(true); setBulkError('')
+    const res = await createDiasInternosBulk({
+      fecha: bulkFecha, horaInicio: bulkInicio, horaFin: bulkFin,
+      descanso: bulkDescanso, descripcion: bulkDescripcion, actividad: bulkActividad,
+      trucks: truckList,
+    })
+    if (res?.error) { setBulkError(res.error); setBulkSaving(false); return }
+    setShowBulk(false); setBulkSelected({})
+    await cargar(); router.refresh()
+    setBulkSaving(false)
+  }
+
+  function toggleBulkTruck(truck: Truck) {
+    setBulkSelected(prev => {
+      const next = { ...prev }
+      if (next[truck.id]) { delete next[truck.id] }
+      else { next[truck.id] = truck.driver?.name ?? '' }
+      return next
+    })
+  }
 
   const totalHoras = (() => {
     if (!horaInicio || !horaFin) return 0
@@ -149,11 +194,114 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
           <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
             className="bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
         </div>
-        <button onClick={openNew}
-          className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold rounded-xl px-4 py-2 text-sm transition-colors ml-auto">
-          + Agregar registro
-        </button>
+        <div className="ml-auto flex gap-2">
+          <button onClick={() => { setShowBulk(v => !v); setShowForm(false) }}
+            className="bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl px-4 py-2 text-sm transition-colors">
+            + Día masivo
+          </button>
+          <button onClick={() => { openNew(); setShowBulk(false) }}
+            className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold rounded-xl px-4 py-2 text-sm transition-colors">
+            + Un camión
+          </button>
+        </div>
       </div>
+
+      {/* ── Formulario DÍA MASIVO ──────────────────────────────────────────── */}
+      {showBulk && (
+        <form onSubmit={handleBulkSubmit} className="bg-zinc-900 border border-blue-500/30 rounded-2xl p-5 space-y-4">
+          <h3 className="text-white font-semibold text-sm">Día interno masivo — varios camiones a la vez</h3>
+
+          {/* Horario común */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Fecha</label>
+              <input type="date" value={bulkFecha} onChange={e => setBulkFecha(e.target.value)} required
+                className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Hora inicio</label>
+              <input type="time" value={bulkInicio} onChange={e => setBulkInicio(e.target.value)} required
+                className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Hora fin</label>
+              <input type="time" value={bulkFin} onChange={e => setBulkFin(e.target.value)} required
+                className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Descanso (h)</label>
+              <input type="number" value={bulkDescanso} onChange={e => setBulkDescanso(parseFloat(e.target.value) || 0)}
+                min={0} step={0.5}
+                className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+            </div>
+          </div>
+
+          {/* Preview horas */}
+          {bulkHoras > 0 && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-2 text-sm text-amber-400 font-semibold">
+              {bulkHoras}h × $20.00 = ${(bulkHoras * 20).toFixed(2)} por camión
+              {Object.keys(bulkSelected).length > 0 && (
+                <span className="text-zinc-400 font-normal ml-2">
+                  · {Object.keys(bulkSelected).length} camión(es) seleccionado(s) = ${(bulkHoras * 20 * Object.keys(bulkSelected).length).toFixed(2)} total
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Selección de camiones */}
+          <div>
+            <p className="text-xs text-zinc-400 mb-2">Selecciona los camiones que trabajaron ese día:</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {trucks.map(truck => {
+                const selected = !!bulkSelected[truck.id]
+                return (
+                  <label key={truck.id}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 border cursor-pointer transition-colors ${
+                      selected ? 'bg-blue-500/10 border-blue-500/40' : 'bg-zinc-800/50 border-zinc-700 hover:border-zinc-600'
+                    }`}>
+                    <input type="checkbox" checked={selected} onChange={() => toggleBulkTruck(truck)}
+                      className="accent-blue-500 w-4 h-4 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-mono font-medium text-sm">{truck.plate}</p>
+                      {selected ? (
+                        <input
+                          type="text"
+                          value={bulkSelected[truck.id]}
+                          onChange={e => setBulkSelected(prev => ({ ...prev, [truck.id]: e.target.value }))}
+                          onClick={e => e.stopPropagation()}
+                          placeholder="Conductor"
+                          className="w-full bg-zinc-700 border border-zinc-600 text-white rounded px-1.5 py-0.5 text-xs mt-1 focus:outline-none focus:border-blue-500"
+                        />
+                      ) : (
+                        <p className="text-zinc-500 text-xs truncate">{truck.driver?.name ?? '—'}</p>
+                      )}
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Seleccionar todos */}
+          <div className="flex gap-3 text-xs">
+            <button type="button" onClick={() => setBulkSelected(Object.fromEntries(trucks.map(t => [t.id, t.driver?.name ?? ''])))}
+              className="text-blue-400 hover:text-blue-300 transition-colors">Seleccionar todos</button>
+            <button type="button" onClick={() => setBulkSelected({})}
+              className="text-zinc-500 hover:text-zinc-300 transition-colors">Limpiar</button>
+          </div>
+
+          {bulkError && <p className="text-red-400 text-sm">{bulkError}</p>}
+
+          <div className="flex gap-3">
+            <button type="submit" disabled={bulkSaving || Object.keys(bulkSelected).length === 0}
+              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold rounded-xl px-5 py-2 text-sm transition-colors">
+              {bulkSaving ? 'Guardando...' : `Crear ${Object.keys(bulkSelected).length || ''} registro(s)`}
+            </button>
+            <button type="button" onClick={() => { setShowBulk(false); setBulkSelected({}) }}
+              className="text-zinc-400 hover:text-white text-sm transition-colors">Cancelar</button>
+          </div>
+        </form>
+      )}
 
       {/* Resumen */}
       <div className="grid grid-cols-2 gap-3">

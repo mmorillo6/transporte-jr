@@ -79,6 +79,39 @@ export async function deleteDiasInternosEntry(id: string) {
   revalidatePath('/dias-internos')
 }
 
+export async function createDiasInternosBulk(data: {
+  fecha: string
+  horaInicio: string
+  horaFin: string
+  descanso: number
+  descripcion: string
+  actividad: string
+  trucks: { truckId: string; conductor: string }[]
+}) {
+  const { fecha, horaInicio, horaFin, descanso, descripcion, actividad, trucks } = data
+  if (!fecha || !horaInicio || !horaFin || trucks.length === 0)
+    return { error: 'Faltan datos requeridos' }
+
+  const totalHoras = Math.max(0, calcHoras(horaInicio, horaFin) - descanso)
+  if (totalHoras <= 0) return { error: 'Las horas resultantes deben ser mayores a 0' }
+
+  await prisma.diasInternosEntry.createMany({
+    data: trucks.map(t => ({
+      truckId:    t.truckId,
+      conductor:  t.conductor,
+      fecha:      new Date(fecha + 'T12:00:00'),
+      horaInicio,
+      horaFin,
+      totalHoras,
+      descripcion: descripcion || 'INTERNO TRONCAL A PLANTA',
+      actividad:   actividad   || 'ACARREO DE ÑUMA DE TRONCAL A PLANTA',
+    })),
+  })
+
+  revalidatePath('/dias-internos')
+  return { created: trucks.length }
+}
+
 /** Detecta camiones con DIAS INTERNOS en la romana para el período dado */
 export async function getDiasInternosDetections(startDate: string, endDate: string) {
   const start = new Date(startDate + 'T00:00:00')
