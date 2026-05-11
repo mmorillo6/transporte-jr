@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma'
 import PeriodActions from './PeriodActions'
 import PayrollTableClient from './PayrollTableClient'
 import { getTotalAlmacenPendiente } from '@/app/actions/almacen'
+import GastosMasivosClient from './GastosMasivosClient'
+import GastosComunesClient from './GastosComunesClient'
 
 async function getPeriodData(periodId: string, role: string, ownerId: string | null) {
   const period = await prisma.period.findUnique({
@@ -149,21 +151,41 @@ export default async function PeriodDetailPage({
     }))
     .sort((a, b) => b.totalWage - a.totalWage)
 
+  const trucksForGastos = payroll
+    .map((e: any) => ({
+      id: e.truckId,
+      plate: e.truck?.plate ?? '',
+      driverName: e.truck?.driver?.name ?? '',
+    }))
+    .filter((t: { id: string; plate: string; driverName: string }) => t.plate)
+
+  const periodStartISO = new Date(period.startDate).toISOString().slice(0, 10)
+  const periodEndISO   = new Date(period.endDate).toISOString().slice(0, 10)
+
+  const checklistData = {
+    payrollCount:         payroll.length,
+    tripsWithoutTicket:   trips.filter((t: any) => !t.ticketNo).length,
+    unpaidEntries:        payroll.filter((e: any) => !e.paidAt && e.netAmount > 0).length,
+    negativoEntries:      payroll.filter((e: any) => e.netAmount < 0).length,
+    totalAlmacenPendiente,
+    totalLoansPendientes,
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Link href="/nomina" className="text-zinc-500 hover:text-white transition-colors">
+      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <Link href="/nomina" className="text-zinc-500 hover:text-white transition-colors flex-shrink-0">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-white">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-white leading-tight">
               Relación {formatDate(period.startDate)} — {formatDate(period.endDate)}
             </h1>
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                 period.status === 'OPEN'
                   ? 'bg-emerald-500/10 text-emerald-400'
@@ -177,7 +199,7 @@ export default async function PeriodDetailPage({
         </div>
 
         {['DUENO', 'ENCARGADO'].includes(session.role) && (
-          <PeriodActions periodId={periodId} periodStatus={period.status} role={session.role} />
+          <PeriodActions periodId={periodId} periodStatus={period.status} role={session.role} checklistData={checklistData} />
         )}
       </div>
 
@@ -290,6 +312,25 @@ export default async function PeriodDetailPage({
             totalAbono={totalAbono}
             totalNet={totalNet}
           />
+
+          {/* Gastos comunes — divididos entre todos los camiones */}
+          {['DUENO', 'ENCARGADO'].includes(session.role) && (
+            <GastosComunesClient
+              periodId={periodId}
+              periodEnd={periodEndISO}
+              truckCount={trucksForGastos.length}
+            />
+          )}
+
+          {/* Gastos operativos por camión */}
+          {['DUENO', 'ENCARGADO'].includes(session.role) && (
+            <GastosMasivosClient
+              trucks={trucksForGastos}
+              periodId={periodId}
+              periodStart={periodStartISO}
+              periodEnd={periodEndISO}
+            />
+          )}
 
           {/* Nómina de choferes */}
           {nominaChoferes.length > 0 && (

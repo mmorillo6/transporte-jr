@@ -223,6 +223,19 @@ async function getStats() {
     }))
   }
 
+  // Alerta: sin período abierto hace más de 2 días
+  let lastClosedEndDate: Date | null = null
+  if (!openPeriod) {
+    const last = await prisma.period.findFirst({
+      where: { status: 'CLOSED' },
+      orderBy: { endDate: 'desc' },
+      select: { endDate: true },
+    })
+    lastClosedEndDate = last?.endDate ?? null
+  }
+  const needsNewPeriod = !openPeriod && lastClosedEndDate !== null &&
+    (Date.now() - new Date(lastClosedEndDate).getTime()) > 2 * 24 * 60 * 60 * 1000
+
   return {
     totalTrucks, activeTrucks, openAlerts, openPeriod,
     balanceEfectivo, balanceUsdt, totalLoans,
@@ -234,6 +247,8 @@ async function getStats() {
     joseTrucksPayroll,
     clientPeriodStats,
     periodsSinCxC,
+    needsNewPeriod,
+    lastClosedEndDate,
   }
 }
 
@@ -299,6 +314,27 @@ export default async function DashboardPage() {
           <Link href="/cuentas-por-cobrar"
             className="text-xs bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-medium rounded-xl px-3 py-2 transition-colors flex-shrink-0 whitespace-nowrap">
             Registrar CxC →
+          </Link>
+        </div>
+      )}
+
+      {/* ── Alerta: no hay período abierto ─────────────────────────────────── */}
+      {showFinancials && stats.needsNewPeriod && (
+        <div className="bg-amber-500/5 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3">
+          <span className="text-amber-400 text-lg flex-shrink-0">⚠</span>
+          <div className="flex-1">
+            <p className="text-amber-400 font-semibold text-sm">No hay período abierto</p>
+            <p className="text-zinc-500 text-xs mt-1">
+              El último período cerró el{' '}
+              {new Date(stats.lastClosedEndDate!).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })}{' '}
+              y no se ha abierto uno nuevo.
+            </p>
+          </div>
+          <Link
+            href="/nomina"
+            className="text-xs bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 font-medium rounded-xl px-3 py-2 transition-colors flex-shrink-0 whitespace-nowrap"
+          >
+            Abrir período →
           </Link>
         </div>
       )}

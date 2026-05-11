@@ -66,6 +66,88 @@ export async function createExpense(formData: FormData) {
   return { ok: true }
 }
 
+export async function createExpensesBulk(items: {
+  date: string
+  description: string
+  category: string
+  amount: number
+  truckId: string
+  periodId: string
+}[]) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+  if (items.length === 0) return { error: 'Sin gastos para guardar' }
+
+  await prisma.expense.createMany({
+    data: items.map(item => ({
+      date:        new Date(item.date + 'T12:00:00'),
+      category:    item.category as any,
+      truckId:     item.truckId || null,
+      periodId:    item.periodId || null,
+      description: item.description.trim(),
+      amount:      item.amount,
+      isCredit:    false,
+      amountPaid:  item.amount,
+      paidDate:    new Date(),
+    })),
+  })
+
+  revalidatePath('/nomina')
+  revalidatePath('/gastos')
+  return { ok: true, created: items.length }
+}
+
+export async function applyGastosComunes(
+  periodId: string,
+  items: { description: string; category: string; totalAmount: number; date: string }[]
+) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+  if (items.length === 0) return { error: 'Sin gastos para aplicar' }
+
+  const truckIds = await prisma.payrollEntry
+    .findMany({ where: { periodId }, select: { truckId: true } })
+    .then(entries => [...new Set(entries.map(e => e.truckId))])
+
+  if (truckIds.length === 0) return { error: 'No hay camiones con nómina en este período' }
+
+  const bulk: Parameters<typeof createExpensesBulk>[0] = []
+  for (const item of items) {
+    const perTruck = Math.round((item.totalAmount / truckIds.length) * 100) / 100
+    for (const truckId of truckIds) {
+      bulk.push({
+        date:        item.date,
+        description: item.description,
+        category:    item.category,
+        amount:      perTruck,
+        truckId,
+        periodId,
+      })
+    }
+  }
+
+  return createExpensesBulk(bulk)
+}
+
+export async function getExpensesForPeriodTruck(periodId: string, truckId: string) {
+  const period = await prisma.period.findUnique({ where: { id: periodId } })
+  if (!period) return []
+  return prisma.expense.findMany({
+    where: { periodId, truckId },
+    orderBy: { date: 'asc' },
+    select: { id: true, date: true, description: true, category: true, amount: true },
+  })
+}
+
+export async function deleteExpenseBulk(ids: string[]) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+  await prisma.expense.deleteMany({ where: { id: { in: ids } } })
+  revalidatePath('/nomina')
+  revalidatePath('/gastos')
+  return { ok: true }
+}
+
 export async function updateExpense(id: string, formData: FormData) {
   const session = await getSession()
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {

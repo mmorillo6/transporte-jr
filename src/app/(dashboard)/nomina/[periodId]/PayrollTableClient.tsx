@@ -126,6 +126,7 @@ export default function PayrollTableClient({
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+      {/* ── Encabezado ── */}
       <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-white font-semibold text-sm">Relación final — choferes</h2>
         {canPay && pendingCount > 0 && !isClosed && (
@@ -167,7 +168,118 @@ export default function PayrollTableClient({
           </div>
         )}
       </div>
-      <div className="overflow-x-auto">
+      {/* ── Vista móvil: tarjetas ── */}
+      <div className="md:hidden divide-y divide-zinc-800/60">
+        {entries.map(entry => {
+          const isNegative = entry.netAmount < 0
+          const isPaid     = !!entry.paidAt
+          const isPaying   = paying === entry.id
+
+          return (
+            <div
+              key={entry.id}
+              className={`p-4 space-y-4 ${
+                isPaid     ? 'bg-emerald-500/5' :
+                isNegative ? 'bg-red-500/5' : ''
+              }`}
+            >
+              {/* Fila superior: identidad + monto */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-white font-semibold text-base leading-tight truncate">
+                    {entry.truck?.driver?.name ?? '—'}
+                  </p>
+                  <p className="text-zinc-400 text-sm mt-0.5">
+                    <span className="font-mono">{entry.truck?.plate ?? '—'}</span>
+                    <span className="text-zinc-600 mx-1.5">·</span>
+                    <span>{entry.truck?.owner?.name ?? '—'}</span>
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className={`text-2xl font-bold font-mono leading-none ${
+                    isNegative ? 'text-red-400' : isPaid ? 'text-emerald-400' : 'text-amber-400'
+                  }`}>
+                    {isNegative ? '-' : ''}{fmt(Math.abs(entry.netAmount))}
+                  </p>
+                  <p className="text-zinc-600 text-xs mt-1">saldo final</p>
+                </div>
+              </div>
+
+              {/* Estado / acción principal */}
+              {isPaid ? (
+                <div className="flex items-center gap-2 py-2.5 px-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                  <svg className="w-4 h-4 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-emerald-400 text-sm font-medium">
+                    Pagado el {shortDate(entry.paidAt!)}
+                    {entry.paymentMethod && <span className="text-emerald-500/70 ml-1">· {shortMethod(entry.paymentMethod)}</span>}
+                  </span>
+                </div>
+              ) : isNegative ? (
+                <div className="flex items-center gap-2 py-2.5 px-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                  <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-red-400 text-sm">Saldo en negativo — se generará préstamo CC al cerrar</span>
+                </div>
+              ) : canPay && !isClosed ? (
+                isPaying ? (
+                  <div className="space-y-2">
+                    <select
+                      value={selectedMethod}
+                      onChange={e => setSelectedMethod(e.target.value)}
+                      className="w-full bg-zinc-800 border border-zinc-600 text-white rounded-xl px-3 py-3 text-sm focus:outline-none focus:border-amber-500"
+                    >
+                      {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
+                    </select>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handlePay(entry.id, selectedMethod)}
+                        disabled={loadingId === entry.id}
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl py-3 text-sm transition-colors"
+                      >
+                        {loadingId === entry.id ? 'Guardando...' : '✓ Confirmar pago'}
+                      </button>
+                      <button
+                        onClick={() => setPaying(null)}
+                        className="px-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 font-medium rounded-xl py-3 text-sm transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setPaying(entry.id); setSelectedMethod('Efectivo') }}
+                    className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-amber-500/40 text-zinc-300 hover:text-white font-medium rounded-xl py-3 text-sm transition-colors"
+                  >
+                    Marcar como pagado
+                  </button>
+                )
+              ) : (
+                <p className="text-zinc-600 text-sm text-center py-1">Pendiente de cobro</p>
+              )}
+
+              {/* Ver relación — siempre visible */}
+              <a
+                href={`/nomina/${periodId}/truck/${entry.truckId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 text-zinc-500 hover:text-amber-400 text-sm transition-colors py-1"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Ver relación completa
+              </a>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* ── Vista escritorio: tabla ── */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-zinc-800 bg-zinc-800/40">
@@ -339,9 +451,22 @@ export default function PayrollTableClient({
                     </td>
                   )}
                   <td className="px-2 py-2">
-                    {entry.notes && (
-                      <span className="text-zinc-600 text-xs" title={entry.notes}>📝</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {entry.notes && (
+                        <span className="text-zinc-600 text-xs" title={entry.notes}>📝</span>
+                      )}
+                      <a
+                        href={`/nomina/${periodId}/truck/${entry.truckId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Ver relación"
+                        className="text-zinc-600 hover:text-amber-400 transition-colors"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </a>
+                    </div>
                   </td>
                 </tr>
               )
