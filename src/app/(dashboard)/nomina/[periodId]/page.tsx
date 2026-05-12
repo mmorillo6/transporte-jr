@@ -83,10 +83,22 @@ export default async function PeriodDetailPage({
     ownerId = user?.ownerId ?? null
   }
 
-  const [period, totalAlmacenPendiente, loansData] = await Promise.all([
+  const [period, totalAlmacenPendiente, loansData, cxcAurumin, cxcLuisPena] = await Promise.all([
     getPeriodData(periodId, session.role, ownerId),
     getTotalAlmacenPendiente(),
     prisma.loan.findMany({ where: { balance: { gt: 0 } }, select: { balance: true } }),
+    // CxC abiertas de Aurumin (deuda acumulada entre períodos)
+    prisma.cuentaPorCobrar.findMany({
+      where: { clientName: 'AURUMIN', status: { not: 'PAID' } },
+      include: { payments: { select: { amount: true, date: true }, orderBy: { date: 'desc' } } },
+      orderBy: { date: 'asc' },
+    }),
+    // CxC abiertas de Luis Peña (ambos nombres posibles)
+    prisma.cuentaPorCobrar.findMany({
+      where: { clientName: { in: ['LUIS PEÑA', 'CHINO PEÑA (LUIS PEÑA)'] }, status: { not: 'PAID' } },
+      include: { payments: { select: { amount: true, date: true }, orderBy: { date: 'desc' } } },
+      orderBy: { date: 'asc' },
+    }),
   ])
   if (!period) notFound()
 
@@ -114,6 +126,36 @@ export default async function PeriodDetailPage({
   const grossLuisPena = tripsLuisPena.reduce((s, t) => s + t.amount, 0)
   const tonsAurumin   = tripsAurumin.reduce((s, t)  => s + (t.netWeightKg ?? 0), 0) / 1000
   const tonsLuisPena  = tripsLuisPena.reduce((s, t) => s + (t.netWeightKg ?? 0), 0) / 1000
+
+  // ── CxC: separar "este período" de "acumulado" ──────────────────────────────
+  // Una CxC pertenece "a este período" si su date cae dentro de [startDate, endDate]
+  const isThisPeriod = (c: { date: Date }) =>
+    c.date >= period.startDate && c.date <= period.endDate
+
+  const cxcAuruminThisPeriod = cxcAurumin.filter(isThisPeriod)
+  const cxcAuruminPrev       = cxcAurumin.filter(c => !isThisPeriod(c))
+  const cxcLuisPenaThisPeriod= cxcLuisPena.filter(isThisPeriod)
+  const cxcLuisPenaPrev      = cxcLuisPena.filter(c => !isThisPeriod(c))
+
+  // Saldo acumulado = suma de balances de CxC de períodos anteriores
+  const acumuladoAurumin   = cxcAuruminPrev.reduce((s, c) => s + c.balance, 0)
+  const acumuladoLuisPena  = cxcLuisPenaPrev.reduce((s, c) => s + c.balance, 0)
+
+  // CxC de este período (si ya fue registrada)
+  const cxcActualAurumin   = cxcAuruminThisPeriod[0] ?? null
+  const cxcActualLuisPena  = cxcLuisPenaThisPeriod[0] ?? null
+
+  // Subtotales (facturado + acumulado)
+  const subtotalAurumin  = grossAurumin  + acumuladoAurumin
+  const subtotalLuisPena = grossLuisPena + acumuladoLuisPena
+
+  // Abonos recibidos en la CxC de este período
+  const abonosAurumin  = cxcActualAurumin  ? cxcActualAurumin.amountPaid  : 0
+  const abonosLuisPena = cxcActualLuisPena ? cxcActualLuisPena.amountPaid : 0
+
+  // Saldo total: todo lo pendiente de cobrar (incluye previos)
+  const saldoTotalAurumin  = cxcAurumin.reduce((s, c)  => s + c.balance, 0)
+  const saldoTotalLuisPena = cxcLuisPena.reduce((s, c) => s + c.balance, 0)
 
   // Cálculo Aurumin — neto a cobrar (carros positivos menos préstamos y almacén)
   const totalLoansPendientes = loansData.reduce((s, l) => s + l.balance, 0)
@@ -229,13 +271,22 @@ export default async function PeriodDetailPage({
                   <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">{tonsAurumin.toFixed(2)} ton</span>
                 </div>
                 <div className="space-y-1.5 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-zinc-400">Facturación bruta</span>
-                    <span className="text-white font-mono">${grossAurumin.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
-                  </div>
+                  <CxCRow label="Este período" value={grossAurumin} color="text-white" />
+                  {acumuladoAurumin > 0 && (
+                    <CxCRow label="Saldo acumulado (períodos prev.)" value={acumuladoAurumin} color="text-zinc-400" />
+                  )}
+                  {(grossAurumin > 0 || acumuladoAurumin > 0) && (
+                    <CxCRow label="Subtotal" value={subtotalAurumin} color="text-zinc-300" bold />
+                  )}
+                  {abonosAurumin > 0 && (
+                    <div className="flex justify-between text-emerald-400">
+                      <span>Abonos recibidos</span>
+                      <span className="font-mono">-${abonosAurumin.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
                   {sumNegativos < 0 && (
                     <div className="flex justify-between">
-                      <span className="text-zinc-500 text-xs">Carros en negativo (caja chica)</span>
+                      <span className="text-zinc-500 text-xs">Carros negativos (caja chica)</span>
                       <span className="text-zinc-500 font-mono text-xs">${sumNegativos.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
                     </div>
                   )}
@@ -248,28 +299,55 @@ export default async function PeriodDetailPage({
                     <span className="font-mono">-${totalAlmacenPendiente.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="border-t border-zinc-700 pt-2 flex justify-between">
-                    <span className="text-amber-300 font-semibold">Aurumin nos debe</span>
-                    <span className="text-amber-400 font-bold font-mono text-base">${auruminDebe.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-amber-300 font-semibold">
+                      {saldoTotalAurumin > 0 ? 'Aurumin nos debe' : 'Cuenta al día'}
+                    </span>
+                    <span className="text-amber-400 font-bold font-mono text-base">
+                      ${(saldoTotalAurumin > 0 ? saldoTotalAurumin : auruminDebe).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                    </span>
                   </div>
+                  {!cxcActualAurumin && grossAurumin > 0 && (
+                    <Link href="/caja?tab=cobrar" className="text-xs text-zinc-500 hover:text-amber-400 transition-colors">
+                      + Registrar CxC para este período →
+                    </Link>
+                  )}
                 </div>
               </div>
 
               {/* Luis Peña (Chino Peña) */}
-              <div className={`rounded-2xl p-4 space-y-3 border ${grossLuisPena > 0 ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-900/50 border-zinc-800/50'}`}>
+              <div className={`rounded-2xl p-4 space-y-3 border ${grossLuisPena > 0 || acumuladoLuisPena > 0 ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-900/50 border-zinc-800/50'}`}>
                 <div className="flex items-center justify-between">
                   <p className="text-white font-semibold text-sm">Luis Peña (Chino Peña)</p>
                   <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">{tonsLuisPena.toFixed(2)} ton</span>
                 </div>
-                {grossLuisPena > 0 ? (
+                {grossLuisPena > 0 || acumuladoLuisPena > 0 ? (
                   <div className="space-y-1.5 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-zinc-400">Facturación bruta</span>
-                      <span className="text-white font-mono">${grossLuisPena.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
-                    </div>
+                    {grossLuisPena > 0 && <CxCRow label="Este período" value={grossLuisPena} color="text-white" />}
+                    {acumuladoLuisPena > 0 && (
+                      <CxCRow label="Saldo acumulado (períodos prev.)" value={acumuladoLuisPena} color="text-zinc-400" />
+                    )}
+                    {grossLuisPena > 0 && acumuladoLuisPena > 0 && (
+                      <CxCRow label="Subtotal" value={subtotalLuisPena} color="text-zinc-300" bold />
+                    )}
+                    {abonosLuisPena > 0 && (
+                      <div className="flex justify-between text-emerald-400">
+                        <span>Abonos recibidos</span>
+                        <span className="font-mono">-${abonosLuisPena.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
                     <div className="border-t border-zinc-700 pt-2 flex justify-between">
-                      <span className="text-blue-300 font-semibold">Luis Peña nos debe</span>
-                      <span className="text-blue-400 font-bold font-mono text-base">${grossLuisPena.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-blue-300 font-semibold">
+                        {saldoTotalLuisPena > 0 ? 'Luis Peña nos debe' : 'Cuenta al día'}
+                      </span>
+                      <span className="text-blue-400 font-bold font-mono text-base">
+                        ${(saldoTotalLuisPena > 0 ? saldoTotalLuisPena : grossLuisPena).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                      </span>
                     </div>
+                    {!cxcActualLuisPena && grossLuisPena > 0 && (
+                      <Link href="/caja?tab=cobrar" className="text-xs text-zinc-500 hover:text-blue-400 transition-colors">
+                        + Registrar CxC para este período →
+                      </Link>
+                    )}
                   </div>
                 ) : (
                   <p className="text-zinc-600 text-xs">Sin viajes a La Fe / Nuevo Callao este período</p>
@@ -478,6 +556,17 @@ export default async function PeriodDetailPage({
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function CxCRow({ label, value, color, bold }: { label: string; value: number; color: string; bold?: boolean }) {
+  return (
+    <div className={`flex justify-between ${bold ? 'font-semibold' : ''}`}>
+      <span className="text-zinc-400">{label}</span>
+      <span className={`font-mono ${color}`}>
+        ${value.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+      </span>
     </div>
   )
 }
