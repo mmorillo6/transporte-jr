@@ -52,7 +52,7 @@ export default async function TruckRelacionPage({
     }),
     prisma.trip.findMany({
       where: { periodId, truckId },
-      include: { route: { select: { name: true } } },
+      include: { route: { select: { name: true, clientName: true } } },
       orderBy: { date: 'asc' },
     }),
     prisma.expense.findMany({
@@ -65,7 +65,11 @@ export default async function TruckRelacionPage({
 
   const truck   = entry.truck
   const e       = entry as any
-  const totalExpenses = expenses.reduce((s, x) => s + x.amount, 0)
+  const totalExpenses    = expenses.reduce((s, x) => s + x.amount, 0)
+  const tripsAurumin     = trips.filter(t => (t.route as any).clientName !== 'LUIS PEÑA')
+  const tripsLuisPena    = trips.filter(t => (t.route as any).clientName === 'LUIS PEÑA')
+  const grossTripAurumin = tripsAurumin.reduce((s, t) => s + t.amount, 0)
+  const grossTripLuisPena= tripsLuisPena.reduce((s, t) => s + t.amount, 0)
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -126,55 +130,66 @@ export default async function TruckRelacionPage({
           </div>
         </div>
 
-        {/* Tabla de viajes */}
+        {/* Tabla de viajes — separada por cliente */}
         {trips.length > 0 && (
-          <div className="px-6 py-4 border-b border-zinc-800 print:border-zinc-200">
-            <h2 className="text-white font-semibold text-sm mb-3 print:text-black">Detalle de viajes</h2>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-zinc-700 print:border-zinc-300">
-                  <th className="text-left text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Fecha</th>
-                  <th className="text-left text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Ticket</th>
-                  <th className="text-left text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Ruta</th>
-                  <th className="text-right text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Toneladas</th>
-                  <th className="text-right text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Monto</th>
-                  <th className="text-right text-zinc-500 font-medium py-2 print:text-zinc-500">Viático</th>
-                </tr>
-              </thead>
-              <tbody>
-                {trips.map(trip => (
-                  <tr key={trip.id} className="border-b border-zinc-800/50 print:border-zinc-100">
-                    <td className="py-2 pr-3 text-zinc-300 print:text-zinc-700">{fmtDate(trip.date)}</td>
-                    <td className="py-2 pr-3 text-zinc-400 font-mono print:text-zinc-600">{trip.ticketNo ?? '—'}</td>
-                    <td className="py-2 pr-3 text-zinc-300 print:text-zinc-700">{(trip as any).route?.name ?? '—'}</td>
-                    <td className="py-2 pr-3 text-right text-zinc-300 print:text-zinc-700">
-                      {trip.netWeightKg ? (trip.netWeightKg / 1000).toFixed(2) : '—'}
-                    </td>
-                    <td className="py-2 pr-3 text-right text-white font-mono print:text-black">${fmt(trip.amount)}</td>
-                    <td className="py-2 text-right text-blue-400 font-mono print:text-zinc-600">
-                      {trip.viatico > 0 ? `$${fmt(trip.viatico)}` : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-zinc-700 print:border-zinc-300">
-                  <td colSpan={3} className="py-2 pr-3 text-zinc-400 font-semibold print:text-zinc-500">
-                    Total ({trips.length} viajes)
-                  </td>
-                  <td className="py-2 pr-3 text-right text-white font-bold print:text-black">
-                    {(trips.reduce((s, t) => s + (t.netWeightKg ?? 0), 0) / 1000).toFixed(2)}
-                  </td>
-                  <td className="py-2 pr-3 text-right text-white font-bold font-mono print:text-black">
-                    ${fmt(e.grossAmount)}
-                  </td>
-                  <td className="py-2 text-right text-blue-400 font-bold font-mono print:text-zinc-600">
-                    {e.viaticos > 0 ? `$${fmt(e.viaticos)}` : '—'}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+          <>
+            {[
+              { label: 'Aurumin', rows: tripsAurumin,  gross: grossTripAurumin,  color: 'text-amber-400 print:text-amber-600' },
+              { label: 'Luis Peña (Chino Peña)', rows: tripsLuisPena, gross: grossTripLuisPena, color: 'text-blue-400 print:text-blue-700' },
+            ].filter(g => g.rows.length > 0).map(group => (
+              <div key={group.label} className="px-6 py-4 border-b border-zinc-800 print:border-zinc-200">
+                <h2 className="text-white font-semibold text-sm mb-3 print:text-black">
+                  Viajes — <span className={group.color}>{group.label}</span>
+                </h2>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-700 print:border-zinc-300">
+                      <th className="text-left text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Fecha</th>
+                      <th className="text-left text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Ticket</th>
+                      <th className="text-left text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Ruta</th>
+                      <th className="text-right text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Ton</th>
+                      <th className="text-right text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Monto</th>
+                      <th className="text-right text-zinc-500 font-medium py-2 print:text-zinc-500">Viático</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.rows.map(trip => (
+                      <tr key={trip.id} className="border-b border-zinc-800/50 print:border-zinc-100">
+                        <td className="py-2 pr-3 text-zinc-300 print:text-zinc-700">{fmtDate(trip.date)}</td>
+                        <td className="py-2 pr-3 text-zinc-400 font-mono print:text-zinc-600">{trip.ticketNo ?? '—'}</td>
+                        <td className="py-2 pr-3 text-zinc-300 print:text-zinc-700">{(trip as any).route?.name ?? '—'}</td>
+                        <td className="py-2 pr-3 text-right text-zinc-300 print:text-zinc-700">
+                          {trip.netWeightKg ? (trip.netWeightKg / 1000).toFixed(2) : '—'}
+                        </td>
+                        <td className="py-2 pr-3 text-right text-white font-mono print:text-black">${fmt(trip.amount)}</td>
+                        <td className="py-2 text-right text-blue-400 font-mono print:text-zinc-600">
+                          {trip.viatico > 0 ? `$${fmt(trip.viatico)}` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-zinc-700 print:border-zinc-300">
+                      <td colSpan={3} className="py-2 pr-3 text-zinc-400 font-semibold print:text-zinc-500">
+                        Total ({group.rows.length} viajes)
+                      </td>
+                      <td className="py-2 pr-3 text-right text-white font-bold print:text-black">
+                        {(group.rows.reduce((s, t) => s + (t.netWeightKg ?? 0), 0) / 1000).toFixed(2)}
+                      </td>
+                      <td className="py-2 pr-3 text-right font-bold font-mono print:text-black">
+                        <span className={group.color}>${fmt(group.gross)}</span>
+                      </td>
+                      <td className="py-2 text-right text-blue-400 font-bold font-mono print:text-zinc-600">
+                        {group.rows.reduce((s, t) => s + t.viatico, 0) > 0
+                          ? `$${fmt(group.rows.reduce((s, t) => s + t.viatico, 0))}`
+                          : '—'}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            ))}
+          </>
         )}
 
         {/* Tabla de gastos */}

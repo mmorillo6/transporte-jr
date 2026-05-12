@@ -20,7 +20,7 @@ async function getPeriodData(periodId: string, role: string, ownerId: string | n
               owner: { select: { id: true, name: true, type: true, nprPercent: true } },
             },
           },
-          route: { select: { name: true, rateType: true, driverWage: true } },
+          route: { select: { name: true, rateType: true, driverWage: true, clientName: true } },
         },
         orderBy: { date: 'asc' },
       },
@@ -107,7 +107,15 @@ export default async function PeriodDetailPage({
   const totalNet = payroll.reduce((s, e) => s + e.netAmount, 0)
   const totalTons = payroll.reduce((s, e) => s + e.totalTons, 0)
 
-  // Cálculo Aurumin — solo netAmounts positivos, menos préstamos y almacén
+  // Facturación bruta separada por cliente (desde los viajes, con route.clientName)
+  const tripsAurumin  = trips.filter(t => (t.route as any).clientName !== 'LUIS PEÑA')
+  const tripsLuisPena = trips.filter(t => (t.route as any).clientName === 'LUIS PEÑA')
+  const grossAurumin  = tripsAurumin.reduce((s, t) => s + t.amount, 0)
+  const grossLuisPena = tripsLuisPena.reduce((s, t) => s + t.amount, 0)
+  const tonsAurumin   = tripsAurumin.reduce((s, t)  => s + (t.netWeightKg ?? 0), 0) / 1000
+  const tonsLuisPena  = tripsLuisPena.reduce((s, t) => s + (t.netWeightKg ?? 0), 0) / 1000
+
+  // Cálculo Aurumin — neto a cobrar (carros positivos menos préstamos y almacén)
   const totalLoansPendientes = loansData.reduce((s, l) => s + l.balance, 0)
   const sumPositivos = payroll.filter(e => e.netAmount > 0).reduce((s, e) => s + e.netAmount, 0)
   const sumNegativos = payroll.filter(e => e.netAmount < 0).reduce((s, e) => s + e.netAmount, 0)
@@ -210,34 +218,64 @@ export default async function PeriodDetailPage({
         </div>
       ) : (
         <>
-          {/* Cuenta Aurumin — cálculo automático */}
+          {/* Cuentas de cobro por cliente — Aurumin y Luis Peña separados */}
           {session.role !== 'AFILIADO' && payroll.length > 0 && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
-              <p className="text-white font-semibold text-sm">Cuenta de cobro — Aurumin</p>
-              <div className="space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-zinc-400">Suma de carros positivos</span>
-                  <span className="text-white font-mono">${sumPositivos.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+              {/* Aurumin */}
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-white font-semibold text-sm">Aurumin</p>
+                  <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">{tonsAurumin.toFixed(2)} ton</span>
                 </div>
-                {sumNegativos < 0 && (
+                <div className="space-y-1.5 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-zinc-500 text-xs">Carros en negativo (caja chica — no se cobran a Aurumin)</span>
-                    <span className="text-zinc-500 font-mono text-xs">${sumNegativos.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-zinc-400">Facturación bruta</span>
+                    <span className="text-white font-mono">${grossAurumin.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
                   </div>
-                )}
-                <div className="flex justify-between text-red-400">
-                  <span>Préstamos pendientes</span>
-                  <span className="font-mono">-${totalLoansPendientes.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="flex justify-between text-red-400">
-                  <span>Almacén (repuestos no asignados)</span>
-                  <span className="font-mono">-${totalAlmacenPendiente.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="border-t border-zinc-700 pt-2 flex justify-between">
-                  <span className="text-amber-300 font-semibold">Aurumin nos debe</span>
-                  <span className="text-amber-400 font-bold font-mono text-base">${auruminDebe.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                  {sumNegativos < 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500 text-xs">Carros en negativo (caja chica)</span>
+                      <span className="text-zinc-500 font-mono text-xs">${sumNegativos.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-red-400">
+                    <span>Préstamos pendientes</span>
+                    <span className="font-mono">-${totalLoansPendientes.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between text-red-400">
+                    <span>Almacén pendiente</span>
+                    <span className="font-mono">-${totalAlmacenPendiente.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="border-t border-zinc-700 pt-2 flex justify-between">
+                    <span className="text-amber-300 font-semibold">Aurumin nos debe</span>
+                    <span className="text-amber-400 font-bold font-mono text-base">${auruminDebe.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                  </div>
                 </div>
               </div>
+
+              {/* Luis Peña (Chino Peña) */}
+              <div className={`rounded-2xl p-4 space-y-3 border ${grossLuisPena > 0 ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-900/50 border-zinc-800/50'}`}>
+                <div className="flex items-center justify-between">
+                  <p className="text-white font-semibold text-sm">Luis Peña (Chino Peña)</p>
+                  <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">{tonsLuisPena.toFixed(2)} ton</span>
+                </div>
+                {grossLuisPena > 0 ? (
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-zinc-400">Facturación bruta</span>
+                      <span className="text-white font-mono">${grossLuisPena.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="border-t border-zinc-700 pt-2 flex justify-between">
+                      <span className="text-blue-300 font-semibold">Luis Peña nos debe</span>
+                      <span className="text-blue-400 font-bold font-mono text-base">${grossLuisPena.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-zinc-600 text-xs">Sin viajes a La Fe / Nuevo Callao este período</p>
+                )}
+              </div>
+
             </div>
           )}
 
