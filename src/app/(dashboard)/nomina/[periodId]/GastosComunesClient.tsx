@@ -6,8 +6,9 @@ import { applyGastosComunes } from '@/app/actions/expenses'
 type Item = { description: string; category: string; amount: string }
 
 const DEFAULTS: Item[] = [
-  { description: 'STARLINK',       category: 'ADMINISTRATIVO', amount: '10.91' },
-  { description: 'GASTOS COMUNES', category: 'OPERATIVO',      amount: '3.80'  },
+  { description: 'NOMINA MECANICOS', category: 'MECANICA',      amount: '' },
+  { description: 'STARLINK',         category: 'ADMINISTRATIVO', amount: '10.91' },
+  { description: 'GASTOS COMUNES',   category: 'OPERATIVO',      amount: '3.80'  },
 ]
 
 export default function GastosComunesClient({

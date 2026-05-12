@@ -28,7 +28,7 @@ export async function generatePayroll(periodId: string) {
       trips: {
         include: {
           truck: { include: { owner: true } },
-          route: { select: { driverWage: true, name: true } },
+          route: { select: { driverWage: true, name: true, clientName: true } },
         },
       },
     },
@@ -55,17 +55,38 @@ export async function generatePayroll(periodId: string) {
   })
   const truckMap = new Map(trucks.map(t => [t.id, t]))
 
+  // ── Camiones PROPIO con viajes Aurumin este período ─────────────────────────
+  // Solo se consideran activos para el pool los propios con viajes Aurumin
+  // (excluye camiones que solo trabajaron rutas Luis Peña este período)
+  const propiosConAurumin = new Set(
+    period.trips
+      .filter(t => (t.route as any).clientName !== 'LUIS PEÑA')
+      .filter(t => truckMap.get(t.truckId)?.owner.type === 'PROPIO')
+      .map(t => t.truckId)
+  )
+  const activePropioThisPeriod = propiosConAurumin.size
+
   // ── Admin fee ────────────────────────────────────────────────────────────────
-  // Pool = $50 × total carros PROPIO activos en la flota
-  // Cada carro PROPIO activo este período paga: pool ÷ carros_activos_este_período
-  const totalPropioFlota = await prisma.truck.count({
-    where: { active: true, owner: { type: 'PROPIO' } },
+  // Pool = $50 × propios de la flota que han trabajado recientemente
+  // Se excluyen camiones sin viajes en los últimos 90 días (inactivos reales)
+  // Flota Aurumin: propios con al menos 1 viaje Aurumin en los últimos 45 días
+  // 45 días excluye camiones sin actividad reciente (A55BH6D, A15AE9Y) sin afectar
+  // a los que rotaron a Luis Peña temporalmente (A18AZ6C que volvería al pool)
+  const fortyFiveDaysAgo = new Date(period.startDate.getTime() - 45 * 24 * 60 * 60 * 1000)
+  const propioFlotaActiva = await prisma.truck.count({
+    where: {
+      active: true,
+      owner: { type: 'PROPIO' },
+      trips: { some: { date: { gte: fortyFiveDaysAgo }, route: { clientName: { not: 'LUIS PEÑA' } } } },
+    },
   })
-  const activePropioThisPeriod = trucks.filter(t => t.owner.type === 'PROPIO').length
-  const adminPool = 50 * totalPropioFlota
+  const adminPool = 50 * propioFlotaActiva
   const adminFeePerTruck = activePropioThisPeriod > 0 ? adminPool / activePropioThisPeriod : 0
 
-  // ── Mecánica por camión ───────────────────────────────────────────────────────
+  // ── Mecánica — pool dividido entre propios con viajes Aurumin ────────────────
+  // Suma MechanicWork del período + Expenses categoría MECANICA por camión.
+  // Fernando entra la nómina de mecánicos vía "Gastos comunes" como MECANICA;
+  // el sistema la divide y crea un Expense por camión → se acumula aquí.
   const mechanicWorks = await prisma.mechanicWork.findMany({
     where: {
       truckId: { in: truckIds },
@@ -76,6 +97,19 @@ export async function generatePayroll(periodId: string) {
   const mechanicByTruck = new Map<string, number>()
   for (const w of mechanicWorks) {
     mechanicByTruck.set(w.truckId, (mechanicByTruck.get(w.truckId) ?? 0) + w.cost)
+  }
+  // Expenses con categoría MECANICA por camión (incluye nómina de mecánicos distribuida)
+  const mechanicExpenses = await prisma.expense.findMany({
+    where: {
+      truckId: { in: truckIds },
+      periodId,
+      category: 'MECANICA',
+    },
+    select: { truckId: true, amount: true },
+  })
+  for (const e of mechanicExpenses) {
+    if (!e.truckId) continue
+    mechanicByTruck.set(e.truckId, (mechanicByTruck.get(e.truckId) ?? 0) + e.amount)
   }
 
   // ── Gastos operativos por camión (Expense records, excluye nómina/admin/NPR/mecánica) ──
@@ -141,11 +175,10 @@ export async function generatePayroll(periodId: string) {
     // NPR — se calcula siempre; para isNPROwner no se descuenta del neto pero se guarda
     const nprFee = grossAmount * nprPct
 
-    // Mecánica — solo PROPIO; AFILIADO paga por su cuenta
-    const mechanicFee = isPropio ? (mechanicByTruck.get(truckId) ?? 0) : 0
-
-    // Admin — solo PROPIO
-    const adminFee = isPropio ? adminFeePerTruck : 0
+    // Mecánica y admin — solo PROPIO con viajes Aurumin; Luis Peña no lleva estos costos
+    const tieneAurumin = propiosConAurumin.has(truckId)
+    const mechanicFee = (isPropio && tieneAurumin) ? (mechanicByTruck.get(truckId) ?? 0) : 0
+    const adminFee    = (isPropio && tieneAurumin) ? adminFeePerTruck : 0
 
     // Gastos operativos (Expense records) + viáticos de ruta
     const gastosOp = (gastosByTruck.get(truckId) ?? 0) + viaticos
