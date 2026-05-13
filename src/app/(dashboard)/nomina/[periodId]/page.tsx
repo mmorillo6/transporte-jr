@@ -84,7 +84,7 @@ export default async function PeriodDetailPage({
     ownerId = user?.ownerId ?? null
   }
 
-  const [period, totalAlmacenPendiente, loansData, cxcAurumin, cxcLuisPena, mecanicoExpensesCount, gastosGeneralesCount] = await Promise.all([
+  const [period, totalAlmacenPendiente, loansData, cxcAurumin, cxcLuisPena, mecanicoExpensesCount, gastosGeneralesCount, gastosComunesCount] = await Promise.all([
     getPeriodData(periodId, session.role, ownerId),
     getTotalAlmacenPendiente(),
     prisma.loan.findMany({ where: { balance: { gt: 0 } }, select: { balance: true } }),
@@ -104,6 +104,8 @@ export default async function PeriodDetailPage({
     prisma.expense.count({ where: { periodId, category: 'MECANICA' } }),
     // Gastos generales (sin camión) del período
     prisma.expense.count({ where: { periodId, truckId: null } }),
+    // Gastos comunes aplicados a camiones (Starlink, etc.)
+    prisma.expense.count({ where: { periodId, truckId: { not: null } } }),
   ])
   if (!period) notFound()
 
@@ -258,6 +260,94 @@ export default async function PeriodDetailPage({
           <PeriodActions periodId={periodId} periodStatus={period.status} role={session.role} checklistData={checklistData} />
         )}
       </div>
+
+      {/* ── Wizard de cierre — solo período abierto para encargado/dueño ── */}
+      {period.status === 'OPEN' && ['DUENO', 'ENCARGADO'].includes(session.role) && (() => {
+        const tripsWithoutTicket = trips.filter((t: any) => !t.ticketNo).length
+        const steps = [
+          {
+            label: 'Viajes importados',
+            done: trips.length > 0,
+            detail: trips.length > 0 ? `${trips.length} viajes` : 'Sin viajes aún',
+            href: '/romana',
+            action: 'Importar romana',
+          },
+          {
+            label: 'Nómina generada',
+            done: payroll.length > 0,
+            detail: payroll.length > 0 ? `${payroll.length} camiones` : 'Sin nómina',
+            href: null,
+            action: null,
+          },
+          {
+            label: 'Gastos aplicados',
+            done: gastosComunesCount > 0,
+            detail: gastosComunesCount > 0 ? `${gastosComunesCount} gastos` : 'Sin gastos en camiones',
+            href: null,
+            action: 'Usar panel ↓',
+          },
+          {
+            label: 'Mecánicos',
+            done: mecanicoExpensesCount > 0,
+            detail: mecanicoExpensesCount > 0 ? 'Ingresados' : 'Sin gastos MECANICA',
+            href: '/mantenimiento?tab=trabajos',
+            action: 'Registrar trabajos',
+          },
+          {
+            label: 'Tickets completos',
+            done: tripsWithoutTicket === 0,
+            detail: tripsWithoutTicket === 0 ? 'Todos completos' : `${tripsWithoutTicket} sin ticket`,
+            href: '/viajes',
+            action: 'Revisar viajes',
+          },
+        ]
+        const doneCount = steps.filter(s => s.done).length
+        const allDone   = doneCount === steps.length
+
+        return (
+          <div className={`rounded-2xl border p-4 ${allDone ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-zinc-900 border-zinc-800'}`}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold text-white">Progreso de cierre</p>
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${allDone ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-400'}`}>
+                {doneCount}/{steps.length} pasos
+              </span>
+            </div>
+            {/* Barra de progreso */}
+            <div className="w-full h-1.5 bg-zinc-800 rounded-full mb-4 overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all"
+                style={{ width: `${(doneCount / steps.length) * 100}%` }}
+              />
+            </div>
+            {/* Pasos */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {steps.map((step, i) => (
+                <div key={i} className={`rounded-xl p-3 text-xs ${step.done ? 'bg-emerald-500/10' : 'bg-zinc-800/60'}`}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className={`text-base leading-none ${step.done ? 'text-emerald-400' : 'text-zinc-600'}`}>
+                      {step.done ? '✓' : '○'}
+                    </span>
+                    <span className={`font-semibold ${step.done ? 'text-emerald-300' : 'text-zinc-400'}`}>
+                      {step.label}
+                    </span>
+                  </div>
+                  <p className={`text-[11px] ${step.done ? 'text-emerald-500/80' : 'text-zinc-600'}`}>
+                    {step.detail}
+                  </p>
+                  {!step.done && step.href && (
+                    <Link href={step.href} className="text-[11px] text-amber-400 hover:text-amber-300 mt-1 block transition-colors">
+                      {step.action} →
+                    </Link>
+                  )}
+                  {!step.done && !step.href && step.action && (
+                    <span className="text-[11px] text-zinc-500 mt-1 block">{step.action}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {payroll.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl py-12 text-center">
