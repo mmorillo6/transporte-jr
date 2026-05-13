@@ -65,6 +65,20 @@ export default async function TruckRelacionPage({
 
   const truck   = entry.truck
   const e       = entry as any
+
+  // Deudas de cauchos del dueño de este camión (todas las abiertas)
+  const tireDebts = truck?.owner?.name
+    ? await prisma.tireDebt.findMany({
+        where: {
+          ownerName: { contains: truck.owner.name, mode: 'insensitive' },
+          status: { not: 'PAID' },
+        },
+        include: {
+          payments: { select: { amount: true, date: true }, orderBy: { date: 'asc' } },
+        },
+        orderBy: { date: 'asc' },
+      })
+    : []
   const totalExpenses    = expenses.reduce((s, x) => s + x.amount, 0)
   const tripsAurumin     = trips.filter(t => (t.route as any).clientName !== 'LUIS PEÑA')
   const tripsLuisPena    = trips.filter(t => (t.route as any).clientName === 'LUIS PEÑA')
@@ -278,6 +292,69 @@ export default async function TruckRelacionPage({
             </div>
           </div>
         </div>
+
+        {/* Deudas de cauchos */}
+        {tireDebts.length > 0 && (
+          <div className="px-6 py-4 border-t border-zinc-800 print:border-zinc-200">
+            <h2 className="text-white font-semibold text-sm mb-3 print:text-black">Deuda de cauchos</h2>
+            <div className="space-y-3">
+              {tireDebts.map(debt => (
+                <div key={debt.id} className="bg-zinc-800/40 rounded-xl p-3 print:bg-zinc-50 print:border print:border-zinc-200">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-white text-sm font-medium print:text-black">
+                        {debt.quantity} {debt.tireType.toUpperCase()}
+                      </p>
+                      {debt.notes && (
+                        <p className="text-zinc-500 text-xs mt-0.5 print:text-zinc-600">{debt.notes}</p>
+                      )}
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      debt.status === 'PARTIAL'
+                        ? 'bg-amber-500/10 text-amber-400 print:text-amber-700'
+                        : 'bg-red-500/10 text-red-400 print:text-red-700'
+                    }`}>
+                      {debt.status === 'PARTIAL' ? 'Parcial' : 'Pendiente'}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-zinc-500 print:text-zinc-500">Total</p>
+                      <p className="text-white font-mono print:text-black">${fmt(debt.totalAmount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-zinc-500 print:text-zinc-500">Abonado</p>
+                      <p className="text-emerald-400 font-mono print:text-emerald-700">${fmt(debt.amountPaid)}</p>
+                    </div>
+                    <div>
+                      <p className="text-zinc-500 print:text-zinc-500">Debe</p>
+                      <p className="text-red-400 font-mono font-semibold print:text-red-700">${fmt(debt.balance)}</p>
+                    </div>
+                  </div>
+                  {debt.payments.length > 0 && (
+                    <div className="mt-2 border-t border-zinc-700/50 pt-2 space-y-1 print:border-zinc-200">
+                      <p className="text-zinc-600 text-xs print:text-zinc-400">Historial de abonos:</p>
+                      {debt.payments.map((p, i) => (
+                        <div key={i} className="flex justify-between text-xs">
+                          <span className="text-zinc-500 print:text-zinc-500">
+                            {new Date(p.date).toLocaleDateString('es-VE', { day:'2-digit', month:'2-digit', year:'2-digit' })}
+                          </span>
+                          <span className="text-emerald-400 font-mono print:text-emerald-700">${fmt(p.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              <div className="flex justify-between text-sm font-semibold pt-1">
+                <span className="text-zinc-400 print:text-zinc-600">Total deuda cauchos</span>
+                <span className="text-red-400 font-mono print:text-red-700">
+                  ${fmt(tireDebts.reduce((s, d) => s + d.balance, 0))}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Abono — visible solo en pantalla, no en impresión */}
         <AbonoClient
