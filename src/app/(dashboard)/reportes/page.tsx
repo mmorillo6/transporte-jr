@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
 import ReportesClient from './ReportesClient'
@@ -22,6 +23,26 @@ export default async function ReportesPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">Reportes</h1>
         <p className="text-zinc-500 text-sm mt-0.5">Exporta datos históricos a Excel</p>
+      </div>
+
+      {/* Vistas analíticas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Link
+          href="/reportes/facturacion-gastos"
+          className="bg-zinc-900 border border-zinc-800 hover:border-amber-500/40 rounded-2xl p-4 transition-colors group"
+        >
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-amber-500/10 rounded-xl flex-shrink-0 group-hover:bg-amber-500/20 transition-colors">
+              <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-white font-semibold text-sm group-hover:text-amber-400 transition-colors">Facturación vs Gastos</p>
+              <p className="text-zinc-500 text-xs mt-0.5">Rentabilidad por camión en cada período · Comparativa histórica</p>
+            </div>
+          </div>
+        </Link>
       </div>
 
       {/* Leyenda introductoria */}
