@@ -43,6 +43,23 @@ export default async function ReportesPage() {
             </div>
           </div>
         </Link>
+
+        <Link
+          href="/reportes/deuda"
+          className="bg-zinc-900 border border-zinc-800 hover:border-red-500/40 rounded-2xl p-4 transition-colors group"
+        >
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-red-500/10 rounded-xl flex-shrink-0 group-hover:bg-red-500/20 transition-colors">
+              <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-white font-semibold text-sm group-hover:text-red-400 transition-colors">Estado de cuenta — Deuda</p>
+              <p className="text-zinc-500 text-xs mt-0.5">Historial de facturas y abonos · Saldo acumulado Aurumin y Luis Peña</p>
+            </div>
+          </div>
+        </Link>
       </div>
 
       {/* Leyenda introductoria */}
