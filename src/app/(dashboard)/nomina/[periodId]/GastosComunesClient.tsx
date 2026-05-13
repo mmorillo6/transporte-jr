@@ -4,14 +4,14 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { applyGastosComunes } from '@/app/actions/expenses'
 
-type Item = { description: string; category: string; amount: string }
+type Item = { description: string; category: string; amount: string; includeAfiliados: boolean }
 
 const STORAGE_KEY = 'gastos-comunes-defaults'
 
 const FACTORY_DEFAULTS: Item[] = [
-  { description: 'NOMINA MECANICOS', category: 'MECANICA',      amount: '' },
-  { description: 'STARLINK',         category: 'ADMINISTRATIVO', amount: '10.91' },
-  { description: 'GASTOS COMUNES',   category: 'OPERATIVO',      amount: '3.80'  },
+  { description: 'NOMINA MECANICOS', category: 'MECANICA',      amount: '',      includeAfiliados: false },
+  { description: 'STARLINK',         category: 'ADMINISTRATIVO', amount: '10.91', includeAfiliados: true  },
+  { description: 'GASTOS COMUNES',   category: 'OPERATIVO',      amount: '3.80',  includeAfiliados: false },
 ]
 
 function loadSavedDefaults(): Item[] {
@@ -49,7 +49,7 @@ export default function GastosComunesClient({
     } catch { /* ignore */ }
   }, [open])
 
-  function update(i: number, field: keyof Item, val: string) {
+  function update(i: number, field: keyof Item, val: string | boolean) {
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [field]: val } : it))
   }
 
@@ -87,10 +87,11 @@ export default function GastosComunesClient({
     const res = await applyGastosComunes(
       periodId,
       valid.map(it => ({
-        description: it.description.trim().toUpperCase(),
-        category:    it.category,
-        totalAmount: parseFloat(it.amount),
-        date:        periodEnd,
+        description:      it.description.trim().toUpperCase(),
+        category:         it.category,
+        totalAmount:      parseFloat(it.amount),
+        date:             periodEnd,
+        includeAfiliados: it.includeAfiliados,
       }))
     )
     setSaving(false)
@@ -138,6 +139,20 @@ export default function GastosComunesClient({
       />
     ),
     per: <span className="text-amber-400 text-xs font-mono font-medium">{perTruck(it.amount)}</span>,
+    toggle: (
+      <button
+        type="button"
+        onClick={() => update(i, 'includeAfiliados', (!it.includeAfiliados) as any)}
+        title={it.includeAfiliados ? 'Aplica a todos los carros (propios + afiliados)' : 'Aplica solo a propios'}
+        className={`flex-shrink-0 text-xs px-2 py-1 rounded-lg border transition-colors whitespace-nowrap ${
+          it.includeAfiliados
+            ? 'bg-violet-500/20 border-violet-500/40 text-violet-400'
+            : 'bg-zinc-800 border-zinc-700 text-zinc-500'
+        }`}
+      >
+        {it.includeAfiliados ? 'Todos' : 'Propios'}
+      </button>
+    ),
   })
 
   return (
@@ -174,6 +189,12 @@ export default function GastosComunesClient({
                     <div className="w-28">{row.amt}</div>
                     <div className="w-14 text-right flex-shrink-0">{row.per}</div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    {row.toggle}
+                    <span className="text-zinc-600 text-xs">
+                      {it.includeAfiliados ? '— aplica a todos los carros' : '— solo propios'}
+                    </span>
+                  </div>
                 </div>
               )
             })}
@@ -186,7 +207,8 @@ export default function GastosComunesClient({
                 <th className="text-left text-zinc-500 text-xs font-medium pb-2 pr-3">Descripción</th>
                 <th className="text-left text-zinc-500 text-xs font-medium pb-2 pr-3 w-36">Categoría</th>
                 <th className="text-right text-zinc-500 text-xs font-medium pb-2 pr-3 w-28">Total ($)</th>
-                <th className="text-right text-zinc-500 text-xs font-medium pb-2 w-24">Por camión</th>
+                <th className="text-right text-zinc-500 text-xs font-medium pb-2 pr-3 w-24">Por camión</th>
+                <th className="text-center text-zinc-500 text-xs font-medium pb-2 w-24">Aplica a</th>
               </tr>
             </thead>
             <tbody>
@@ -197,7 +219,8 @@ export default function GastosComunesClient({
                     <td className="py-1.5 pr-3">{row.desc}</td>
                     <td className="py-1.5 pr-3">{row.cat}</td>
                     <td className="py-1.5 pr-3">{row.amt}</td>
-                    <td className="py-1.5 text-right">{row.per}</td>
+                    <td className="py-1.5 pr-3 text-right">{row.per}</td>
+                    <td className="py-1.5 text-center">{row.toggle}</td>
                   </tr>
                 )
               })}

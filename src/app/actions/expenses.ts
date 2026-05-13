@@ -99,29 +99,28 @@ export async function createExpensesBulk(items: {
 
 export async function applyGastosComunes(
   periodId: string,
-  items: { description: string; category: string; totalAmount: number; date: string }[]
+  items: { description: string; category: string; totalAmount: number; date: string; includeAfiliados: boolean }[]
 ) {
   const session = await getSession()
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
   if (items.length === 0) return { error: 'Sin gastos para aplicar' }
 
-  // Solo propios que trabajaron — los afiliados no reciben descuentos de gastos comunes
+  // Cargar todos los camiones con nómina y su tipo de dueño
   const entries = await prisma.payrollEntry.findMany({
     where: { periodId },
     select: { truckId: true, truck: { select: { owner: { select: { type: true } } } } },
   })
-  const truckIds = [...new Set(
-    entries
-      .filter(e => e.truck?.owner?.type === 'PROPIO')
-      .map(e => e.truckId)
-  )]
+  const propioIds   = [...new Set(entries.filter(e => e.truck?.owner?.type === 'PROPIO').map(e => e.truckId))]
+  const allIds      = [...new Set(entries.map(e => e.truckId))]
 
-  if (truckIds.length === 0) return { error: 'No hay camiones propios con nómina en este período' }
+  if (propioIds.length === 0) return { error: 'No hay camiones propios con nómina en este período' }
 
   const bulk: Parameters<typeof createExpensesBulk>[0] = []
   for (const item of items) {
-    const perTruck = Math.round((item.totalAmount / truckIds.length) * 100) / 100
-    for (const truckId of truckIds) {
+    // Grasa, Starlink y similares → todos los carros; resto → solo propios
+    const targets = item.includeAfiliados ? allIds : propioIds
+    const perTruck = Math.round((item.totalAmount / targets.length) * 100) / 100
+    for (const truckId of targets) {
       bulk.push({
         date:        item.date,
         description: item.description,
