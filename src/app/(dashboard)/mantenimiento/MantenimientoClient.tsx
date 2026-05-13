@@ -77,6 +77,9 @@ export default function MantenimientoClient({
   const [showLogForm, setShowLogForm] = useState(false)
   const [showPartForm, setShowPartForm] = useState(false)
   const [showWorkForm, setShowWorkForm] = useState(false)
+  const [workCost, setWorkCost]           = useState('')
+  const [workShopCut, setWorkShopCut]     = useState('')
+  const [workMecCut, setWorkMecCut]       = useState('')
   const [partFilter, setPartFilter] = useState<'all' | 'IN_STOCK' | 'USED'>('IN_STOCK')
   // Inline status editing
   const [editingStatusId, setEditingStatusId] = useState<string | null>(null)
@@ -145,12 +148,25 @@ export default function MantenimientoClient({
     router.refresh()
   }
 
+  function handleWorkCostChange(val: string) {
+    setWorkCost(val)
+    const n = parseFloat(val)
+    if (!isNaN(n) && n > 0) {
+      setWorkShopCut((n * 0.4).toFixed(2))
+      setWorkMecCut((n * 0.6).toFixed(2))
+    }
+  }
+
   async function handleWorkSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true); setError('')
     const res = await createMechanicWork(new FormData(e.currentTarget))
     if (res.error) { setError(res.error); setLoading(false) }
-    else { setShowWorkForm(false); router.refresh(); setLoading(false) }
+    else {
+      setShowWorkForm(false)
+      setWorkCost(''); setWorkShopCut(''); setWorkMecCut('')
+      router.refresh(); setLoading(false)
+    }
   }
 
   async function handleDeleteWork(id: string) {
@@ -654,20 +670,24 @@ export default function MantenimientoClient({
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs text-zinc-400 mb-1.5">Costo total $</label>
-                    <input name="cost" type="number" step="0.01" min="0" defaultValue="0" placeholder="0.00"
+                    <input name="cost" type="number" step="0.01" min="0" placeholder="0.00"
+                      value={workCost} onChange={e => handleWorkCostChange(e.target.value)}
                       className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500 placeholder:text-zinc-600" />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1.5">Parte taller $</label>
-                    <input name="workshopCut" type="number" step="0.01" min="0" defaultValue="0" placeholder="0.00"
+                    <label className="block text-xs text-zinc-400 mb-1.5">Taller 40% $</label>
+                    <input name="workshopCut" type="number" step="0.01" min="0" placeholder="0.00"
+                      value={workShopCut} onChange={e => setWorkShopCut(e.target.value)}
                       className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500 placeholder:text-zinc-600" />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1.5">Parte mecánico $</label>
-                    <input name="mechanicCut" type="number" step="0.01" min="0" defaultValue="0" placeholder="0.00"
+                    <label className="block text-xs text-zinc-400 mb-1.5">Mecánico 60% $</label>
+                    <input name="mechanicCut" type="number" step="0.01" min="0" placeholder="0.00"
+                      value={workMecCut} onChange={e => setWorkMecCut(e.target.value)}
                       className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500 placeholder:text-zinc-600" />
                   </div>
                 </div>
+                <p className="text-zinc-600 text-xs">Al ingresar el costo total se calcula el split 40/60 automáticamente. Puedes ajustarlo manualmente.</p>
                 {error && <p className="text-red-400 text-sm">{error}</p>}
                 <div className="flex gap-3">
                   <button type="submit" disabled={loading}
@@ -696,47 +716,76 @@ export default function MantenimientoClient({
             {mechanicWorks.length === 0 ? (
               <div className="py-12 text-center"><p className="text-zinc-500 text-sm">Sin trabajos registrados</p></div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-zinc-800">
-                      <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs">Fecha</th>
-                      <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs">Camión</th>
-                      <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs">Mecánico</th>
-                      <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs">Descripción</th>
-                      {canManage && <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs">Costo</th>}
-                      {canManage && <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs">Taller</th>}
-                      {canManage && <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs">Mecánico</th>}
-                      {canManage && <th className="px-4 py-3"></th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mechanicWorks.map(work => (
-                      <tr key={work.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/20 transition-colors">
-                        <td className="px-4 py-3 text-zinc-400 text-xs whitespace-nowrap">
-                          {new Date(work.date).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })}
-                        </td>
-                        <td className="px-4 py-3 text-white font-mono font-medium">{work.truck.plate}</td>
-                        <td className="px-4 py-3 text-zinc-300">{work.mechanic.name}</td>
-                        <td className="px-4 py-3 text-zinc-400 text-xs max-w-xs truncate">{work.description}</td>
-                        {canManage && <td className="px-4 py-3 text-right text-zinc-300 font-semibold">{work.cost > 0 ? `$${work.cost.toFixed(2)}` : '—'}</td>}
-                        {canManage && <td className="px-4 py-3 text-right text-zinc-500">{work.workshopCut > 0 ? `$${work.workshopCut.toFixed(2)}` : '—'}</td>}
-                        {canManage && <td className="px-4 py-3 text-right text-amber-400">{work.mechanicCut > 0 ? `$${work.mechanicCut.toFixed(2)}` : '—'}</td>}
-                        {canManage && (
-                          <td className="px-4 py-3">
-                            <button onClick={() => handleDeleteWork(work.id)}
-                              className="text-zinc-600 hover:text-red-400 transition-colors">
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              (() => {
+                const totalCost     = mechanicWorks.reduce((s, w) => s + w.cost, 0)
+                const totalWorkshop = mechanicWorks.reduce((s, w) => s + w.workshopCut, 0)
+                const totalMecanic  = mechanicWorks.reduce((s, w) => s + w.mechanicCut, 0)
+                const byMechanic    = mechanicWorks.reduce<Record<string, number>>((acc, w) => {
+                  acc[w.mechanic.name] = (acc[w.mechanic.name] ?? 0) + w.mechanicCut
+                  return acc
+                }, {})
+                return (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-zinc-800">
+                          <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs">Fecha</th>
+                          <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs">Camión</th>
+                          <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs">Mecánico</th>
+                          <th className="text-left text-zinc-500 font-medium px-4 py-3 text-xs">Descripción</th>
+                          {canManage && <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs">Costo</th>}
+                          {canManage && <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs">Taller 40%</th>}
+                          {canManage && <th className="text-right text-zinc-500 font-medium px-4 py-3 text-xs">Mecánico 60%</th>}
+                          {canManage && <th className="px-4 py-3"></th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mechanicWorks.map(work => (
+                          <tr key={work.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/20 transition-colors">
+                            <td className="px-4 py-3 text-zinc-400 text-xs whitespace-nowrap">
+                              {new Date(work.date).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                            </td>
+                            <td className="px-4 py-3 text-white font-mono font-medium">{work.truck.plate}</td>
+                            <td className="px-4 py-3 text-zinc-300">{work.mechanic.name}</td>
+                            <td className="px-4 py-3 text-zinc-400 text-xs max-w-xs truncate">{work.description}</td>
+                            {canManage && <td className="px-4 py-3 text-right text-zinc-300 font-semibold">{work.cost > 0 ? `$${work.cost.toFixed(2)}` : '—'}</td>}
+                            {canManage && <td className="px-4 py-3 text-right text-zinc-500">{work.workshopCut > 0 ? `$${work.workshopCut.toFixed(2)}` : '—'}</td>}
+                            {canManage && <td className="px-4 py-3 text-right text-amber-400">{work.mechanicCut > 0 ? `$${work.mechanicCut.toFixed(2)}` : '—'}</td>}
+                            {canManage && (
+                              <td className="px-4 py-3">
+                                <button onClick={() => handleDeleteWork(work.id)}
+                                  className="text-zinc-600 hover:text-red-400 transition-colors">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                      {canManage && mechanicWorks.length > 0 && (
+                        <tfoot>
+                          <tr className="bg-zinc-800/50 border-t border-zinc-700">
+                            <td colSpan={4} className="px-4 py-2.5 text-zinc-400 text-xs font-semibold uppercase tracking-wide">
+                              TOTAL
+                              {Object.entries(byMechanic).map(([name, cut]) => (
+                                <span key={name} className="ml-3 font-normal normal-case text-zinc-500">
+                                  {name}: <span className="text-amber-400">${cut.toFixed(2)}</span>
+                                </span>
+                              ))}
+                            </td>
+                            <td className="px-4 py-2.5 text-right text-white font-bold">${totalCost.toFixed(2)}</td>
+                            <td className="px-4 py-2.5 text-right text-zinc-400 font-bold">${totalWorkshop.toFixed(2)}</td>
+                            <td className="px-4 py-2.5 text-right text-amber-400 font-bold">${totalMecanic.toFixed(2)}</td>
+                            <td />
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+                )
+              })()
             )}
           </div>
         </div>

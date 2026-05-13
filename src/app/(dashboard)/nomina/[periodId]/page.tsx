@@ -462,6 +462,22 @@ export default async function PeriodDetailPage({
             totalNet={totalNet}
           />
 
+          {/* Acceso rápido a trabajos de mecánico */}
+          {['DUENO', 'ENCARGADO'].includes(session.role) && (
+            <Link
+              href="/mantenimiento?tab=trabajos"
+              className="flex items-center justify-between px-5 py-3 bg-zinc-900 border border-zinc-800 hover:border-amber-500/30 rounded-2xl transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-white font-semibold text-sm group-hover:text-amber-400 transition-colors">
+                  Trabajos de mecánico
+                </span>
+                <span className="text-zinc-500 text-xs">Registra trabajo por camión con split 40/60 automático</span>
+              </div>
+              <span className="text-zinc-600 group-hover:text-amber-400 transition-colors text-sm">→</span>
+            </Link>
+          )}
+
           {/* Gastos comunes — divididos entre todos los camiones */}
           {['DUENO', 'ENCARGADO'].includes(session.role) && (
             <GastosComunesClient
