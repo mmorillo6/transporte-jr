@@ -1,7 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createLoan, updateLoan, markLoanPaid, deleteLoan } from '@/app/actions/loans'
+import { createLoan, updateLoan, markLoanPaid, deleteLoan, abonarLoan } from '@/app/actions/loans'
+import { toast } from 'sonner'
 
 const DEDUCT_LABEL: Record<string, string> = {
   QUINCENAL: 'Quincenal',
@@ -30,6 +31,8 @@ export default function PrestamosClient({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'paid'>('active')
+  const [abonando, setAbonando] = useState<string | null>(null)  // loan id being paid
+  const [abonoVal, setAbonoVal] = useState('')
 
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -57,6 +60,19 @@ export default function PrestamosClient({
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar este préstamo?')) return
     await deleteLoan(id)
+    router.refresh()
+  }
+
+  async function handleAbono(id: string) {
+    const amount = parseFloat(abonoVal)
+    if (isNaN(amount) || amount <= 0) { toast.error('Ingresa un monto válido'); return }
+    setLoading(true)
+    const res = await abonarLoan(id, amount)
+    setLoading(false)
+    if (res.error) { toast.error(res.error); return }
+    toast.success(`Abono registrado — saldo restante: $${res.newBalance?.toFixed(2)}`)
+    setAbonando(null)
+    setAbonoVal('')
     router.refresh()
   }
 
@@ -212,26 +228,62 @@ export default function PrestamosClient({
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => { setEditing(loan); setShowForm(false); setError('') }}
-                          className="text-zinc-600 hover:text-amber-400 transition-colors" title="Editar">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        {loan.balance > 0 && (
-                          <button onClick={() => handlePaid(loan.id)}
-                            className="text-xs text-emerald-400 bg-emerald-400/10 hover:bg-emerald-400/20 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap">
-                            Saldado
+                      {abonando === loan.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={abonoVal}
+                            onChange={e => setAbonoVal(e.target.value)}
+                            placeholder="0.00"
+                            min="0.01"
+                            step="0.01"
+                            autoFocus
+                            className="w-24 bg-zinc-800 border border-amber-500/50 text-white rounded-lg px-2 py-1 text-xs focus:outline-none"
+                          />
+                          <button
+                            onClick={() => handleAbono(loan.id)}
+                            disabled={loading}
+                            className="text-xs bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 rounded-lg px-2 py-1 transition-colors whitespace-nowrap"
+                          >
+                            ✓
                           </button>
-                        )}
-                        <button onClick={() => handleDelete(loan.id)}
-                          className="text-zinc-600 hover:text-red-400 transition-colors">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
+                          <button
+                            onClick={() => { setAbonando(null); setAbonoVal('') }}
+                            className="text-zinc-600 hover:text-white text-xs"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => { setEditing(loan); setShowForm(false); setError('') }}
+                            className="text-zinc-600 hover:text-amber-400 transition-colors" title="Editar">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          {loan.balance > 0 && (
+                            <>
+                              <button
+                                onClick={() => { setAbonando(loan.id); setAbonoVal(''); setEditing(null) }}
+                                className="text-xs text-amber-400 bg-amber-400/10 hover:bg-amber-400/20 rounded-lg px-2 py-1 transition-colors whitespace-nowrap"
+                              >
+                                + Abono
+                              </button>
+                              <button onClick={() => handlePaid(loan.id)}
+                                className="text-xs text-emerald-400 bg-emerald-400/10 hover:bg-emerald-400/20 rounded-lg px-2 py-1 transition-colors whitespace-nowrap">
+                                Saldado
+                              </button>
+                            </>
+                          )}
+                          <button onClick={() => handleDelete(loan.id)}
+                            className="text-zinc-600 hover:text-red-400 transition-colors">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -66,7 +66,23 @@ export async function markLoanPaid(id: string) {
 
   await prisma.loan.update({ where: { id }, data: { balance: 0 } })
   revalidatePath('/prestamos')
+  revalidatePath('/caja')
   return { ok: true }
+}
+
+export async function abonarLoan(id: string, amount: number) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+  if (isNaN(amount) || amount <= 0) return { error: 'Monto inválido' }
+
+  const loan = await prisma.loan.findUnique({ where: { id } })
+  if (!loan) return { error: 'Préstamo no encontrado' }
+
+  const newBalance = Math.max(0, Math.round((loan.balance - amount) * 100) / 100)
+  await prisma.loan.update({ where: { id }, data: { balance: newBalance } })
+  revalidatePath('/prestamos')
+  revalidatePath('/caja')
+  return { ok: true, newBalance }
 }
 
 export async function deleteLoan(id: string) {
