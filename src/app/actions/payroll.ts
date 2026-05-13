@@ -292,13 +292,23 @@ export async function closePeriod(periodId: string) {
     return { error: 'No autorizado' }
   }
 
-  const entries = await prisma.payrollEntry.findMany({
-    where: { periodId },
-    include: {
-      period: { select: { endDate: true } },
-    },
-  })
+  const [entries, period] = await Promise.all([
+    prisma.payrollEntry.findMany({
+      where: { periodId },
+      include: { period: { select: { endDate: true } } },
+    }),
+    prisma.period.findUnique({
+      where: { id: periodId },
+      select: {
+        startDate: true,
+        endDate:   true,
+        trips: { select: { amount: true, route: { select: { clientName: true } } } },
+      },
+    }),
+  ])
+
   if (entries.length === 0) return { error: 'Genera la nómina antes de cerrar el período' }
+  if (!period) return { error: 'Período no encontrado' }
 
   // Carros con saldo negativo → préstamo de caja chica
   const negativos = entries.filter(e => e.netAmount < 0 && !e.cashEntryId)
@@ -327,6 +337,38 @@ export async function closePeriod(periodId: string) {
     })
   }
 
+  // Auto-crear CxC por cliente
+  const fmtD = (d: Date) =>
+    new Date(d).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })
+  const periodLabel = `${fmtD(period.startDate)} al ${fmtD(period.endDate)}`
+
+  const grossAurumin  = period.trips
+    .filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
+    .reduce((s, t) => s + t.amount, 0)
+  const grossLuisPena = period.trips
+    .filter(t => (t.route as any)?.clientName === 'LUIS PEÑA')
+    .reduce((s, t) => s + t.amount, 0)
+
+  const cxcCreadas: string[] = []
+  for (const [clientName, gross] of [['AURUMIN', grossAurumin], ['LUIS PEÑA', grossLuisPena]] as const) {
+    if (gross <= 0) continue
+    const existing = await prisma.cuentaPorCobrar.findFirst({ where: { clientName, periodLabel } })
+    if (existing) continue
+    await prisma.cuentaPorCobrar.create({
+      data: {
+        clientName,
+        concept:     `Facturación ${periodLabel}`,
+        periodLabel,
+        date:        period.endDate,
+        totalAmount: gross,
+        amountPaid:  0,
+        balance:     gross,
+        status:      'PENDING',
+      },
+    })
+    cxcCreadas.push(clientName)
+  }
+
   await prisma.period.update({
     where: { id: periodId },
     data: { status: 'CLOSED' },
@@ -335,7 +377,9 @@ export async function closePeriod(periodId: string) {
   revalidatePath('/nomina')
   revalidatePath(`/nomina/${periodId}`)
   revalidatePath('/caja')
-  return { ok: true, prestamos: negativos.length }
+  revalidatePath('/cuentas-por-cobrar')
+  revalidatePath('/reportes/deuda')
+  return { ok: true, prestamos: negativos.length, cxcCreadas }
 }
 
 // ─── Reabrir período ───────────────────────────────────────────────────────────

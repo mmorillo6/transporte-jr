@@ -42,12 +42,11 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
     const res = await closePeriod(periodId)
     if ('error' in res && res.error) toast.error(res.error)
     else {
-      const r = res as { ok: boolean; prestamos: number }
-      if (r.prestamos > 0) {
-        toast.success(`Período cerrado — ${r.prestamos} carro${r.prestamos !== 1 ? 's' : ''} con saldo negativo → préstamo de caja chica creado`)
-      } else {
-        toast.success('Período cerrado correctamente')
-      }
+      const r = res as { ok: boolean; prestamos: number; cxcCreadas: string[] }
+      const parts: string[] = ['Período cerrado']
+      if (r.prestamos > 0) parts.push(`${r.prestamos} préstamo${r.prestamos !== 1 ? 's' : ''} CC`)
+      if (r.cxcCreadas?.length > 0) parts.push(`CxC creada: ${r.cxcCreadas.join(', ')}`)
+      toast.success(parts.join(' — '))
       router.refresh()
     }
     setClosing(false)
