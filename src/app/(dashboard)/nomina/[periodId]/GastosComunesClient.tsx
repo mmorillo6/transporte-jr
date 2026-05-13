@@ -80,7 +80,45 @@ export default function GastosComunesClient({
             Ingresa el monto total de cada gasto. El sistema lo divide entre los {truckCount} camiones activos del período y crea un gasto individual por camión.
           </p>
 
-          <table className="w-full text-sm">
+          {/* Mobile: cards apiladas */}
+          <div className="sm:hidden space-y-3">
+            {items.map((it, i) => (
+              <div key={i} className="bg-zinc-800/40 border border-zinc-700/50 rounded-xl p-3 space-y-2">
+                <input
+                  type="text"
+                  value={it.description}
+                  onChange={e => update(i, 'description', e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500 uppercase"
+                />
+                <div className="flex gap-2 items-center">
+                  <select
+                    value={it.category}
+                    onChange={e => update(i, 'category', e.target.value)}
+                    className="flex-1 bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500"
+                  >
+                    {['REPUESTO','MECANICA','ACEITE','CAUCHO','OPERATIVO','ADMINISTRATIVO','OTRO'].map(c => (
+                      <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    value={it.amount}
+                    onChange={e => update(i, 'amount', e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-28 bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-xs text-right focus:outline-none focus:border-amber-500"
+                  />
+                  <span className="text-amber-400 text-xs font-mono font-medium w-16 text-right flex-shrink-0">
+                    {perTruck(it.amount)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop: tabla */}
+          <table className="hidden sm:table w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-700">
                 <th className="text-left text-zinc-500 text-xs font-medium pb-2 pr-3">Descripción</th>
