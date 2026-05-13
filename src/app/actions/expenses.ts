@@ -105,11 +105,18 @@ export async function applyGastosComunes(
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
   if (items.length === 0) return { error: 'Sin gastos para aplicar' }
 
-  const truckIds = await prisma.payrollEntry
-    .findMany({ where: { periodId }, select: { truckId: true } })
-    .then(entries => [...new Set(entries.map(e => e.truckId))])
+  // Solo propios que trabajaron — los afiliados no reciben descuentos de gastos comunes
+  const entries = await prisma.payrollEntry.findMany({
+    where: { periodId },
+    select: { truckId: true, truck: { select: { owner: { select: { type: true } } } } },
+  })
+  const truckIds = [...new Set(
+    entries
+      .filter(e => e.truck?.owner?.type === 'PROPIO')
+      .map(e => e.truckId)
+  )]
 
-  if (truckIds.length === 0) return { error: 'No hay camiones con nómina en este período' }
+  if (truckIds.length === 0) return { error: 'No hay camiones propios con nómina en este período' }
 
   const bulk: Parameters<typeof createExpensesBulk>[0] = []
   for (const item of items) {

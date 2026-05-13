@@ -261,6 +261,45 @@ export default function PayrollTableClient({
                 <p className="text-zinc-600 text-sm text-center py-1">Pendiente de cobro</p>
               )}
 
+              {/* Abono — visible en móvil para canPay y período abierto */}
+              {canPay && !isClosed && !isNegative && (
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-500 text-xs">Abono:</span>
+                  {entry.id in abonoEditing ? (
+                    <>
+                      <input
+                        type="number"
+                        value={abonoEditing[entry.id]}
+                        onChange={e => setAbonoEditing(prev => ({ ...prev, [entry.id]: e.target.value }))}
+                        className="flex-1 bg-zinc-800 border border-amber-500/50 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none"
+                        placeholder="0.00"
+                        min="0"
+                        step="0.01"
+                      />
+                      <button
+                        onClick={() => handleAbonoSave(entry.id)}
+                        disabled={abonoLoading === entry.id}
+                        className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm transition-colors"
+                      >
+                        {abonoLoading === entry.id ? '...' : 'Guardar'}
+                      </button>
+                      <button
+                        onClick={() => setAbonoEditing(prev => { const n = { ...prev }; delete n[entry.id]; return n })}
+                        className="text-zinc-500 hover:text-white"
+                      >✕</button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setAbonoEditing(prev => ({ ...prev, [entry.id]: entry.abono.toString() }))}
+                      className="flex-1 flex items-center justify-between bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-amber-500/40 text-zinc-300 hover:text-amber-400 rounded-lg px-3 py-2 text-sm transition-colors"
+                    >
+                      <span>{entry.abono > 0 ? `Abono: $${fmt(entry.abono)}` : '+ Registrar abono'}</span>
+                      <span className="text-zinc-600 text-xs">✎</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Ver relación — siempre visible */}
               <a
                 href={`/nomina/${periodId}/truck/${entry.truckId}`}

@@ -252,6 +252,7 @@ export async function updateTripInline(
 
   revalidatePath('/relaciones')
   revalidatePath('/viajes')
+  revalidatePath('/nomina')
   return { ok: true }
 }
 

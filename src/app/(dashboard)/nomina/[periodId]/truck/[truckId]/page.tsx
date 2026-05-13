@@ -4,6 +4,7 @@ import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
 import PrintButton from './PrintButton'
 import AbonoClient from './AbonoClient'
+import TripAmountClient from './TripAmountClient'
 
 function fmt(n: number) {
   return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -175,7 +176,13 @@ export default async function TruckRelacionPage({
                         <td className="py-2 pr-3 text-right text-zinc-300 print:text-zinc-700">
                           {trip.netWeightKg ? (trip.netWeightKg / 1000).toFixed(2) : '—'}
                         </td>
-                        <td className="py-2 pr-3 text-right text-white font-mono print:text-black">${fmt(trip.amount)}</td>
+                        <td className="py-2 pr-3 text-right print:text-black">
+                          <TripAmountClient
+                            tripId={trip.id}
+                            amount={trip.amount}
+                            canEdit={['DUENO','ENCARGADO'].includes(session.role) && period?.status === 'OPEN'}
+                          />
+                        </td>
                         <td className="py-2 text-right text-blue-400 font-mono print:text-zinc-600">
                           {trip.viatico > 0 ? `$${fmt(trip.viatico)}` : '—'}
                         </td>
