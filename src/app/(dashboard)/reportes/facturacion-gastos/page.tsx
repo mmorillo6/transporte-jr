@@ -92,7 +92,7 @@ export default async function FacuracionVsGastosPage() {
             return (
               <div key={period.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden print:border-zinc-300 print:rounded-none print:mb-6">
                 {/* Cabecera del período */}
-                <div className="px-4 py-3 bg-zinc-800/50 border-b border-zinc-800 print:bg-zinc-100 print:border-zinc-300 flex items-center justify-between">
+                <div className="px-4 py-3 bg-zinc-800/50 border-b border-zinc-800 print:bg-zinc-100 print:border-zinc-300 flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-3">
                     <Link
                       href={`/nomina/${period.id}`}
@@ -102,9 +102,18 @@ export default async function FacuracionVsGastosPage() {
                     </Link>
                     <span className="text-zinc-500 text-xs">{period.payroll.length} camiones</span>
                   </div>
-                  <span className="text-amber-400 font-bold font-mono text-sm print:text-black">
-                    Neto total: {fmt(totals.net)}
-                  </span>
+                  <div className="flex items-center gap-4 flex-wrap">
+                    {totals.npr > 0 && (
+                      <span className="text-zinc-500 text-xs font-mono print:text-zinc-600">
+                        NPR {fmt(totals.npr)}
+                        <span className="text-amber-400 ml-1">enc. {fmt(totals.npr * 0.10)}</span>
+                        <span className="text-emerald-400 ml-1">emp. {fmt(totals.npr * 0.90)}</span>
+                      </span>
+                    )}
+                    <span className="text-amber-400 font-bold font-mono text-sm print:text-black">
+                      Neto total: {fmt(totals.net)}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Tabla */}
@@ -230,6 +239,34 @@ export default async function FacuracionVsGastosPage() {
               </table>
             </div>
           </div>
+
+          {/* Resumen NPR acumulado */}
+          {(() => {
+            const totalNpr = periods.reduce((s, p) =>
+              s + p.payroll.reduce((ps, e) => ps + ((e as any).nprFee ?? 0), 0), 0)
+            if (totalNpr === 0) return null
+            return (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-5 py-4 print:border-zinc-300">
+                <p className="text-zinc-500 text-xs font-semibold uppercase tracking-wide mb-3 print:text-zinc-600">
+                  Distribución NPR acumulada — {periods.length} períodos
+                </p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-zinc-500 text-xs">Total recaudado</p>
+                    <p className="text-white font-bold text-lg font-mono mt-0.5 print:text-black">{fmt(totalNpr)}</p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500 text-xs">Encargado (10%)</p>
+                    <p className="text-amber-400 font-bold text-lg font-mono mt-0.5 print:text-amber-700">{fmt(totalNpr * 0.10)}</p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500 text-xs">Empresa (90%)</p>
+                    <p className="text-emerald-400 font-bold text-lg font-mono mt-0.5 print:text-emerald-700">{fmt(totalNpr * 0.90)}</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
         </>
       )}
 

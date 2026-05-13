@@ -412,6 +412,33 @@ export default async function PeriodDetailPage({
             )
           })()}
 
+          {/* NPR — distribución encargado / empresa */}
+          {totalNprFee > 0 && ['DUENO', 'ENCARGADO'].includes(session.role) && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-5 py-4">
+              <p className="text-zinc-500 text-xs font-semibold uppercase tracking-wide mb-3">Distribución NPR</p>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="text-zinc-500 text-xs">Total recaudado</p>
+                  <p className="text-white font-bold text-lg font-mono mt-0.5">
+                    ${totalNprFee.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-zinc-500 text-xs">Encargado (10%)</p>
+                  <p className="text-amber-400 font-bold text-lg font-mono mt-0.5">
+                    ${(totalNprFee * 0.10).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-zinc-500 text-xs">Empresa (90%)</p>
+                  <p className="text-emerald-400 font-bold text-lg font-mono mt-0.5">
+                    ${(totalNprFee * 0.90).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Payroll table — client component with payment tracking */}
           <PayrollTableClient
             entries={payroll as any}
