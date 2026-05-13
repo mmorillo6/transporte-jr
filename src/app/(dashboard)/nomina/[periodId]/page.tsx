@@ -83,7 +83,7 @@ export default async function PeriodDetailPage({
     ownerId = user?.ownerId ?? null
   }
 
-  const [period, totalAlmacenPendiente, loansData, cxcAurumin, cxcLuisPena] = await Promise.all([
+  const [period, totalAlmacenPendiente, loansData, cxcAurumin, cxcLuisPena, mecanicoExpensesCount] = await Promise.all([
     getPeriodData(periodId, session.role, ownerId),
     getTotalAlmacenPendiente(),
     prisma.loan.findMany({ where: { balance: { gt: 0 } }, select: { balance: true } }),
@@ -99,6 +99,8 @@ export default async function PeriodDetailPage({
       include: { payments: { select: { amount: true, date: true }, orderBy: { date: 'desc' } } },
       orderBy: { date: 'asc' },
     }),
+    // Gastos de mecánicos ingresados para este período
+    prisma.expense.count({ where: { periodId, category: 'MECANICA' } }),
   ])
   if (!period) notFound()
 
@@ -219,6 +221,7 @@ export default async function PeriodDetailPage({
     negativoEntries:      payroll.filter((e: any) => e.netAmount < 0).length,
     totalAlmacenPendiente,
     totalLoansPendientes,
+    mecanicoExpensesCount,
   }
 
   return (

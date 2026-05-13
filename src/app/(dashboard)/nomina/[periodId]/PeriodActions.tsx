@@ -12,6 +12,7 @@ type ChecklistData = {
   negativoEntries: number
   totalAlmacenPendiente: number
   totalLoansPendientes: number
+  mecanicoExpensesCount: number
 }
 
 export default function PeriodActions({ periodId, periodStatus, role, checklistData }: {
@@ -158,6 +159,13 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
                 <CheckItem type="ok" text="Todos los viajes tienen número de ticket" />
               ) : (
                 <CheckItem type="warn" text={`${cl.tripsWithoutTicket} viaje${cl.tripsWithoutTicket !== 1 ? 's' : ''} sin número de ticket`} />
+              )}
+
+              {/* Gastos mecánicos */}
+              {cl.mecanicoExpensesCount > 0 ? (
+                <CheckItem type="ok" text="Gastos de mecánicos ingresados" />
+              ) : (
+                <CheckItem type="warn" text="No se ingresaron gastos de mecánicos — verifica si aplica" />
               )}
 
               {/* Pagos pendientes */}
