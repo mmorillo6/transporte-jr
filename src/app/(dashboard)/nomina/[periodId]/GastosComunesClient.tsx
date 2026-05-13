@@ -1,15 +1,27 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { applyGastosComunes } from '@/app/actions/expenses'
 
 type Item = { description: string; category: string; amount: string }
 
-const DEFAULTS: Item[] = [
+const STORAGE_KEY = 'gastos-comunes-defaults'
+
+const FACTORY_DEFAULTS: Item[] = [
   { description: 'NOMINA MECANICOS', category: 'MECANICA',      amount: '' },
   { description: 'STARLINK',         category: 'ADMINISTRATIVO', amount: '10.91' },
   { description: 'GASTOS COMUNES',   category: 'OPERATIVO',      amount: '3.80'  },
 ]
+
+function loadSavedDefaults(): Item[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return FACTORY_DEFAULTS.map(d => ({ ...d }))
+    return JSON.parse(raw)
+  } catch {
+    return FACTORY_DEFAULTS.map(d => ({ ...d }))
+  }
+}
 
 export default function GastosComunesClient({
   periodId,
@@ -20,9 +32,20 @@ export default function GastosComunesClient({
   periodEnd: string
   truckCount: number
 }) {
-  const [open, setOpen]     = useState(false)
-  const [items, setItems]   = useState<Item[]>(DEFAULTS)
-  const [saving, setSaving] = useState(false)
+  const [open, setOpen]           = useState(false)
+  const [items, setItems]         = useState<Item[]>(FACTORY_DEFAULTS.map(d => ({ ...d })))
+  const [saving, setSaving]       = useState(false)
+  const [hasCustom, setHasCustom] = useState(false)
+
+  // Load saved defaults on first open
+  useEffect(() => {
+    if (!open) return
+    const saved = loadSavedDefaults()
+    setItems(saved)
+    try {
+      setHasCustom(!!localStorage.getItem(STORAGE_KEY))
+    } catch { /* ignore */ }
+  }, [open])
 
   function update(i: number, field: keyof Item, val: string) {
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [field]: val } : it))
@@ -32,6 +55,25 @@ export default function GastosComunesClient({
     const n = parseFloat(amount)
     if (!n || truckCount === 0) return '—'
     return `$${(n / truckCount).toFixed(2)}`
+  }
+
+  function saveAsDefault() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+      setHasCustom(true)
+      toast.success('Valores guardados como predeterminados')
+    } catch {
+      toast.error('No se pudieron guardar los predeterminados')
+    }
+  }
+
+  function resetDefaults() {
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+      setHasCustom(false)
+    } catch { /* ignore */ }
+    setItems(FACTORY_DEFAULTS.map(d => ({ ...d })))
+    toast('Valores restaurados a los originales')
   }
 
   async function handleApply() {
@@ -54,12 +96,46 @@ export default function GastosComunesClient({
     if (res && 'error' in res && res.error) { toast.error(res.error); return }
     if (res && 'created' in res) {
       toast.success(`${res.created} gasto(s) creados — divididos entre ${truckCount} camiones`)
-      setItems(DEFAULTS.map(d => ({ ...d })))
+      setItems(loadSavedDefaults())
       setOpen(false)
     }
   }
 
   const totalNuevo = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0)
+
+  const inputRow = (it: Item, i: number) => ({
+    desc: (
+      <input
+        type="text"
+        value={it.description}
+        onChange={e => update(i, 'description', e.target.value)}
+        className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500 uppercase placeholder:normal-case"
+      />
+    ),
+    cat: (
+      <select
+        value={it.category}
+        onChange={e => update(i, 'category', e.target.value)}
+        className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500"
+      >
+        {['REPUESTO','MECANICA','ACEITE','CAUCHO','OPERATIVO','ADMINISTRATIVO','OTRO'].map(c => (
+          <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>
+        ))}
+      </select>
+    ),
+    amt: (
+      <input
+        type="number"
+        value={it.amount}
+        onChange={e => update(i, 'amount', e.target.value)}
+        placeholder="0.00"
+        min="0"
+        step="0.01"
+        className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-xs text-right focus:outline-none focus:border-amber-500"
+      />
+    ),
+    per: <span className="text-amber-400 text-xs font-mono font-medium">{perTruck(it.amount)}</span>,
+  })
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
@@ -69,52 +145,35 @@ export default function GastosComunesClient({
       >
         <div className="flex items-center gap-3">
           <span className="text-white font-semibold text-sm">Gastos comunes del período</span>
-          <span className="text-zinc-500 text-xs">Starlink, gastos comunes — divididos entre {truckCount} camiones</span>
+          <span className="text-zinc-500 text-xs hidden sm:inline">Starlink, gastos comunes — divididos entre {truckCount} camiones</span>
         </div>
-        <span className="text-zinc-400 text-lg">{open ? '▲' : '▼'}</span>
+        <div className="flex items-center gap-2">
+          {hasCustom && <span className="text-amber-500 text-xs">★ custom</span>}
+          <span className="text-zinc-400 text-lg">{open ? '▲' : '▼'}</span>
+        </div>
       </button>
 
       {open && (
         <div className="border-t border-zinc-800 p-5 space-y-4">
           <p className="text-zinc-500 text-xs">
-            Ingresa el monto total de cada gasto. El sistema lo divide entre los {truckCount} camiones activos del período y crea un gasto individual por camión.
+            Ingresa el monto total de cada gasto. El sistema lo divide entre los {truckCount} camiones activos del período.
           </p>
 
           {/* Mobile: cards apiladas */}
           <div className="sm:hidden space-y-3">
-            {items.map((it, i) => (
-              <div key={i} className="bg-zinc-800/40 border border-zinc-700/50 rounded-xl p-3 space-y-2">
-                <input
-                  type="text"
-                  value={it.description}
-                  onChange={e => update(i, 'description', e.target.value)}
-                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500 uppercase"
-                />
-                <div className="flex gap-2 items-center">
-                  <select
-                    value={it.category}
-                    onChange={e => update(i, 'category', e.target.value)}
-                    className="flex-1 bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500"
-                  >
-                    {['REPUESTO','MECANICA','ACEITE','CAUCHO','OPERATIVO','ADMINISTRATIVO','OTRO'].map(c => (
-                      <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    value={it.amount}
-                    onChange={e => update(i, 'amount', e.target.value)}
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-28 bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-xs text-right focus:outline-none focus:border-amber-500"
-                  />
-                  <span className="text-amber-400 text-xs font-mono font-medium w-16 text-right flex-shrink-0">
-                    {perTruck(it.amount)}
-                  </span>
+            {items.map((it, i) => {
+              const row = inputRow(it, i)
+              return (
+                <div key={i} className="bg-zinc-800/40 border border-zinc-700/50 rounded-xl p-3 space-y-2">
+                  {row.desc}
+                  <div className="flex gap-2 items-center">
+                    <div className="flex-1">{row.cat}</div>
+                    <div className="w-28">{row.amt}</div>
+                    <div className="w-14 text-right flex-shrink-0">{row.per}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* Desktop: tabla */}
@@ -128,50 +187,37 @@ export default function GastosComunesClient({
               </tr>
             </thead>
             <tbody>
-              {items.map((it, i) => (
-                <tr key={i} className="border-b border-zinc-800/50">
-                  <td className="py-1.5 pr-3">
-                    <input
-                      type="text"
-                      value={it.description}
-                      onChange={e => update(i, 'description', e.target.value)}
-                      className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500 uppercase placeholder:normal-case"
-                    />
-                  </td>
-                  <td className="py-1.5 pr-3">
-                    <select
-                      value={it.category}
-                      onChange={e => update(i, 'category', e.target.value)}
-                      className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-amber-500"
-                    >
-                      {['REPUESTO','MECANICA','ACEITE','CAUCHO','OPERATIVO','ADMINISTRATIVO','OTRO'].map(c => (
-                        <option key={c} value={c}>{c.charAt(0) + c.slice(1).toLowerCase()}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="py-1.5 pr-3">
-                    <input
-                      type="number"
-                      value={it.amount}
-                      onChange={e => update(i, 'amount', e.target.value)}
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-xs text-right focus:outline-none focus:border-amber-500"
-                    />
-                  </td>
-                  <td className="py-1.5 text-right text-amber-400 text-xs font-mono font-medium">
-                    {perTruck(it.amount)}
-                  </td>
-                </tr>
-              ))}
+              {items.map((it, i) => {
+                const row = inputRow(it, i)
+                return (
+                  <tr key={i} className="border-b border-zinc-800/50">
+                    <td className="py-1.5 pr-3">{row.desc}</td>
+                    <td className="py-1.5 pr-3">{row.cat}</td>
+                    <td className="py-1.5 pr-3">{row.amt}</td>
+                    <td className="py-1.5 text-right">{row.per}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
 
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <p className="text-zinc-600 text-xs">
-              Cada gasto se asigna con fecha de fin de período ({periodEnd}).
-            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={saveAsDefault}
+                className="text-zinc-500 hover:text-zinc-300 text-xs underline transition-colors"
+              >
+                Guardar como predeterminado
+              </button>
+              {hasCustom && (
+                <button
+                  onClick={resetDefaults}
+                  className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors"
+                >
+                  Restaurar originales
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-4">
               {totalNuevo > 0 && (
                 <div className="text-sm">
