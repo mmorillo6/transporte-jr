@@ -139,6 +139,41 @@ export async function getExpensesForPeriodTruck(periodId: string, truckId: strin
   })
 }
 
+export async function addGastoGeneral(
+  periodId: string,
+  items: { description: string; category: string; amount: number; date: string }[]
+) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+  if (items.length === 0) return { error: 'Sin gastos para guardar' }
+
+  await prisma.expense.createMany({
+    data: items.map(item => ({
+      date:        new Date(item.date + 'T12:00:00'),
+      category:    item.category as any,
+      truckId:     null,
+      periodId,
+      description: item.description.trim().toUpperCase(),
+      amount:      item.amount,
+      isCredit:    false,
+      amountPaid:  item.amount,
+      paidDate:    new Date(),
+    })),
+  })
+
+  revalidatePath(`/nomina/${periodId}`)
+  revalidatePath('/gastos')
+  return { ok: true, created: items.length }
+}
+
+export async function getGastosGeneralesByPeriod(periodId: string) {
+  return prisma.expense.findMany({
+    where: { periodId, truckId: null },
+    orderBy: { date: 'asc' },
+    select: { id: true, date: true, description: true, category: true, amount: true },
+  })
+}
+
 export async function deleteExpenseBulk(ids: string[]) {
   const session = await getSession()
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }

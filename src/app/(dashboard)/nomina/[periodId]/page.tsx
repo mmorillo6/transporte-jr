@@ -7,6 +7,7 @@ import PayrollTableClient from './PayrollTableClient'
 import { getTotalAlmacenPendiente } from '@/app/actions/almacen'
 import GastosMasivosClient from './GastosMasivosClient'
 import GastosComunesClient from './GastosComunesClient'
+import GastosGeneralesClient from './GastosGeneralesClient'
 
 async function getPeriodData(periodId: string, role: string, ownerId: string | null) {
   const period = await prisma.period.findUnique({
@@ -83,7 +84,7 @@ export default async function PeriodDetailPage({
     ownerId = user?.ownerId ?? null
   }
 
-  const [period, totalAlmacenPendiente, loansData, cxcAurumin, cxcLuisPena, mecanicoExpensesCount] = await Promise.all([
+  const [period, totalAlmacenPendiente, loansData, cxcAurumin, cxcLuisPena, mecanicoExpensesCount, gastosGeneralesCount] = await Promise.all([
     getPeriodData(periodId, session.role, ownerId),
     getTotalAlmacenPendiente(),
     prisma.loan.findMany({ where: { balance: { gt: 0 } }, select: { balance: true } }),
@@ -101,6 +102,8 @@ export default async function PeriodDetailPage({
     }),
     // Gastos de mecánicos ingresados para este período
     prisma.expense.count({ where: { periodId, category: 'MECANICA' } }),
+    // Gastos generales (sin camión) del período
+    prisma.expense.count({ where: { periodId, truckId: null } }),
   ])
   if (!period) notFound()
 
@@ -475,6 +478,15 @@ export default async function PeriodDetailPage({
               periodId={periodId}
               periodStart={periodStartISO}
               periodEnd={periodEndISO}
+            />
+          )}
+
+          {/* Gastos generales de caja chica (sin camión) */}
+          {['DUENO', 'ENCARGADO'].includes(session.role) && (
+            <GastosGeneralesClient
+              periodId={periodId}
+              periodEnd={periodEndISO}
+              existingCount={gastosGeneralesCount}
             />
           )}
 
