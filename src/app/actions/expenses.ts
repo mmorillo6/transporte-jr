@@ -133,7 +133,9 @@ export async function applyGastosComunes(
     }
   }
 
-  return createExpensesBulk(bulk)
+  const result = await createExpensesBulk(bulk)
+  revalidatePath(`/nomina/${periodId}`)
+  return result
 }
 
 export async function getExpensesForPeriodTruck(periodId: string, truckId: string) {

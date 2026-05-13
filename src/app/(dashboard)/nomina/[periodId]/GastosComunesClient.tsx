@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { applyGastosComunes } from '@/app/actions/expenses'
 
@@ -32,6 +33,7 @@ export default function GastosComunesClient({
   periodEnd: string
   truckCount: number
 }) {
+  const router = useRouter()
   const [open, setOpen]           = useState(false)
   const [items, setItems]         = useState<Item[]>(FACTORY_DEFAULTS.map(d => ({ ...d })))
   const [saving, setSaving]       = useState(false)
@@ -98,6 +100,7 @@ export default function GastosComunesClient({
       toast.success(`${res.created} gasto(s) creados — divididos entre ${truckCount} camiones`)
       setItems(loadSavedDefaults())
       setOpen(false)
+      router.refresh()
     }
   }
 
