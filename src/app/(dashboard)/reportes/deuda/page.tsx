@@ -165,7 +165,7 @@ function ClientLedger({
 
       {/* Tabla */}
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full min-w-[620px] text-xs">
           <thead>
             <tr className="border-b border-zinc-800 print:border-zinc-300 bg-zinc-800/30 print:bg-zinc-50">
               <th className="text-left text-zinc-500 font-medium px-4 py-2.5 whitespace-nowrap print:text-zinc-600">Período</th>

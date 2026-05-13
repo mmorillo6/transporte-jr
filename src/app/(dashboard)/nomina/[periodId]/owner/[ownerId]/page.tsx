@@ -65,7 +65,7 @@ export default async function OwnerRelacionPage({
       orderBy: { date: 'asc' },
     }),
     prisma.tireDebt.findMany({
-      where: { ownerName: { contains: owner.name, mode: 'insensitive' }, status: { not: 'PAID' } },
+      where: { ownerName: { equals: owner.name, mode: 'insensitive' }, status: { not: 'PAID' } },
       include: { payments: { select: { amount: true, date: true }, orderBy: { date: 'asc' } } },
       orderBy: { date: 'asc' },
     }),

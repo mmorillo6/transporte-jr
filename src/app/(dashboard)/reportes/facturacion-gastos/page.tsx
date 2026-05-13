@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
+import PrintButton from './PrintButton'
 
 function fmt(n: number) {
   if (n === 0) return '—'
@@ -65,17 +66,7 @@ export default async function FacuracionVsGastosPage() {
             Rentabilidad por camión en cada período cerrado
           </p>
         </div>
-        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-        <button
-          // @ts-expect-error onclick in server component renders as HTML attr
-          onclick="window.print()"
-          className="hidden sm:flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold rounded-lg text-sm transition-colors cursor-pointer"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-          </svg>
-          Imprimir
-        </button>
+        <PrintButton />
       </div>
 
       {periods.length === 0 ? (
@@ -118,7 +109,7 @@ export default async function FacuracionVsGastosPage() {
 
                 {/* Tabla */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full min-w-[720px] text-xs">
                     <thead>
                       <tr className="border-b border-zinc-800 print:border-zinc-300">
                         <th className="text-left text-zinc-500 font-medium px-3 py-2 whitespace-nowrap print:text-zinc-600">Vehículo</th>
@@ -197,7 +188,7 @@ export default async function FacuracionVsGastosPage() {
               <p className="text-zinc-500 text-xs">{periods.length} períodos cerrados</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full min-w-[480px] text-xs">
                 <thead>
                   <tr className="border-b border-zinc-800 print:border-zinc-300">
                     <th className="text-left text-zinc-500 font-medium px-3 py-2 print:text-zinc-600">Vehículo</th>

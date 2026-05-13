@@ -60,7 +60,7 @@ export async function generatePayroll(periodId: string) {
   // (excluye camiones que solo trabajaron rutas Luis Peña este período)
   const propiosConAurumin = new Set(
     period.trips
-      .filter(t => (t.route as any).clientName !== 'LUIS PEÑA')
+      .filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
       .filter(t => truckMap.get(t.truckId)?.owner.type === 'PROPIO')
       .map(t => t.truckId)
   )

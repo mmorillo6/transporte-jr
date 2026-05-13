@@ -70,7 +70,7 @@ export default async function TruckRelacionPage({
   const tireDebts = truck?.owner?.name
     ? await prisma.tireDebt.findMany({
         where: {
-          ownerName: { contains: truck.owner.name, mode: 'insensitive' },
+          ownerName: { equals: truck.owner.name, mode: 'insensitive' },
           status: { not: 'PAID' },
         },
         include: {
@@ -80,8 +80,8 @@ export default async function TruckRelacionPage({
       })
     : []
   const totalExpenses    = expenses.reduce((s, x) => s + x.amount, 0)
-  const tripsAurumin     = trips.filter(t => (t.route as any).clientName !== 'LUIS PEÑA')
-  const tripsLuisPena    = trips.filter(t => (t.route as any).clientName === 'LUIS PEÑA')
+  const tripsAurumin     = trips.filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
+  const tripsLuisPena    = trips.filter(t => (t.route as any)?.clientName === 'LUIS PEÑA')
   const grossTripAurumin = tripsAurumin.reduce((s, t) => s + t.amount, 0)
   const grossTripLuisPena= tripsLuisPena.reduce((s, t) => s + t.amount, 0)
 

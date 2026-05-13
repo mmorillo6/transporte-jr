@@ -120,8 +120,8 @@ export default async function PeriodDetailPage({
   const totalTons = payroll.reduce((s, e) => s + e.totalTons, 0)
 
   // Facturación bruta separada por cliente (desde los viajes, con route.clientName)
-  const tripsAurumin  = trips.filter(t => (t.route as any).clientName !== 'LUIS PEÑA')
-  const tripsLuisPena = trips.filter(t => (t.route as any).clientName === 'LUIS PEÑA')
+  const tripsAurumin  = trips.filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
+  const tripsLuisPena = trips.filter(t => (t.route as any)?.clientName === 'LUIS PEÑA')
   const grossAurumin  = tripsAurumin.reduce((s, t) => s + t.amount, 0)
   const grossLuisPena = tripsLuisPena.reduce((s, t) => s + t.amount, 0)
   const tonsAurumin   = tripsAurumin.reduce((s, t)  => s + (t.netWeightKg ?? 0), 0) / 1000
