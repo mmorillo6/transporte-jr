@@ -26,7 +26,7 @@ export default async function ReportesPage() {
       </div>
 
       {/* Vistas analíticas */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <Link
           href="/reportes/facturacion-gastos"
           className="bg-zinc-900 border border-zinc-800 hover:border-amber-500/40 rounded-2xl p-4 transition-colors group"
@@ -40,6 +40,23 @@ export default async function ReportesPage() {
             <div>
               <p className="text-white font-semibold text-sm group-hover:text-amber-400 transition-colors">Facturación vs Gastos</p>
               <p className="text-zinc-500 text-xs mt-0.5">Rentabilidad por camión en cada período · Comparativa histórica</p>
+            </div>
+          </div>
+        </Link>
+
+        <Link
+          href="/reportes/afiliados"
+          className="bg-zinc-900 border border-zinc-800 hover:border-violet-500/40 rounded-2xl p-4 transition-colors group"
+        >
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-violet-500/10 rounded-xl flex-shrink-0 group-hover:bg-violet-500/20 transition-colors">
+              <svg className="w-5 h-5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-white font-semibold text-sm group-hover:text-violet-400 transition-colors">% Afiliados — NPR</p>
+              <p className="text-zinc-500 text-xs mt-0.5">NPR por vehículo afiliado · histórico quincena a quincena · 10% enc. / 90% empresa</p>
             </div>
           </div>
         </Link>
