@@ -261,8 +261,8 @@ export default function PayrollTableClient({
                 <p className="text-zinc-600 text-sm text-center py-1">Pendiente de cobro</p>
               )}
 
-              {/* Abono — visible en móvil para canPay y período abierto */}
-              {canPay && !isClosed && !isNegative && (
+              {/* Abono — visible en móvil para canPay, abierto o cerrado */}
+              {canPay && !isNegative && (
                 <div className="flex items-center gap-2">
                   <span className="text-zinc-500 text-xs">Abono:</span>
                   {entry.id in abonoEditing ? (
@@ -399,7 +399,7 @@ export default function PayrollTableClient({
                     ) : <span className="text-zinc-600">—</span>}
                   </td>
                   <td className="px-2 py-2 text-right whitespace-nowrap">
-                    {canPay && !isClosed ? (
+                    {canPay ? (
                       isEditingAbono ? (
                         <div className="flex items-center gap-1 justify-end">
                           <input
