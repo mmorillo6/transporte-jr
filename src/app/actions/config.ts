@@ -166,6 +166,7 @@ export async function createUser(formData: FormData) {
   const role = formData.get('role') as string
   const phone = formData.get('phone') as string
   const ownerId = formData.get('ownerId') as string
+  const whatsappApiKey = formData.get('whatsappApiKey') as string
 
   if (!name || !email || !password || !role) return { error: 'Nombre, email, contraseña y rol son requeridos' }
 
@@ -181,6 +182,7 @@ export async function createUser(formData: FormData) {
       password: hashed,
       role: role as any,
       phone: phone || null,
+      whatsappApiKey: whatsappApiKey || null,
       ownerId: ownerId || null,
       active: true,
     },
@@ -202,8 +204,9 @@ export async function updateUser(id: string, formData: FormData) {
   const ownerId = formData.get('ownerId') as string
   const active = formData.get('active') === 'true'
   const newPassword = formData.get('newPassword') as string
+  const whatsappApiKey = formData.get('whatsappApiKey') as string
 
-  const data: any = { name, phone: phone || null, role, ownerId: ownerId || null, active }
+  const data: any = { name, phone: phone || null, whatsappApiKey: whatsappApiKey || null, role, ownerId: ownerId || null, active }
   if (newPassword) data.password = await hashPassword(newPassword)
 
   await prisma.user.update({ where: { id }, data })

@@ -26,6 +26,7 @@ type User = {
   email: string
   role: string
   phone: string | null
+  whatsappApiKey: string | null
   active: boolean
   owner: { id: string; name: string } | null
 }
@@ -129,6 +130,15 @@ export default function UsuariosClient({
                   onKeyDown={e => { if (!/[\d+\-\s()]/.test(e.key) && !['Backspace','Delete','Tab','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault() }}
                   className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500 placeholder:text-zinc-600" />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">WhatsApp API key (CallMeBot)</label>
+              <p className="text-zinc-600 text-[11px] mb-1.5">
+                El dueño debe enviar &quot;I allow callmebot to send me messages&quot; al número <span className="text-zinc-400 font-mono">+34644634944</span> en WhatsApp, y recibirá su API key.
+              </p>
+              <input name="whatsappApiKey" defaultValue={editing?.whatsappApiKey ?? ''} placeholder="ej: 1234567"
+                className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500 placeholder:text-zinc-600" />
             </div>
 
             <div className="grid grid-cols-2 gap-4">

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
 import PeriodActions from './PeriodActions'
+import NotifyButton from './NotifyButton'
 import PayrollTableClient from './PayrollTableClient'
 import { getTotalAlmacenPendiente } from '@/app/actions/almacen'
 import GastosMasivosClient from './GastosMasivosClient'
@@ -257,7 +258,12 @@ export default async function PeriodDetailPage({
         </div>
 
         {['DUENO', 'ENCARGADO'].includes(session.role) && (
-          <PeriodActions periodId={periodId} periodStatus={period.status} role={session.role} checklistData={checklistData} />
+          <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
+            {period.status === 'CLOSED' && (
+              <NotifyButton periodId={periodId} />
+            )}
+            <PeriodActions periodId={periodId} periodStatus={period.status} role={session.role} checklistData={checklistData} />
+          </div>
         )}
       </div>
 
