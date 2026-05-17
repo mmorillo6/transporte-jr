@@ -137,6 +137,15 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
   const [conductorMappings, setConductorMappings] = useState<Record<string, string>>({})
   const [conductoresSugerRechazadas, setConductoresSugerRechazadas] = useState<Set<string>>(new Set())
   const [ignorarDuplicado, setIgnorarDuplicado] = useState(false)
+
+  // Placas sin resolver: existen en el preview pero no tienen truckId ni mapeo asignado
+  const placasSinResolver = preview
+    ? placasSinRegistrar.filter(p => !plateMappings[p])
+    : []
+  const viajesSinResolver = preview
+    ? (preview.trips.filter(t => !t.truckId && !t.duplicate && !plateMappings[t.plate]).length +
+       preview.unknownProveedores.flatMap(up => up.rows).filter(r => !r.truckId && !r.duplicate && !plateMappings[r.plate]).length)
+    : 0
   // proveedorClassifications: proveedor → routeId (ruta existente o recién creada)
   const [proveedorClassifications, setProveedorClassifications] = useState<Record<string, string>>({})
   // proveedorMode: qué opción seleccionó el encargado ('mine' | 'hourly' | 'existing') → muestra el formulario
@@ -398,9 +407,6 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
 
           {/* Warning sin camión */}
           {sinCamion > 0 && (() => {
-            const viajesSinResolver =
-              preview.trips.filter(t => !t.truckId && !t.duplicate && !plateMappings[t.plate]).length +
-              preview.unknownProveedores.flatMap(up => up.rows).filter(r => !r.truckId && !r.duplicate && !plateMappings[r.plate]).length
             return (
             <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl px-4 py-4 space-y-3">
               <div>
@@ -963,12 +969,14 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
           <div className="flex gap-3">
             <button
               onClick={handleImportar}
-              disabled={saving || (preview.newTrips === 0 && resolvedUnknownTrips.length === 0) || unknownPendientes > 0}
+              disabled={saving || (preview.newTrips === 0 && resolvedUnknownTrips.length === 0) || unknownPendientes > 0 || viajesSinResolver > 0}
               className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-xl px-5 py-2.5 text-sm transition-colors"
             >
               {saving
                 ? 'Importando...'
-                : `Importar ${preview.newTrips + resolvedUnknownTrips.length} viajes nuevos`}
+                : viajesSinResolver > 0
+                  ? `Resuelve ${placasSinResolver.length} placa${placasSinResolver.length !== 1 ? 's' : ''} antes de importar`
+                  : `Importar ${preview.newTrips + resolvedUnknownTrips.length} viajes nuevos`}
             </button>
             <button onClick={() => { setPreview(null); if (fileRef.current) fileRef.current.value = '' }}
               className="px-5 py-2.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl text-sm transition-colors border border-zinc-800">
