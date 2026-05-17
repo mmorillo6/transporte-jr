@@ -89,7 +89,7 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
         reader.onerror = rej
         reader.readAsDataURL(file)
       })
-      const data = await parseRomana(base64)
+      const data = await parseRomana(base64, openPeriodId)
       setPreview(data)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Error al leer el archivo')
@@ -317,8 +317,8 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
               <p className="text-white font-semibold text-sm">{preview.period}</p>
             </div>
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-              <p className="text-zinc-500 text-xs mb-1">Viajes en archivo</p>
-              <p className="text-2xl font-bold text-white">{preview.totalTrips}</p>
+              <p className="text-zinc-500 text-xs mb-1">Filas en archivo</p>
+              <p className="text-2xl font-bold text-white">{preview.rawRowCount}</p>
             </div>
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
               <p className="text-zinc-500 text-xs mb-1">Nuevos a importar</p>
@@ -331,6 +331,89 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
               </p>
             </div>
           </div>
+
+          {/* ── Reconciliación de filas ── */}
+          {(() => {
+            const unknownCount = preview.unknownProveedores.reduce((s, u) => s + u.count, 0)
+            const clasificados = preview.rawRowCount
+            const accounted    = preview.totalTrips + unknownCount + preview.skippedRows.length
+            const diff         = clasificados - accounted
+            const allOk        = preview.skippedRows.length === 0 && diff === 0
+            return (
+              <div className={`rounded-2xl border px-4 py-3 ${allOk ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-zinc-900 border-zinc-700'}`}>
+                <p className="text-xs font-semibold text-zinc-400 mb-2">Reconciliación de filas</p>
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+                  <span className="text-white">{preview.rawRowCount} filas en el archivo</span>
+                  <span className="text-amber-400">→ {preview.newTrips} nuevas</span>
+                  {preview.duplicates > 0 && <span className="text-zinc-500">+ {preview.duplicates} duplicadas</span>}
+                  {unknownCount > 0 && <span className="text-blue-400">+ {unknownCount} proveedor desconocido</span>}
+                  {preview.skippedRows.length > 0 && <span className="text-red-400 font-semibold">+ {preview.skippedRows.length} saltadas con error</span>}
+                  {diff !== 0 && <span className="text-orange-400">+ {diff} sin clasificar</span>}
+                  {allOk && <span className="text-emerald-400 font-medium">✓ Todo cuadra</span>}
+                </div>
+                {preview.skippedRows.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {preview.skippedRows.map((s, i) => (
+                      <div key={i} className="flex items-center gap-2 text-[11px]">
+                        <span className="text-red-400">✕</span>
+                        <span className="text-zinc-300 font-mono">#{s.ticketNo}</span>
+                        <span className="text-zinc-500">{s.plate} · {s.conductor || '—'}</span>
+                        <span className="text-red-400">
+                          {s.reason === 'sin_fecha'      ? 'Fecha inválida'
+                          : s.reason === 'sin_datos'     ? 'Falta placa, proveedor o procedencia'
+                          : 'Ruta no existe en el sistema'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* ── Peso cero en ruta PER_TON ── */}
+          {(() => {
+            const ceroTrips = preview.trips.filter(t => t.zeroWeight && !t.duplicate)
+            if (ceroTrips.length === 0) return null
+            return (
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl px-4 py-3 space-y-2">
+                <p className="text-orange-400 text-sm font-medium">
+                  {ceroTrips.length} {ceroTrips.length === 1 ? 'viaje' : 'viajes'} con peso 0 — monto será $0
+                </p>
+                <p className="text-zinc-500 text-xs">Revisa si falta el peso neto en la romana antes de importar.</p>
+                <div className="space-y-0.5">
+                  {ceroTrips.map(t => (
+                    <div key={t.ticketNo} className="flex gap-3 text-xs">
+                      <span className="text-zinc-300 font-mono">#{t.ticketNo}</span>
+                      <span className="text-zinc-500">{t.plate} · {t.routeName} · {t.conductor}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* ── Viajes fuera del período ── */}
+          {(() => {
+            const fueraTrips = preview.trips.filter(t => t.outsidePeriod && !t.duplicate)
+            if (fueraTrips.length === 0) return null
+            return (
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl px-4 py-3 space-y-2">
+                <p className="text-yellow-400 text-sm font-medium">
+                  {fueraTrips.length} {fueraTrips.length === 1 ? 'viaje cae' : 'viajes caen'} fuera del período abierto
+                </p>
+                <p className="text-zinc-500 text-xs">Se importarán igual pero verifica que correspondan a este período.</p>
+                <div className="space-y-0.5">
+                  {fueraTrips.map(t => (
+                    <div key={t.ticketNo} className="flex gap-3 text-xs">
+                      <span className="text-zinc-300 font-mono">#{t.ticketNo}</span>
+                      <span className="text-zinc-500">{new Date(t.date).toLocaleDateString('es-VE')} · {t.plate} · {t.routeName}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Por cliente */}
           {preview.byClient.map(client => (

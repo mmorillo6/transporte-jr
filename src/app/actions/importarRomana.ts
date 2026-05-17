@@ -21,6 +21,15 @@ export type RomanaTrip = {
   truckId: string | null
   driverId: string | null
   duplicate: boolean
+  zeroWeight: boolean     // peso 0 en ruta PER_TON → monto $0
+  outsidePeriod: boolean  // fecha fuera del rango del período abierto
+}
+
+export type SkippedRow = {
+  ticketNo: string
+  plate: string
+  conductor: string
+  reason: 'sin_fecha' | 'sin_datos' | 'ruta_no_existe'
 }
 
 /** Fila sin ruta resuelta — para que el encargado la clasifique */
@@ -40,6 +49,8 @@ export type UnknownProveedorRow = {
 
 export type RomanaPreview = {
   period: string
+  rawRowCount: number     // filas con ticket encontradas en el Excel
+  skippedRows: SkippedRow[]
   totalTrips: number
   byClient: {
     client: string
@@ -148,7 +159,7 @@ function colIdx(headers: (string | number)[], ...keywords: string[]): number {
   return -1
 }
 
-export async function parseRomana(base64: string): Promise<RomanaPreview> {
+export async function parseRomana(base64: string, periodId?: string): Promise<RomanaPreview> {
   const XLSX = await import('xlsx')
   const buf  = Buffer.from(base64, 'base64')
   const wb   = XLSX.read(buf, { type: 'buffer' })
@@ -189,13 +200,16 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     netoKg:      iNetoKg      !== -1 ? iNetoKg      : 20,
   }
 
-  // Load routes, trucks, drivers and existing tickets from DB
-  const [routes, trucks, existingTickets, registeredDrivers] = await Promise.all([
+  // Load routes, trucks, drivers, existing tickets, and period dates from DB
+  const [routes, trucks, existingTickets, registeredDrivers, openPeriod] = await Promise.all([
     prisma.route.findMany({ where: { active: true } }),
     prisma.truck.findMany({ include: { driver: { select: { id: true, name: true } } } }),
     prisma.trip.findMany({ select: { ticketNo: true }, where: { ticketNo: { not: null } } }),
     prisma.user.findMany({ where: { role: 'CHOFER', active: true }, select: { id: true, name: true } }),
+    periodId ? prisma.period.findUnique({ where: { id: periodId }, select: { startDate: true, endDate: true } }) : Promise.resolve(null),
   ])
+  const periodStart = openPeriod?.startDate ?? null
+  const periodEnd   = openPeriod?.endDate   ?? null
 
   const routeMap = new Map(routes.map(r => [r.name.toUpperCase(), r]))
   const truckMap = new Map(trucks.map(t => [t.plate.toUpperCase(), t]))
@@ -203,7 +217,9 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
 
   const trips: RomanaTrip[] = []
   const unknownProveedorMap = new Map<string, UnknownProveedorRow[]>()
+  const skippedRows: SkippedRow[] = []
   let dateMin = '', dateMax = ''
+  let rawRowCount = 0
 
   for (let i = headerRowIdx + 1; i < rows.length; i++) {
     const r = rows[i]
@@ -211,6 +227,8 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     if (!codi && codi !== 0) continue
     const ticketNo = String(codi).trim()
     if (!ticketNo) continue
+
+    rawRowCount++
 
     const dateSerial  = r[COL.fecha]
     const procedencia = String(r[COL.procedencia] ?? '').trim()
@@ -220,10 +238,16 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     const material    = String(r[COL.material]    ?? '').trim()
     const netoKg      = typeof r[COL.netoKg] === 'number' ? r[COL.netoKg] as number : 0
 
-    if (!procedencia || !proveedor || !plate) continue
+    if (!procedencia || !proveedor || !plate) {
+      skippedRows.push({ ticketNo, plate: plate || '—', conductor, reason: 'sin_datos' })
+      continue
+    }
 
     const date = typeof dateSerial === 'number' ? excelDate(dateSerial) : new Date(String(dateSerial))
-    if (isNaN(date.getTime())) continue
+    if (isNaN(date.getTime())) {
+      skippedRows.push({ ticketNo, plate, conductor, reason: 'sin_fecha' })
+      continue
+    }
     const dateStr = date.toISOString()
     const dateKey = date.toISOString().slice(0, 10)
 
@@ -245,7 +269,10 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
     }
 
     const route = routeMap.get(routeName.toUpperCase())
-    if (!route) continue
+    if (!route) {
+      skippedRows.push({ ticketNo, plate, conductor, reason: 'ruta_no_existe' })
+      continue
+    }
 
     if (!dateMin || dateKey < dateMin) dateMin = dateKey
     if (!dateMax || dateKey > dateMax) dateMax = dateKey
@@ -257,6 +284,9 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
       : route.rateType === 'PER_TON'
         ? Math.round(tons * route.rate * 100) / 100
         : route.rate
+
+    const zeroWeight    = route.rateType === 'PER_TON' && netoKg === 0
+    const outsidePeriod = !!(periodStart && periodEnd && (date < periodStart || date > periodEnd))
 
     trips.push({
       ticketNo,
@@ -276,6 +306,8 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
       truckId,
       driverId,
       duplicate: isDup,
+      zeroWeight,
+      outsidePeriod,
     })
   }
 
@@ -357,6 +389,8 @@ export async function parseRomana(base64: string): Promise<RomanaPreview> {
 
   return {
     period: `${dateMin} al ${dateMax}`,
+    rawRowCount,
+    skippedRows,
     totalTrips: trips.length,
     byClient,
     trips,
