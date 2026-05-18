@@ -36,6 +36,8 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
   })
 
   const owner = user?.owner
+  // Fecha desde la que se cuentan sus viajes (para dueños con camión transferido)
+  const activeSince = (owner as any)?.activeSince ? new Date((owner as any).activeSince) : null
 
   // Si no tiene Owner asociado, mostrar pantalla de ayuda
   if (!owner) {
@@ -57,6 +59,15 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
 
   const truckIds = owner.trucks.map(t => t.id)
 
+  // Si activeSince está definido, contar viajes solo desde esa fecha
+  const truckTripCounts = activeSince
+    ? await prisma.trip.groupBy({
+        by: ['truckId'],
+        where: { truckId: { in: truckIds }, date: { gte: activeSince } },
+        _count: { id: true },
+      }).then(rows => Object.fromEntries(rows.map(r => [r.truckId, r._count.id])))
+    : null
+
   // Período abierto
   const openPeriod = await prisma.period.findFirst({
     where: { status: 'OPEN' },
@@ -77,7 +88,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
 
     truckIds.length > 0
       ? prisma.trip.findMany({
-          where: { truckId: { in: truckIds } },
+          where: { truckId: { in: truckIds }, ...(activeSince ? { date: { gte: activeSince } } : {}) },
           orderBy: { date: 'desc' },
           take: 20,
           include: { route: { select: { name: true, clientName: true } }, truck: { select: { plate: true } } },
@@ -86,7 +97,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
 
     truckIds.length > 0
       ? prisma.payrollEntry.findMany({
-          where: { truckId: { in: truckIds } },
+          where: { truckId: { in: truckIds }, ...(activeSince ? { period: { startDate: { gte: activeSince } } } : {}) },
           orderBy: { createdAt: 'desc' },
           take: 30,
           include: {
@@ -326,7 +337,9 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                   <div className="flex items-center justify-between pt-3 border-t border-zinc-800">
                     <div>
                       <p className="text-zinc-500 text-xs">Total viajes</p>
-                      <p className="text-white font-semibold">{truck._count.trips}</p>
+                      <p className="text-white font-semibold">
+                        {truckTripCounts ? (truckTripCounts[truck.id] ?? 0) : truck._count.trips}
+                      </p>
                     </div>
                     {openPeriod && (
                       <div className="text-right">

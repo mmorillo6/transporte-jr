@@ -224,6 +224,8 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
         ? Math.round((row.netWeightKg / 1000) * route.rate * 100) / 100
         : route.rate,
       clientLabel: route.clientName || 'INTERNO',
+      zeroWeight:    route.rateType === 'PER_TON' && row.netWeightKg === 0,
+      outsidePeriod: false,
     }))
   }
 
