@@ -17,7 +17,12 @@ import { getConfigValue } from './systemConfig'
 //  - SALDO_INICIAL: netAmount del período anterior (si negativo = deuda; si positivo y pagado = 0)
 //  - AFILIADO: sin adminFee ni mechanicFee (pagan por su cuenta)
 
-export async function generatePayroll(periodId: string) {
+export type PayrollOptions = {
+  skipLoanIds?: string[]
+  adminFeeOverride?: number
+}
+
+export async function generatePayroll(periodId: string, options: PayrollOptions = {}) {
   const session = await getSession()
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {
     return { error: 'No autorizado' }
@@ -81,7 +86,7 @@ export async function generatePayroll(periodId: string) {
       trips: { some: { date: { gte: fortyFiveDaysAgo }, route: { clientName: { not: 'LUIS PEÑA' } } } },
     },
   })
-  const adminFeeBase = await getConfigValue('adminFeePerTruck')
+  const adminFeeBase = options.adminFeeOverride ?? await getConfigValue('adminFeePerTruck')
   const adminPool = adminFeeBase * propioFlotaActiva
   const adminFeePerTruck = activePropioThisPeriod > 0 ? adminPool / activePropioThisPeriod : 0
 
@@ -186,12 +191,14 @@ export async function generatePayroll(periodId: string) {
     const gastosOp = (gastosByTruck.get(truckId) ?? 0) + viaticos
 
     // Préstamos: match por nombre del chofer O por nombre del dueño
+    // Se excluyen los préstamos en skipLoanIds (Fernando los deseleccionó en el modal)
+    const skip = new Set(options.skipLoanIds ?? [])
     const driverName  = truck.driver?.name ?? ''
     const ownerName   = truck.owner.name.toLowerCase().trim()
-    const driverLoans = loans.filter(l => l.driverName.toLowerCase().trim() === driverName.toLowerCase().trim())
+    const driverLoans = loans.filter(l => !skip.has(l.id) && !!driverName && l.driverName.toLowerCase().trim() === driverName.toLowerCase().trim())
     const ownerLoans  = loans.filter(l => {
       const lname = l.driverName.toLowerCase().trim()
-      return lname === ownerName && !ownerLoanApplied.has(l.id)
+      return !skip.has(l.id) && lname === ownerName && !ownerLoanApplied.has(l.id)
     })
     ownerLoans.forEach(l => ownerLoanApplied.add(l.id))
     const loanDeductions = [...driverLoans, ...ownerLoans].reduce((s, l) => s + l.deductAmount, 0)
@@ -247,6 +254,90 @@ export async function generatePayroll(periodId: string) {
   revalidatePath('/nomina')
   revalidatePath(`/nomina/${periodId}`)
   return { ok: true, count: created.length }
+}
+
+// ─── Parámetros previos a generar nómina ────────────────────────────────────
+export type LoanForPayroll = {
+  id: string
+  driverName: string
+  balance: number
+  deductAmount: number
+  type: 'chofer' | 'dueno'
+  truckId: string
+  truckPlate: string
+  ownerName: string
+}
+
+export type PayrollParams = {
+  loans: LoanForPayroll[]
+  adminFeeBase: number
+  adminFeePerTruck: number
+  fleetCount: number
+  activeCount: number
+  systemConfig: { key: string; value: string; label: string }[]
+}
+
+export async function getPayrollParams(periodId: string): Promise<PayrollParams | { error: string }> {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
+  const period = await prisma.period.findUnique({
+    where: { id: periodId },
+    include: {
+      trips: { select: { truckId: true, route: { select: { clientName: true } } } },
+    },
+  })
+  if (!period) return { error: 'Período no encontrado' }
+
+  const truckIds = [...new Set(period.trips.map(t => t.truckId))]
+  const trucks = await prisma.truck.findMany({
+    where: { id: { in: truckIds } },
+    include: { driver: { select: { name: true } }, owner: { select: { name: true, type: true } } },
+  })
+  const truckMap = new Map(trucks.map(t => [t.id, t]))
+
+  // Calcular fleet/active para admin fee
+  const propiosConAurumin = new Set(
+    period.trips
+      .filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
+      .filter(t => truckMap.get(t.truckId)?.owner.type === 'PROPIO')
+      .map(t => t.truckId)
+  )
+  const fortyFiveDaysAgo = new Date(period.startDate.getTime() - 45 * 24 * 60 * 60 * 1000)
+  const fleetCount = await prisma.truck.count({
+    where: {
+      active: true,
+      owner: { type: 'PROPIO' },
+      trips: { some: { date: { gte: fortyFiveDaysAgo }, route: { clientName: { not: 'LUIS PEÑA' } } } },
+    },
+  })
+  const adminFeeBase = await getConfigValue('adminFeePerTruck')
+  const activeCount = propiosConAurumin.size
+  const adminFeePerTruck = activeCount > 0 ? (adminFeeBase * fleetCount) / activeCount : 0
+
+  // Préstamos activos y a cuál camión se asignan
+  const allLoans = await prisma.loan.findMany({ where: { balance: { gt: 0 } } })
+  const loans: LoanForPayroll[] = []
+  const ownerLoanApplied = new Set<string>()
+
+  for (const truck of trucks) {
+    const driverName = truck.driver?.name ?? ''
+    const ownerName  = truck.owner.name.toLowerCase().trim()
+
+    if (driverName) {
+      for (const l of allLoans.filter(l => l.driverName.toLowerCase().trim() === driverName.toLowerCase().trim())) {
+        loans.push({ id: l.id, driverName: l.driverName, balance: l.balance, deductAmount: l.deductAmount, type: 'chofer', truckId: truck.id, truckPlate: truck.plate, ownerName: truck.owner.name })
+      }
+    }
+    for (const l of allLoans.filter(l => l.driverName.toLowerCase().trim() === ownerName && !ownerLoanApplied.has(l.id))) {
+      ownerLoanApplied.add(l.id)
+      loans.push({ id: l.id, driverName: l.driverName, balance: l.balance, deductAmount: l.deductAmount, type: 'dueno', truckId: truck.id, truckPlate: truck.plate, ownerName: truck.owner.name })
+    }
+  }
+
+  const systemConfig = await prisma.systemConfig.findMany({ orderBy: { key: 'asc' } })
+
+  return { loans, adminFeeBase, adminFeePerTruck, fleetCount, activeCount, systemConfig }
 }
 
 // ─── Actualizar abono de un camión (Fernando lo entra antes de cerrar) ────────
