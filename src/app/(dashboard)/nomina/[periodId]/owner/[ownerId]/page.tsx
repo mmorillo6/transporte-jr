@@ -13,11 +13,6 @@ function fmtDate(d: Date | string) {
   return new Date(y, m - 1, day, 12).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
-const CATEGORY_LABEL: Record<string, string> = {
-  REPUESTO: 'Repuesto', MECANICA: 'Mecánica', ACEITE: 'Aceite', CAUCHO: 'Caucho',
-  OPERATIVO: 'Operativo', ADMINISTRATIVO: 'Administrativo', NPR: 'NPR',
-  NOMINA: 'Nómina', VIATICO: 'Viático', OTRO: 'Otro',
-}
 
 export default async function OwnerRelacionPage({
   params,

@@ -172,19 +172,6 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
     return { truck, curr, prev }
   })
 
-  // Desglose por cliente en el período actual
-  const byClient = new Map<string, { trips: number; tons: number; amount: number }>()
-  for (const t of periodTrips) {
-    const client = (t as any).route?.clientName ?? 'AURUMIN'
-    const ex = byClient.get(client) ?? { trips: 0, tons: 0, amount: 0 }
-    byClient.set(client, {
-      trips:  ex.trips + 1,
-      tons:   ex.tons + (t.netWeightKg ?? 0) / 1000,
-      amount: ex.amount + (t.amount ?? 0),
-    })
-  }
-  const clientBreakdown = Array.from(byClient.entries()).sort((a, b) => b[1].amount - a[1].amount)
-
   // Datos para la gráfica (orden cronológico)
   const chartData = [...periodHistory]
     .reverse()
@@ -514,33 +501,6 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                 <p className="text-amber-400 font-semibold text-sm">${loan.balance.toFixed(0)}</p>
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Desglose por cliente — período actual */}
-      {clientBreakdown.length > 0 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-zinc-800">
-            <h2 className="text-white font-semibold text-sm">Viajes por cliente — período actual</h2>
-            <p className="text-zinc-500 text-xs mt-0.5">Montos separados por empresa contratante</p>
-          </div>
-          <div className="divide-y divide-zinc-800/50">
-            {clientBreakdown.map(([client, data]) => (
-              <div key={client} className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
-                <div>
-                  <p className="text-white font-semibold text-sm">{client}</p>
-                  <p className="text-zinc-500 text-xs mt-0.5">{data.trips} viajes · {data.tons.toFixed(1)} ton</p>
-                </div>
-                <p className="text-amber-400 font-bold text-lg">${data.amount.toFixed(2)}</p>
-              </div>
-            ))}
-            {clientBreakdown.length > 1 && (
-              <div className="px-5 py-3 flex items-center justify-between bg-zinc-800/30">
-                <p className="text-zinc-400 text-sm font-medium">Total combinado</p>
-                <p className="text-white font-bold">${clientBreakdown.reduce((s, [, d]) => s + d.amount, 0).toFixed(2)}</p>
-              </div>
-            )}
           </div>
         </div>
       )}
