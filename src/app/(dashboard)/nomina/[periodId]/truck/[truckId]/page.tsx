@@ -80,11 +80,14 @@ export default async function TruckRelacionPage({
         orderBy: { date: 'asc' },
       })
     : []
-  const totalExpenses    = expenses.reduce((s, x) => s + x.amount, 0)
-  const tripsAurumin     = trips.filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
-  const tripsLuisPena    = trips.filter(t => (t.route as any)?.clientName === 'LUIS PEÑA')
-  const grossTripAurumin = tripsAurumin.reduce((s, t) => s + t.amount, 0)
-  const grossTripLuisPena= tripsLuisPena.reduce((s, t) => s + t.amount, 0)
+  const totalExpenses     = expenses.reduce((s, x) => s + x.amount, 0)
+  const tripsAurumin      = trips.filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
+  const tripsLuisPena     = trips.filter(t => (t.route as any)?.clientName === 'LUIS PEÑA')
+  const grossTripAurumin  = tripsAurumin.reduce((s, t) => s + t.amount, 0)
+  const grossTripLuisPena = tripsLuisPena.reduce((s, t) => s + t.amount, 0)
+  const nprPct = (truck?.owner?.nprPercent ?? 10) / 100
+  const nprAurumin  = Math.round(grossTripAurumin  * nprPct * 100) / 100
+  const nprLuisPena = Math.round(grossTripLuisPena * nprPct * 100) / 100
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -254,50 +257,78 @@ export default async function TruckRelacionPage({
           </div>
         )}
 
-        {/* Resumen financiero */}
+        {/* Resumen financiero — separado por cliente (igual al Excel de Fernando) */}
         <div className="px-6 py-5">
           <h2 className="text-white font-semibold text-sm mb-4 print:text-black">Resumen financiero</h2>
-          <div className="space-y-2">
-            <FinRow label="Facturación bruta"     value={`$${fmt(e.grossAmount)}`}           color="text-white print:text-black" />
-            {e.viaticos > 0 && (
-              <FinRow label="Viáticos"             value={`$${fmt(e.viaticos)}`}              color="text-blue-400 print:text-blue-700" />
-            )}
-            {e.driverWage > 0 && (
-              <FinRow label="Nómina chofer"        value={`-$${fmt(e.driverWage)}`}           color="text-orange-400 print:text-orange-700" />
-            )}
-            {(e.nprFee ?? 0) > 0 && (
-              <FinRow label={`NPR (${truck?.owner?.nprPercent ?? 5}%)`} value={`-$${fmt(e.nprFee)}`} color="text-red-400 print:text-red-700" />
-            )}
-            {(e.mechanicFee ?? 0) > 0 && (
-              <FinRow label="Mecánicos"            value={`-$${fmt(e.mechanicFee)}`}          color="text-purple-400 print:text-purple-700" />
-            )}
-            {(e.adminFee ?? 0) > 0 && (
-              <FinRow label="Admin"                value={`-$${fmt(e.adminFee)}`}             color="text-zinc-400 print:text-zinc-600" />
-            )}
-            {e.commissionFee > 0 && (
-              <FinRow label="Gastos operativos"    value={`-$${fmt(e.commissionFee)}`}        color="text-red-400 print:text-red-700" />
-            )}
-            {e.deductions > 0 && (
-              <FinRow label="Otras deducciones"    value={`-$${fmt(e.deductions)}`}           color="text-red-400 print:text-red-700" />
-            )}
-            {e.saldoInicial !== 0 && (
-              <FinRow
-                label="Saldo anterior"
-                value={`${e.saldoInicial < 0 ? '-' : ''}$${fmt(Math.abs(e.saldoInicial))}`}
-                color={e.saldoInicial < 0 ? 'text-red-400 print:text-red-700' : 'text-emerald-400 print:text-emerald-700'}
-              />
-            )}
-            {e.abono > 0 && (
-              <FinRow label="Abono recibido"       value={`-$${fmt(e.abono)}`}               color="text-emerald-400 print:text-emerald-700" />
-            )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-            <div className="border-t border-zinc-700 print:border-zinc-300 pt-3 mt-3 flex items-center justify-between">
-              <span className="text-white font-bold print:text-black">Saldo final</span>
+            {/* ── Aurumin ── */}
+            {grossTripAurumin > 0 && (() => {
+              const saldoA = Math.round((
+                (e.saldoInicial ?? 0)
+                + grossTripAurumin
+                - (e.commissionFee ?? 0)
+                - e.driverWage
+                - (e.mechanicFee ?? 0)
+                - (e.adminFee ?? 0)
+                - nprAurumin
+                - (e.deductions ?? 0)
+                - (e.abono ?? 0)
+              ) * 100) / 100
+              return (
+                <div className="space-y-1.5">
+                  <p className="text-amber-400 text-xs font-bold uppercase tracking-widest print:text-amber-600">Aurumin</p>
+                  {(e.saldoInicial ?? 0) !== 0 && <FinRow label="Saldo anterior" value={`${(e.saldoInicial??0)<0?'-':''}$${fmt(Math.abs(e.saldoInicial??0))}`} color={(e.saldoInicial??0)<0?'text-red-400':'text-emerald-400'} />}
+                  <FinRow label="Facturación"       value={`$${fmt(grossTripAurumin)}`}          color="text-white print:text-black" />
+                  {(e.commissionFee ?? 0) > 0 && <FinRow label="Gastos operativos"  value={`-$${fmt(e.commissionFee)}`}         color="text-red-400 print:text-red-700" />}
+                  {e.driverWage > 0           && <FinRow label="Nómina chofer"      value={`-$${fmt(e.driverWage)}`}            color="text-orange-400 print:text-orange-700" />}
+                  {(e.mechanicFee ?? 0) > 0   && <FinRow label="Nómina mecánicos"   value={`-$${fmt(e.mechanicFee)}`}           color="text-purple-400 print:text-purple-700" />}
+                  {(e.adminFee ?? 0) > 0      && <FinRow label="Administrativo"     value={`-$${fmt(e.adminFee)}`}              color="text-zinc-400 print:text-zinc-600" />}
+                  {nprAurumin > 0             && <FinRow label={`${truck?.owner?.nprPercent ?? 10}% NPR`} value={`-$${fmt(nprAurumin)}`} color="text-red-400 print:text-red-700" />}
+                  {(e.deductions ?? 0) > 0    && <FinRow label="Otras deducciones"  value={`-$${fmt(e.deductions)}`}            color="text-red-400 print:text-red-700" />}
+                  {(e.abono ?? 0) > 0         && <FinRow label="Abono recibido"     value={`-$${fmt(e.abono)}`}                 color="text-emerald-400 print:text-emerald-700" />}
+                  <div className="border-t border-zinc-700 print:border-zinc-300 pt-2 mt-1 flex justify-between">
+                    <span className="text-white font-bold text-sm print:text-black">Saldo final</span>
+                    <span className={`text-base font-bold font-mono ${saldoA < 0 ? 'text-red-400 print:text-red-700' : 'text-amber-400 print:text-amber-600'}`}>
+                      {saldoA < 0 ? `-$${fmt(Math.abs(saldoA))}` : `$${fmt(saldoA)}`}
+                    </span>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* ── Luis Peña ── */}
+            {grossTripLuisPena > 0 && (() => {
+              const saldoLP = Math.round((grossTripLuisPena - nprLuisPena) * 100) / 100
+              return (
+                <div className="space-y-1.5">
+                  <p className="text-blue-400 text-xs font-bold uppercase tracking-widest print:text-blue-700">Luis Peña (Chino Peña)</p>
+                  <FinRow label="Saldo anterior"   value="$0.00"                                color="text-zinc-600 print:text-zinc-500" />
+                  <FinRow label="Facturación"       value={`$${fmt(grossTripLuisPena)}`}         color="text-white print:text-black" />
+                  <FinRow label="Gastos operativos" value="$0.00"                                color="text-zinc-600 print:text-zinc-500" />
+                  <FinRow label="Nómina chofer"     value="$0.00"                                color="text-zinc-600 print:text-zinc-500" />
+                  <FinRow label="Nómina mecánicos"  value="$0.00"                                color="text-zinc-600 print:text-zinc-500" />
+                  <FinRow label="Administrativo"    value="$0.00"                                color="text-zinc-600 print:text-zinc-500" />
+                  {nprLuisPena > 0 && <FinRow label={`${truck?.owner?.nprPercent ?? 10}% NPR`} value={`-$${fmt(nprLuisPena)}`} color="text-red-400 print:text-red-700" />}
+                  <FinRow label="Abono recibido"    value="$0.00"                                color="text-zinc-600 print:text-zinc-500" />
+                  <div className="border-t border-zinc-700 print:border-zinc-300 pt-2 mt-1 flex justify-between">
+                    <span className="text-white font-bold text-sm print:text-black">Saldo final</span>
+                    <span className="text-base font-bold font-mono text-blue-400 print:text-blue-700">${fmt(saldoLP)}</span>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* Total a cobrar */}
+          {(grossTripAurumin > 0 || grossTripLuisPena > 0) && (
+            <div className="mt-4 pt-3 border-t border-zinc-700 print:border-zinc-300 flex justify-between items-center">
+              <span className="text-white font-bold print:text-black">Total a cobrar</span>
               <span className={`text-xl font-bold font-mono ${e.netAmount < 0 ? 'text-red-400 print:text-red-700' : 'text-amber-400 print:text-amber-600'}`}>
                 {e.netAmount < 0 ? `-$${fmt(Math.abs(e.netAmount))}` : `$${fmt(e.netAmount)}`}
               </span>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Deudas de cauchos */}

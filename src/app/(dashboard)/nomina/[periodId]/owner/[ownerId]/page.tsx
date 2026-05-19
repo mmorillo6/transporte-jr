@@ -41,7 +41,6 @@ export default async function OwnerRelacionPage({
   ])
   if (!period || !owner) notFound()
 
-  // Todos los camiones de este dueño activos en este período
   const [entries, expenses, tireDebts] = await Promise.all([
     prisma.payrollEntry.findMany({
       where: { periodId, truck: { ownerId } },
@@ -76,16 +75,14 @@ export default async function OwnerRelacionPage({
   const e = entries as any[]
 
   // Totales consolidados
-  const totalGross     = e.reduce((s, x) => s + x.grossAmount, 0)
-  const totalGastos    = e.reduce((s, x) => s + x.commissionFee, 0)
-  const totalChofer    = e.reduce((s, x) => s + x.driverWage, 0)
-  const totalMecanicos = e.reduce((s, x) => s + (x.mechanicFee ?? 0), 0)
-  const totalAdmin     = e.reduce((s, x) => s + (x.adminFee ?? 0), 0)
-  const totalNpr       = e.reduce((s, x) => s + (x.nprFee ?? 0), 0)
-  const totalDeductions= e.reduce((s, x) => s + x.deductions, 0)
-  const totalSaldoIni  = e.reduce((s, x) => s + (x.saldoInicial ?? 0), 0)
-  const totalAbono     = e.reduce((s, x) => s + (x.abono ?? 0), 0)
-  const totalNet       = e.reduce((s, x) => s + x.netAmount, 0)
+  const totalGastos    = e.reduce((s: number, x: any) => s + (x.commissionFee ?? 0), 0)
+  const totalChofer    = e.reduce((s: number, x: any) => s + x.driverWage, 0)
+  const totalMecanicos = e.reduce((s: number, x: any) => s + (x.mechanicFee ?? 0), 0)
+  const totalAdmin     = e.reduce((s: number, x: any) => s + (x.adminFee ?? 0), 0)
+  const totalDeductions= e.reduce((s: number, x: any) => s + x.deductions, 0)
+  const totalSaldoIni  = e.reduce((s: number, x: any) => s + (x.saldoInicial ?? 0), 0)
+  const totalAbono     = e.reduce((s: number, x: any) => s + (x.abono ?? 0), 0)
+  const totalNet       = e.reduce((s: number, x: any) => s + x.netAmount, 0)
   const totalTireDebt  = tireDebts.reduce((s, d) => s + d.balance, 0)
 
   // Gastos por camión
@@ -94,6 +91,29 @@ export default async function OwnerRelacionPage({
     const key = exp.truck?.plate ?? '?'
     gastosByTruck.set(key, [...(gastosByTruck.get(key) ?? []), exp])
   }
+
+  // Splits Aurumin / Luis Peña por camión
+  const nprPct = (owner.nprPercent ?? 10) / 100
+  const truckSplits = e.map((entry: any) => {
+    const trips  = entry.truck.trips as any[]
+    const gTrips = trips.filter((t: any) => t.route?.clientName !== 'LUIS PEÑA')
+    const lpTrips= trips.filter((t: any) => t.route?.clientName === 'LUIS PEÑA')
+    const gGross = gTrips.reduce( (s: number, t: any) => s + t.amount, 0)
+    const lpGross= lpTrips.reduce((s: number, t: any) => s + t.amount, 0)
+    const nprA   = Math.round(gGross  * nprPct * 100) / 100
+    const nprLP  = Math.round(lpGross * nprPct * 100) / 100
+    const saldoA = Math.round(((entry.saldoInicial ?? 0) + gGross - (entry.commissionFee ?? 0) - entry.driverWage - (entry.mechanicFee ?? 0) - (entry.adminFee ?? 0) - nprA - entry.deductions - (entry.abono ?? 0)) * 100) / 100
+    const saldoLP= Math.round((lpGross - nprLP) * 100) / 100
+    return { entryId: entry.id, gGross, lpGross, nprA, nprLP, saldoA, saldoLP }
+  })
+
+  // Consolidados Aurumin / Luis Peña
+  const totalGrossA  = truckSplits.reduce((s, x) => s + x.gGross,  0)
+  const totalGrossLP = truckSplits.reduce((s, x) => s + x.lpGross, 0)
+  const totalNprA    = Math.round(totalGrossA  * nprPct * 100) / 100
+  const totalNprLP   = Math.round(totalGrossLP * nprPct * 100) / 100
+  const consSaldoA   = Math.round((totalSaldoIni + totalGrossA - totalGastos - totalChofer - totalMecanicos - totalAdmin - totalNprA - totalDeductions - totalAbono) * 100) / 100
+  const consSaldoLP  = Math.round((totalGrossLP - totalNprLP) * 100) / 100
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -147,13 +167,9 @@ export default async function OwnerRelacionPage({
 
         {/* Detalle por camión */}
         {e.map((entry: any) => {
-          const truck  = entry.truck
-          const trips  = truck.trips as any[]
-          const gTrips = trips.filter((t: any) => t.route?.clientName !== 'LUIS PEÑA')
-          const lpTrips= trips.filter((t: any) => t.route?.clientName === 'LUIS PEÑA')
-          const gGross = gTrips.reduce((s: number, t: any) => s + t.amount, 0)
-          const lpGross= lpTrips.reduce((s: number, t: any) => s + t.amount, 0)
-          const truckGastos = gastosByTruck.get(truck.plate) ?? []
+          const truck      = entry.truck
+          const split      = truckSplits.find(s => s.entryId === entry.id)!
+          const truckGastos= gastosByTruck.get(truck.plate) ?? []
 
           return (
             <div key={entry.id} className="border-b border-zinc-800 print:border-zinc-200">
@@ -168,83 +184,61 @@ export default async function OwnerRelacionPage({
                 </span>
               </div>
 
-              {/* Desglose */}
-              <div className="px-6 py-3 space-y-1.5 text-sm">
-                {/* Facturación por cliente */}
-                {gGross > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-zinc-400 print:text-zinc-600">Facturación Aurumin</span>
-                    <span className="text-white font-mono print:text-black">${fmt(gGross)}</span>
-                  </div>
-                )}
-                {lpGross > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-zinc-400 print:text-zinc-600">Facturación Luis Peña</span>
-                    <span className="text-blue-400 font-mono print:text-blue-700">${fmt(lpGross)}</span>
-                  </div>
-                )}
-                {gGross > 0 && lpGross > 0 && (
-                  <div className="flex justify-between font-medium">
-                    <span className="text-zinc-300 print:text-zinc-700">Total bruto</span>
-                    <span className="text-white font-mono print:text-black">${fmt(entry.grossAmount)}</span>
-                  </div>
-                )}
+              {/* Desglose Aurumin / Luis Peña */}
+              <div className="px-6 py-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-                {/* Deducciones */}
-                {entry.commissionFee > 0 && (
-                  <div className="flex justify-between text-red-400 print:text-red-700">
-                    <span>Gastos operativos</span>
-                    <span className="font-mono">-${fmt(entry.commissionFee)}</span>
-                  </div>
-                )}
-                {entry.driverWage > 0 && (
-                  <div className="flex justify-between text-orange-400 print:text-orange-700">
-                    <span>Nómina chofer</span>
-                    <span className="font-mono">-${fmt(entry.driverWage)}</span>
-                  </div>
-                )}
-                {(entry.mechanicFee ?? 0) > 0 && (
-                  <div className="flex justify-between text-purple-400 print:text-purple-700">
-                    <span>Nómina mecánicos</span>
-                    <span className="font-mono">-${fmt(entry.mechanicFee)}</span>
-                  </div>
-                )}
-                {(entry.adminFee ?? 0) > 0 && (
-                  <div className="flex justify-between text-zinc-400 print:text-zinc-600">
-                    <span>Administrativo</span>
-                    <span className="font-mono">-${fmt(entry.adminFee)}</span>
-                  </div>
-                )}
-                {(entry.nprFee ?? 0) > 0 && (
-                  <div className="flex justify-between text-red-400 print:text-red-700">
-                    <span>{owner.type === 'AFILIADO' ? `${owner.nprPercent}% NPR` : '5% NPR'}</span>
-                    <span className="font-mono">-${fmt(entry.nprFee)}</span>
-                  </div>
-                )}
-                {entry.deductions > 0 && (
-                  <div className="flex justify-between text-red-400 print:text-red-700">
-                    <span>Otras deducciones</span>
-                    <span className="font-mono">-${fmt(entry.deductions)}</span>
-                  </div>
-                )}
-                {entry.saldoInicial !== 0 && (
-                  <div className={`flex justify-between ${entry.saldoInicial < 0 ? 'text-red-400 print:text-red-700' : 'text-emerald-400 print:text-emerald-700'}`}>
-                    <span>Saldo anterior</span>
-                    <span className="font-mono">
-                      {entry.saldoInicial < 0 ? '-' : '+'}${fmt(Math.abs(entry.saldoInicial))}
-                    </span>
-                  </div>
-                )}
-                {entry.abono > 0 && (
-                  <div className="flex justify-between text-emerald-400 print:text-emerald-700">
-                    <span>Abono recibido</span>
-                    <span className="font-mono">-${fmt(entry.abono)}</span>
-                  </div>
-                )}
+                  {/* Aurumin */}
+                  {split.gGross > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-amber-400 text-xs font-bold uppercase tracking-widest print:text-amber-600">Aurumin</p>
+                      {(entry.saldoInicial ?? 0) !== 0 && (
+                        <FinRow
+                          label="Saldo anterior"
+                          value={`${(entry.saldoInicial ?? 0) < 0 ? '-' : ''}$${fmt(Math.abs(entry.saldoInicial ?? 0))}`}
+                          color={(entry.saldoInicial ?? 0) < 0 ? 'text-red-400 print:text-red-700' : 'text-emerald-400 print:text-emerald-700'}
+                        />
+                      )}
+                      <FinRow label="Facturación"       value={`$${fmt(split.gGross)}`}              color="text-white print:text-black" />
+                      {(entry.commissionFee ?? 0) > 0 && <FinRow label="Gastos operativos"  value={`-$${fmt(entry.commissionFee)}`}    color="text-red-400 print:text-red-700" />}
+                      {entry.driverWage > 0           && <FinRow label="Nómina chofer"       value={`-$${fmt(entry.driverWage)}`}       color="text-orange-400 print:text-orange-700" />}
+                      {(entry.mechanicFee ?? 0) > 0   && <FinRow label="Nómina mecánicos"    value={`-$${fmt(entry.mechanicFee)}`}      color="text-purple-400 print:text-purple-700" />}
+                      {(entry.adminFee ?? 0) > 0      && <FinRow label="Administrativo"      value={`-$${fmt(entry.adminFee)}`}         color="text-zinc-400 print:text-zinc-600" />}
+                      {split.nprA > 0                 && <FinRow label={`${owner.nprPercent ?? 10}% NPR`} value={`-$${fmt(split.nprA)}`} color="text-red-400 print:text-red-700" />}
+                      {entry.deductions > 0           && <FinRow label="Otras deducciones"   value={`-$${fmt(entry.deductions)}`}       color="text-red-400 print:text-red-700" />}
+                      {(entry.abono ?? 0) > 0         && <FinRow label="Abono recibido"      value={`-$${fmt(entry.abono)}`}            color="text-emerald-400 print:text-emerald-700" />}
+                      <div className="border-t border-zinc-700 print:border-zinc-300 pt-1.5 flex justify-between text-sm">
+                        <span className="text-white font-bold print:text-black">Saldo final</span>
+                        <span className={`font-mono font-bold ${split.saldoA < 0 ? 'text-red-400 print:text-red-700' : 'text-amber-400 print:text-amber-600'}`}>
+                          {split.saldoA < 0 ? `-$${fmt(Math.abs(split.saldoA))}` : `$${fmt(split.saldoA)}`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
-                {/* Gastos del período por camión */}
+                  {/* Luis Peña */}
+                  {split.lpGross > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-blue-400 text-xs font-bold uppercase tracking-widest print:text-blue-700">Luis Peña (Chino Peña)</p>
+                      <FinRow label="Saldo anterior"    value="$0.00"                              color="text-zinc-600 print:text-zinc-500" />
+                      <FinRow label="Facturación"        value={`$${fmt(split.lpGross)}`}           color="text-white print:text-black" />
+                      <FinRow label="Gastos operativos"  value="$0.00"                              color="text-zinc-600 print:text-zinc-500" />
+                      <FinRow label="Nómina chofer"      value="$0.00"                              color="text-zinc-600 print:text-zinc-500" />
+                      <FinRow label="Nómina mecánicos"   value="$0.00"                              color="text-zinc-600 print:text-zinc-500" />
+                      <FinRow label="Administrativo"     value="$0.00"                              color="text-zinc-600 print:text-zinc-500" />
+                      {split.nprLP > 0               && <FinRow label={`${owner.nprPercent ?? 10}% NPR`} value={`-$${fmt(split.nprLP)}`} color="text-red-400 print:text-red-700" />}
+                      <FinRow label="Abono recibido"     value="$0.00"                              color="text-zinc-600 print:text-zinc-500" />
+                      <div className="border-t border-zinc-700 print:border-zinc-300 pt-1.5 flex justify-between text-sm">
+                        <span className="text-white font-bold print:text-black">Saldo final</span>
+                        <span className="font-mono font-bold text-blue-400 print:text-blue-700">${fmt(split.saldoLP)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Gastos del período */}
                 {truckGastos.length > 0 && (
-                  <details className="mt-2">
+                  <details className="mt-3">
                     <summary className="text-zinc-500 text-xs cursor-pointer hover:text-zinc-300 transition-colors print:hidden">
                       Ver {truckGastos.length} gasto{truckGastos.length !== 1 ? 's' : ''} operativos
                     </summary>
@@ -265,26 +259,65 @@ export default async function OwnerRelacionPage({
           )
         })}
 
-        {/* Resumen consolidado del dueño */}
+        {/* Resumen consolidado — mismo formato Excel Fernando */}
         <div className="px-6 py-5 border-b border-zinc-800 print:border-zinc-200">
-          <h2 className="text-white font-semibold text-sm mb-3 print:text-black">Resumen consolidado</h2>
-          <div className="space-y-1.5 text-sm">
-            <SumRow label="Facturación bruta total"  value={totalGross}      color="text-white" />
-            {totalGastos > 0    && <SumRow label="Gastos operativos"   value={-totalGastos}    color="text-red-400" />}
-            {totalChofer > 0    && <SumRow label="Nómina choferes"     value={-totalChofer}    color="text-orange-400" />}
-            {totalMecanicos > 0 && <SumRow label="Nómina mecánicos"    value={-totalMecanicos} color="text-purple-400" />}
-            {totalAdmin > 0     && <SumRow label="Administrativo"      value={-totalAdmin}     color="text-zinc-400" />}
-            {totalNpr > 0       && <SumRow label="NPR"                 value={-totalNpr}       color="text-red-400" />}
-            {totalDeductions > 0&& <SumRow label="Otras deducciones"   value={-totalDeductions}color="text-red-400" />}
-            {totalSaldoIni !== 0&& <SumRow label="Saldo anterior"      value={totalSaldoIni}   color={totalSaldoIni < 0 ? 'text-red-400' : 'text-emerald-400'} />}
-            {totalAbono > 0     && <SumRow label="Abono recibido"      value={-totalAbono}     color="text-emerald-400" />}
+          <h2 className="text-white font-semibold text-sm mb-4 print:text-black">Resumen consolidado</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-            <div className="border-t border-zinc-700 print:border-zinc-300 pt-3 mt-2 flex items-center justify-between">
-              <span className="text-white font-bold print:text-black">Saldo final del período</span>
-              <span className={`text-xl font-bold font-mono ${totalNet < 0 ? 'text-red-400 print:text-red-700' : 'text-amber-400 print:text-amber-600'}`}>
-                {totalNet < 0 ? '-' : ''}${fmt(Math.abs(totalNet))}
-              </span>
-            </div>
+            {/* Aurumin consolidado */}
+            {totalGrossA > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-amber-400 text-xs font-bold uppercase tracking-widest print:text-amber-600">Aurumin</p>
+                {totalSaldoIni !== 0 && (
+                  <FinRow
+                    label="Saldo anterior"
+                    value={`${totalSaldoIni < 0 ? '-' : ''}$${fmt(Math.abs(totalSaldoIni))}`}
+                    color={totalSaldoIni < 0 ? 'text-red-400 print:text-red-700' : 'text-emerald-400 print:text-emerald-700'}
+                  />
+                )}
+                <FinRow label="Facturación"       value={`$${fmt(totalGrossA)}`}          color="text-white print:text-black" />
+                {totalGastos > 0    && <FinRow label="Gastos operativos"  value={`-$${fmt(totalGastos)}`}    color="text-red-400 print:text-red-700" />}
+                {totalChofer > 0    && <FinRow label="Nómina choferes"    value={`-$${fmt(totalChofer)}`}    color="text-orange-400 print:text-orange-700" />}
+                {totalMecanicos > 0 && <FinRow label="Nómina mecánicos"   value={`-$${fmt(totalMecanicos)}`} color="text-purple-400 print:text-purple-700" />}
+                {totalAdmin > 0     && <FinRow label="Administrativo"     value={`-$${fmt(totalAdmin)}`}     color="text-zinc-400 print:text-zinc-600" />}
+                {totalNprA > 0      && <FinRow label={`${owner.nprPercent ?? 10}% NPR`} value={`-$${fmt(totalNprA)}`} color="text-red-400 print:text-red-700" />}
+                {totalDeductions > 0&& <FinRow label="Otras deducciones"  value={`-$${fmt(totalDeductions)}`} color="text-red-400 print:text-red-700" />}
+                {totalAbono > 0     && <FinRow label="Abono recibido"     value={`-$${fmt(totalAbono)}`}     color="text-emerald-400 print:text-emerald-700" />}
+                <div className="border-t border-zinc-700 print:border-zinc-300 pt-2 mt-1 flex justify-between">
+                  <span className="text-white font-bold print:text-black">Saldo final</span>
+                  <span className={`text-base font-bold font-mono ${consSaldoA < 0 ? 'text-red-400 print:text-red-700' : 'text-amber-400 print:text-amber-600'}`}>
+                    {consSaldoA < 0 ? `-$${fmt(Math.abs(consSaldoA))}` : `$${fmt(consSaldoA)}`}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Luis Peña consolidado */}
+            {totalGrossLP > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-blue-400 text-xs font-bold uppercase tracking-widest print:text-blue-700">Luis Peña (Chino Peña)</p>
+                <FinRow label="Saldo anterior"    value="$0.00"                           color="text-zinc-600 print:text-zinc-500" />
+                <FinRow label="Facturación"        value={`$${fmt(totalGrossLP)}`}         color="text-white print:text-black" />
+                <FinRow label="Gastos operativos"  value="$0.00"                           color="text-zinc-600 print:text-zinc-500" />
+                <FinRow label="Nómina choferes"    value="$0.00"                           color="text-zinc-600 print:text-zinc-500" />
+                <FinRow label="Nómina mecánicos"   value="$0.00"                           color="text-zinc-600 print:text-zinc-500" />
+                <FinRow label="Administrativo"     value="$0.00"                           color="text-zinc-600 print:text-zinc-500" />
+                {totalNprLP > 0 && <FinRow label={`${owner.nprPercent ?? 10}% NPR`} value={`-$${fmt(totalNprLP)}`} color="text-red-400 print:text-red-700" />}
+                <FinRow label="Abono recibido"     value="$0.00"                           color="text-zinc-600 print:text-zinc-500" />
+                <div className="border-t border-zinc-700 print:border-zinc-300 pt-2 mt-1 flex justify-between">
+                  <span className="text-white font-bold print:text-black">Saldo final</span>
+                  <span className="text-base font-bold font-mono text-blue-400 print:text-blue-700">${fmt(consSaldoLP)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Total a cobrar */}
+          <div className="mt-4 pt-3 border-t border-zinc-700 print:border-zinc-300 flex justify-between items-center">
+            <span className="text-white font-bold print:text-black">Total a cobrar</span>
+            <span className={`text-xl font-bold font-mono ${totalNet < 0 ? 'text-red-400 print:text-red-700' : 'text-amber-400 print:text-amber-600'}`}>
+              {totalNet < 0 ? `-$${fmt(Math.abs(totalNet))}` : `$${fmt(totalNet)}`}
+            </span>
           </div>
         </div>
 
@@ -336,13 +369,11 @@ export default async function OwnerRelacionPage({
   )
 }
 
-function SumRow({ label, value, color }: { label: string; value: number; color: string }) {
+function FinRow({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="flex justify-between text-sm">
+    <div className="flex items-center justify-between text-sm">
       <span className="text-zinc-400 print:text-zinc-600">{label}</span>
-      <span className={`font-mono ${color}`}>
-        {value < 0 ? '-' : ''}${fmt(Math.abs(value))}
-      </span>
+      <span className={`font-mono font-medium ${color}`}>{value}</span>
     </div>
   )
 }
