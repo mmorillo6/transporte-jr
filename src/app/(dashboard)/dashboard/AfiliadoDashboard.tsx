@@ -263,54 +263,110 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         </div>
       </div>
 
-      {/* Desglose por cliente — Aurumin vs Chino Peña */}
-      {clientBreakdown.length > 0 && (
-        <div>
-          <h2 className="text-white font-semibold text-sm mb-3">Facturación por cliente — período actual</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {clientBreakdown.map(([cn, d]) => {
-              const isAurumin = cn === 'AURUMIN'
-              const nprFee    = Math.round(d.amount * (owner.nprPercent / 100) * 100) / 100
-              const base      = Math.round((d.amount - nprFee) * 100) / 100
-              const pago      = Math.round(base * 0.20 * 100) / 100
-              const label     = isAurumin ? 'Aurumin' : 'Chino Peña (Luis Peña)'
-              return (
-                <div key={cn}
-                  className={`border rounded-2xl p-4 ${isAurumin ? 'border-amber-500/25 bg-amber-500/5' : 'border-blue-500/20 bg-blue-500/5'}`}>
-                  <p className={`text-xs font-bold uppercase tracking-widest mb-3 ${isAurumin ? 'text-amber-500' : 'text-blue-400'}`}>
-                    {label}
-                  </p>
-                  <div className="space-y-1.5 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-zinc-400">Facturado</span>
-                      <span className={`font-bold text-base ${isAurumin ? 'text-amber-400' : 'text-blue-400'}`}>
-                        ${d.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      {/* Relación del período actual — formato igual al Excel de Fernando */}
+      {openPeriod && (() => {
+        const openEntries = payrollHistory.filter(e => e.period.id === openPeriod.id)
+        if (openEntries.length === 0) return (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-center">
+            <p className="text-zinc-500 text-sm">Nómina no generada aún para este período</p>
+          </div>
+        )
+
+        // Agregar todos los camiones del dueño en este período
+        const gastos       = openEntries.reduce((s, e) => s + (e.commissionFee ?? 0), 0)
+        const nomChofer    = openEntries.reduce((s, e) => s + e.driverWage, 0)
+        const nomMecanicos = openEntries.reduce((s, e) => s + (e.mechanicFee ?? 0), 0)
+        const administrativo = openEntries.reduce((s, e) => s + (e.adminFee ?? 0), 0)
+        const prestamos    = openEntries.reduce((s, e) => s + (e.deductions ?? 0), 0)
+        const abono        = openEntries.reduce((s, e) => s + (e.abono ?? 0), 0)
+        const saldoAnterior = openEntries.reduce((s, e) => s + (e.saldoInicial ?? 0), 0)
+
+        // Facturación split por cliente (desde los viajes del período)
+        const auruminTrips = periodTrips.filter(t => (t as any).route?.clientName !== 'LUIS PEÑA')
+        const lpTrips      = periodTrips.filter(t => (t as any).route?.clientName === 'LUIS PEÑA')
+        const brutoAurumin = auruminTrips.reduce((s, t) => s + (t.amount ?? 0), 0)
+        const brutoLP      = lpTrips.reduce((s, t) => s + (t.amount ?? 0), 0)
+
+        const nprPct      = owner.nprPercent / 100
+        const nprAurumin  = Math.round(brutoAurumin * nprPct * 100) / 100
+        const nprLP       = Math.round(brutoLP * nprPct * 100) / 100
+
+        // Saldo Aurumin = bruto - gastos - chofer - mecánicos - admin - NPR - préstamos + saldoAnterior - abono
+        const saldoAurumin = Math.round((
+          brutoAurumin - gastos - nomChofer - nomMecanicos - administrativo - nprAurumin - prestamos + saldoAnterior - abono
+        ) * 100) / 100
+        // Saldo Luis Peña = bruto - NPR (Fernando no pone otros gastos en LP)
+        const saldoLP = Math.round((brutoLP - nprLP) * 100) / 100
+
+        const money = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        const Row = ({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) => (
+          <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/50 last:border-0">
+            <span className="text-zinc-400 text-sm">{label}</span>
+            <span className={`font-mono text-sm ${highlight ? 'text-white font-semibold' : value < 0 ? 'text-red-400' : value === 0 ? 'text-zinc-600' : 'text-zinc-300'}`}>
+              {value < 0 ? `− $${money(Math.abs(value))}` : `$${money(value)}`}
+            </span>
+          </div>
+        )
+
+        return (
+          <div>
+            <h2 className="text-white font-semibold text-sm mb-3">Relación del período</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+              {/* Aurumin */}
+              {brutoAurumin > 0 && (
+                <div className="bg-zinc-900 border border-amber-500/20 rounded-2xl p-4">
+                  <p className="text-amber-400 text-xs font-bold uppercase tracking-widest mb-3">Aurumin</p>
+                  <div>
+                    {saldoAnterior !== 0 && <Row label="Saldo anterior" value={saldoAnterior} />}
+                    <Row label="Facturación" value={brutoAurumin} highlight />
+                    {gastos > 0 && <Row label="Gastos operativos" value={-gastos} />}
+                    {nomChofer > 0 && <Row label="Nómina chofer" value={-nomChofer} />}
+                    {nomMecanicos > 0 && <Row label="Nómina mecánicos" value={-nomMecanicos} />}
+                    {administrativo > 0 && <Row label="Administrativo" value={-administrativo} />}
+                    <Row label={`${owner.nprPercent}% NPR`} value={-nprAurumin} />
+                    {prestamos > 0 && <Row label="Préstamos" value={-prestamos} />}
+                    {abono > 0 && <Row label="Abono recibido" value={-abono} />}
+                    <div className="flex justify-between items-center pt-2 mt-1 border-t border-zinc-700">
+                      <span className="text-white font-semibold text-sm">Saldo final</span>
+                      <span className={`font-mono font-bold text-lg ${saldoAurumin >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
+                        ${money(saldoAurumin)}
                       </span>
-                    </div>
-                    <div className="flex justify-between text-zinc-500">
-                      <span>{d.trips} viajes · {(d.tons / 1000).toFixed(1)} ton</span>
-                    </div>
-                    <div className="border-t border-zinc-700 pt-1.5 mt-1.5 space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-zinc-500">− {owner.nprPercent}% NPR (José)</span>
-                        <span className="text-red-400">− ${nprFee.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-zinc-500">Base × 20%</span>
-                        <span className="text-zinc-400">${base.toFixed(2)} × 20%</span>
-                      </div>
-                      <div className="flex justify-between font-semibold">
-                        <span className="text-white">Su pago</span>
-                        <span className="text-emerald-400 text-base">${pago.toFixed(2)}</span>
-                      </div>
                     </div>
                   </div>
                 </div>
-              )
-            })}
+              )}
+
+              {/* Luis Peña */}
+              {brutoLP > 0 && (
+                <div className="bg-zinc-900 border border-blue-500/20 rounded-2xl p-4">
+                  <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-3">Luis Peña (Chino Peña)</p>
+                  <div>
+                    <Row label="Saldo anterior" value={0} />
+                    <Row label="Facturación" value={brutoLP} highlight />
+                    <Row label="Gastos operativos" value={0} />
+                    <Row label="Nómina chofer" value={0} />
+                    <Row label="Nómina mecánicos" value={0} />
+                    <Row label="Administrativo" value={0} />
+                    <Row label={`${owner.nprPercent}% NPR`} value={-nprLP} />
+                    <Row label="Abono recibido" value={0} />
+                    <div className="flex justify-between items-center pt-2 mt-1 border-t border-zinc-700">
+                      <span className="text-white font-semibold text-sm">Saldo final</span>
+                      <span className="font-mono font-bold text-lg text-blue-400">${money(saldoLP)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+            {/* Total a recibir */}
+            <div className="mt-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-3 flex justify-between items-center">
+              <span className="text-emerald-300 font-semibold text-sm">Total a cobrar este período</span>
+              <span className="text-emerald-400 font-bold text-xl font-mono">${money(saldoAurumin + saldoLP)}</span>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Mis camiones — tarjetas */}
       <div>
