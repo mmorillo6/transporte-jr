@@ -2,6 +2,7 @@
 import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
+import { getConfigValue } from './systemConfig'
 
 // ─── Generar / recalcular nómina de un período ────────────────────────────────
 // Fórmula de Fernando por camión:
@@ -80,7 +81,8 @@ export async function generatePayroll(periodId: string) {
       trips: { some: { date: { gte: fortyFiveDaysAgo }, route: { clientName: { not: 'LUIS PEÑA' } } } },
     },
   })
-  const adminPool = 50 * propioFlotaActiva
+  const adminFeeBase = await getConfigValue('adminFeePerTruck')
+  const adminPool = adminFeeBase * propioFlotaActiva
   const adminFeePerTruck = activePropioThisPeriod > 0 ? adminPool / activePropioThisPeriod : 0
 
   // ── Mecánica — pool dividido entre propios con viajes Aurumin ────────────────

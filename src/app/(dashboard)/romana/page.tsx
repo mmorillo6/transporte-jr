@@ -2,15 +2,16 @@ import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import RomanaClient from './RomanaClient'
+import { getSystemConfig } from '@/app/actions/systemConfig'
 
 export default async function RomanaPage() {
   const session = await getSession()
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) redirect('/dashboard')
 
-  const openPeriod = await prisma.period.findFirst({
-    where: { status: 'OPEN' },
-    orderBy: { startDate: 'desc' },
-  })
+  const [openPeriod, systemConfig] = await Promise.all([
+    prisma.period.findFirst({ where: { status: 'OPEN' }, orderBy: { startDate: 'desc' } }),
+    getSystemConfig(),
+  ])
 
   return (
     <div className="space-y-6">
@@ -24,7 +25,7 @@ export default async function RomanaPage() {
           </p>
         )}
       </div>
-      <RomanaClient openPeriodId={openPeriod?.id} />
+      <RomanaClient openPeriodId={openPeriod?.id} systemConfig={systemConfig} />
     </div>
   )
 }

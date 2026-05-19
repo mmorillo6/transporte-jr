@@ -17,12 +17,23 @@ export type RomanaTrip = {
   rateType: string
   rate: number
   amount: number
+  viatico: number         // viático calculado para este viaje
   clientLabel: string
   truckId: string | null
   driverId: string | null
   duplicate: boolean
   zeroWeight: boolean     // peso 0 en ruta PER_TON → monto $0
   outsidePeriod: boolean  // fecha fuera del rango del período abierto
+}
+
+export type ViaticosPreview = {
+  routeName: string
+  routeId: string
+  perTrip: number         // monto por viaje (La Fe)
+  perDoubleDay: number    // monto por día doble (Nuevo Callao)
+  tripsCount: number      // viajes con viático
+  doubleDaysCount: number // días dobles detectados
+  total: number           // total calculado
 }
 
 export type SkippedRow = {
@@ -51,6 +62,7 @@ export type RomanaPreview = {
   period: string
   rawRowCount: number     // filas con ticket encontradas en el Excel
   skippedRows: SkippedRow[]
+  viaticosPreview: ViaticosPreview[]
   totalTrips: number
   byClient: {
     client: string
@@ -289,6 +301,7 @@ export async function parseRomana(base64: string, periodId?: string): Promise<Ro
     const outsidePeriod = !!(periodStart && periodEnd && (date < periodStart || date > periodEnd))
 
     trips.push({
+      viatico: 0, // se calcula en el segundo paso
       ticketNo,
       date: dateStr,
       procedencia,
@@ -310,6 +323,56 @@ export async function parseRomana(base64: string, periodId?: string): Promise<Ro
       outsidePeriod,
     })
   }
+
+  // ── Segundo paso: calcular viáticos ──────────────────────────────────────────
+  // La Fe: viaticoSingle por cada viaje
+  // Nuevo Callao: viaticoDouble por camión en días con 2+ viajes
+  const viaticosMap = new Map<string, ViaticosPreview>()
+
+  for (const t of trips) {
+    if (t.duplicate) continue
+    const route = routeMap.get(t.routeName.toUpperCase())
+    if (!route || !route.hasViatico) continue
+
+    if (!viaticosMap.has(t.routeId)) {
+      viaticosMap.set(t.routeId, {
+        routeName: t.routeName, routeId: t.routeId,
+        perTrip: route.viaticoSingle, perDoubleDay: route.viaticoDouble,
+        tripsCount: 0, doubleDaysCount: 0, total: 0,
+      })
+    }
+  }
+
+  // La Fe: $perTrip en cada viaje nuevo
+  for (const t of trips) {
+    if (t.duplicate) continue
+    const route = routeMap.get(t.routeName.toUpperCase())
+    if (!route?.hasViatico || route.viaticoSingle <= 0) continue
+    t.viatico = route.viaticoSingle
+    const vp = viaticosMap.get(t.routeId)!
+    vp.tripsCount++
+    vp.total += route.viaticoSingle
+  }
+
+  // Nuevo Callao: $perDoubleDay en el primer viaje del día cuando hay 2+
+  const ncTrips = trips.filter(t => !t.duplicate && t.routeName.toUpperCase() === 'NUEVO CALLAO')
+  const ncByPlateDay = new Map<string, RomanaTrip[]>()
+  for (const t of ncTrips) {
+    const key = `${t.plate}|${t.date.slice(0, 10)}`
+    if (!ncByPlateDay.has(key)) ncByPlateDay.set(key, [])
+    ncByPlateDay.get(key)!.push(t)
+  }
+  const ncRoute = routes.find(r => r.name.toUpperCase() === 'NUEVO CALLAO')
+  if (ncRoute?.hasViatico && ncRoute.viaticoDouble > 0) {
+    for (const dayTrips of ncByPlateDay.values()) {
+      if (dayTrips.length >= 2) {
+        dayTrips[0].viatico = ncRoute.viaticoDouble
+        const vp = viaticosMap.get(ncRoute.id)
+        if (vp) { vp.doubleDaysCount++; vp.total += ncRoute.viaticoDouble }
+      }
+    }
+  }
+  const viaticosPreview = Array.from(viaticosMap.values()).filter(v => v.total > 0)
 
   // Group by client
   const clientMap = new Map<string, Map<string, { trips: number; tons: number; amount: number }>>()
@@ -391,6 +454,7 @@ export async function parseRomana(base64: string, periodId?: string): Promise<Ro
     period: `${dateMin} al ${dateMax}`,
     rawRowCount,
     skippedRows,
+    viaticosPreview,
     totalTrips: trips.length,
     byClient,
     trips,
@@ -444,7 +508,7 @@ export async function confirmarImport(trips: RomanaTrip[], openPeriodId?: string
       origin:      t.procedencia || null,
       conductor:   t.conductor || null,
       amount:      t.amount,
-      viatico:     0,
+      viatico:     t.viatico ?? 0,
       periodId:    openPeriodId ?? null,
     }))
 

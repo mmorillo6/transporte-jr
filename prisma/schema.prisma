@@ -577,6 +577,16 @@ model AlmacenItem {
   updatedAt     DateTime  @updatedAt
 }
 
+// ─── CONFIGURACIÓN DEL SISTEMA ───────────────────────────────────────────────
+// Parámetros globales editables por Fernando sin tocar código.
+model SystemConfig {
+  key         String   @id
+  value       String
+  label       String   // nombre legible para mostrar en UI
+  description String   @default("")
+  updatedAt   DateTime @updatedAt
+}
+
 // ─── DÍAS INTERNOS ────────────────────────────────────────────────────────────
 model DiasInternosEntry {
   id          String   @id @default(cuid())

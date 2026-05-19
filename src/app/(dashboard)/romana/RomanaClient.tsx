@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { parseRomana, confirmarImport, crearRutaDesdeRomana } from '@/app/actions/importarRomana'
 import type { RomanaPreview, RomanaTrip, UnknownProveedorRow } from '@/app/actions/importarRomana'
+import { updateSystemConfig } from '@/app/actions/systemConfig'
+import type { SystemConfigItem } from '@/app/actions/systemConfig'
 
 // ─── Utilidades de similitud de placas ────────────────────────────────────────
 
@@ -66,7 +68,7 @@ function DiffPlate({ wrong, correct }: { wrong: string; correct: string }) {
   )
 }
 
-export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }) {
+export default function RomanaClient({ openPeriodId, systemConfig = [] }: { openPeriodId?: string; systemConfig?: SystemConfigItem[] }) {
   const router  = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -137,6 +139,11 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
   const [conductorMappings, setConductorMappings] = useState<Record<string, string>>({})
   const [conductoresSugerRechazadas, setConductoresSugerRechazadas] = useState<Set<string>>(new Set())
   const [ignorarDuplicado, setIgnorarDuplicado] = useState(false)
+  // Parámetros editables (copia local de systemConfig, editable antes de importar)
+  const [configEdits, setConfigEdits] = useState<Record<string, string>>(
+    Object.fromEntries(systemConfig.map(c => [c.key, c.value]))
+  )
+  const [savingConfig, setSavingConfig] = useState(false)
 
   // Placas sin resolver: existen en el preview pero no tienen truckId ni mapeo asignado
   const placasSinResolver = preview
@@ -224,6 +231,7 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
         ? Math.round((row.netWeightKg / 1000) * route.rate * 100) / 100
         : route.rate,
       clientLabel: route.clientName || 'INTERNO',
+      viatico:       0,
       zeroWeight:    route.rateType === 'PER_TON' && row.netWeightKg === 0,
       outsidePeriod: false,
     }))
@@ -1049,6 +1057,71 @@ export default function RomanaClient({ openPeriodId }: { openPeriodId?: string }
               )}
             </div>
           )}
+
+          {/* ── Panel de parámetros y viáticos ── */}
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 space-y-4">
+            <p className="text-white text-sm font-semibold">Confirmar parámetros antes de importar</p>
+
+            {/* Viáticos detectados */}
+            {preview.viaticosPreview.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-zinc-400 text-xs font-medium uppercase tracking-wide">Viáticos detectados</p>
+                {preview.viaticosPreview.map(vp => (
+                  <div key={vp.routeId} className="bg-zinc-800 rounded-xl px-3 py-2.5 flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="text-white text-sm font-medium">{vp.routeName}</p>
+                      <p className="text-zinc-500 text-xs">
+                        {vp.tripsCount > 0 && `${vp.tripsCount} viajes × $${vp.perTrip}`}
+                        {vp.doubleDaysCount > 0 && `${vp.doubleDaysCount} días dobles × $${vp.perDoubleDay}`}
+                      </p>
+                    </div>
+                    <p className="text-amber-400 font-semibold font-mono">${vp.total.toFixed(2)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {preview.viaticosPreview.length === 0 && (
+              <p className="text-zinc-600 text-xs">No se detectaron viáticos en este archivo.</p>
+            )}
+
+            {/* Parámetros globales editables */}
+            {systemConfig.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-zinc-400 text-xs font-medium uppercase tracking-wide">Parámetros del sistema</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {systemConfig.map(cfg => (
+                    <div key={cfg.key} className="bg-zinc-800 rounded-xl px-3 py-2.5">
+                      <label className="block text-zinc-400 text-xs mb-1">{cfg.label}</label>
+                      {cfg.description && <p className="text-zinc-600 text-[11px] mb-1.5">{cfg.description}</p>}
+                      <div className="flex items-center gap-2">
+                        <span className="text-zinc-500 text-sm">$</span>
+                        <input
+                          type="number"
+                          value={configEdits[cfg.key] ?? cfg.value}
+                          onChange={e => setConfigEdits(prev => ({ ...prev, [cfg.key]: e.target.value }))}
+                          step="0.01" min="0"
+                          className="flex-1 bg-zinc-700 border border-zinc-600 text-white rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-amber-500"
+                        />
+                        {configEdits[cfg.key] !== cfg.value && (
+                          <button
+                            onClick={async () => {
+                              setSavingConfig(true)
+                              await updateSystemConfig(cfg.key, configEdits[cfg.key])
+                              setSavingConfig(false)
+                            }}
+                            disabled={savingConfig}
+                            className="text-[11px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 px-2 py-1 rounded-lg transition-colors whitespace-nowrap"
+                          >
+                            {savingConfig ? '...' : 'Guardar'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Acción */}
           <div className="flex gap-3">
