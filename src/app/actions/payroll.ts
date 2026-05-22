@@ -168,7 +168,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     if (!truck) continue
 
     const isPropio   = truck.owner.type === 'PROPIO'
-    const isNPROner  = truck.owner.isNPROwner
+    const isNPROwner = truck.owner.isNPROwner
     const nprPct     = truck.owner.nprPercent / 100
 
     // Facturación
@@ -223,7 +223,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     const netAmount = grossAmount
       - gastosOp
       - driverWage
-      - (isNPROner ? 0 : nprFee)   // José no paga NPR (es suyo)
+      - (isNPROwner ? 0 : nprFee)   // José no paga NPR (es suyo)
       - mechanicFee
       - adminFee
       - loanDeductions
