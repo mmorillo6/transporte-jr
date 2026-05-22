@@ -38,15 +38,20 @@ export async function notifyPeriodReady(periodId: string): Promise<NotifyResult>
   })
   const ownerIds = [...new Set(entries.map(e => e.truck.ownerId))]
 
-  // Find users linked to those owners (DUENO or AFILIADO roles)
-  const users = await prisma.user.findMany({
-    where: {
-      ownerId: { in: ownerIds },
-      role: { in: ['DUENO', 'AFILIADO'] },
-      active: true,
-    },
-    select: { id: true, name: true, email: true, phone: true, whatsappApiKey: true },
-  })
+  // Dueños/afiliados vinculados a camiones del período + encargado (siempre)
+  const [ownerUsers, encargados] = await Promise.all([
+    prisma.user.findMany({
+      where: { ownerId: { in: ownerIds }, role: { in: ['DUENO', 'AFILIADO'] }, active: true },
+      select: { id: true, name: true, email: true, phone: true, whatsappApiKey: true },
+    }),
+    prisma.user.findMany({
+      where: { role: 'ENCARGADO', active: true },
+      select: { id: true, name: true, email: true, phone: true, whatsappApiKey: true },
+    }),
+  ])
+  // Merge sin duplicados por id
+  const seen = new Set<string>()
+  const users = [...ownerUsers, ...encargados].filter(u => { if (seen.has(u.id)) return false; seen.add(u.id); return true })
 
   const sent: NotifyResult['sent'] = []
   const skipped: NotifyResult['skipped'] = []

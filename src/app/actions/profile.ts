@@ -3,6 +3,19 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
 
+export async function updateContactInfo(phone: string, whatsappApiKey: string) {
+  const session = await getSession()
+  if (!session) return { error: 'No autorizado' }
+  await prisma.user.update({
+    where: { id: session.userId },
+    data: {
+      phone:          phone.trim()          || null,
+      whatsappApiKey: whatsappApiKey.trim() || null,
+    },
+  })
+  return { ok: true }
+}
+
 export async function changePassword(currentPassword: string, newPassword: string) {
   const session = await getSession()
   if (!session) return { error: 'No autorizado' }
