@@ -154,7 +154,7 @@ export default async function OwnerRelacionPage({
                 ? 'bg-violet-500/10 text-violet-400 print:text-violet-700'
                 : 'bg-zinc-700 text-zinc-300 print:text-zinc-600'
             }`}>
-              {owner.type === 'AFILIADO' ? `Afiliado · ${owner.nprPercent}%` : 'Propio'}
+              {`${owner.type === 'AFILIADO' ? 'Afiliado' : 'Propio'} · ${owner.nprPercent}% NPR`}
             </span>
             <span className="text-zinc-500 text-xs">{entries.length} camión{entries.length !== 1 ? 'es' : ''}</span>
           </div>

@@ -188,7 +188,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         <div>
           <h1 className="text-2xl font-bold text-white">Bienvenido, {name.split(' ')[0]}</h1>
           <p className="text-zinc-500 text-sm mt-0.5">
-            {owner.name} · Afiliado {owner.nprPercent}% NPR · {owner.trucks.length} camión{owner.trucks.length !== 1 ? 'es' : ''}
+            {owner.name} · Dueño {owner.nprPercent}% NPR · {owner.trucks.length} camión{owner.trucks.length !== 1 ? 'es' : ''}
           </p>
         </div>
         {openPeriod && (

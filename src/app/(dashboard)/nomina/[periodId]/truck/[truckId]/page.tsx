@@ -141,8 +141,8 @@ export default async function TruckRelacionPage({
             <div>
               <p className="text-zinc-500 text-xs print:text-zinc-400">Dueño</p>
               <p className="text-white font-medium print:text-black">{truck?.owner?.name ?? '—'}</p>
-              {truck?.owner?.type === 'AFILIADO' && (
-                <p className="text-violet-400 text-xs print:text-zinc-500">Afiliado · {truck.owner.nprPercent ?? 10}% NPR</p>
+              {truck?.owner?.nprPercent != null && (
+                <p className="text-violet-400 text-xs print:text-zinc-500">Dueño · {truck.owner.nprPercent}% NPR</p>
               )}
             </div>
           </div>
