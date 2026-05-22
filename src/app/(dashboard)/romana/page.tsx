@@ -3,14 +3,16 @@ import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import RomanaClient from './RomanaClient'
 import { getSystemConfig } from '@/app/actions/systemConfig'
+import { getActiveOwners } from '@/app/actions/owners'
 
 export default async function RomanaPage() {
   const session = await getSession()
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) redirect('/dashboard')
 
-  const [openPeriod, systemConfig] = await Promise.all([
+  const [openPeriod, systemConfig, owners] = await Promise.all([
     prisma.period.findFirst({ where: { status: 'OPEN' }, orderBy: { startDate: 'desc' } }),
     getSystemConfig(),
+    getActiveOwners(),
   ])
 
   return (
@@ -25,7 +27,7 @@ export default async function RomanaPage() {
           </p>
         )}
       </div>
-      <RomanaClient openPeriodId={openPeriod?.id} systemConfig={systemConfig} />
+      <RomanaClient openPeriodId={openPeriod?.id} systemConfig={systemConfig} owners={owners} />
     </div>
   )
 }

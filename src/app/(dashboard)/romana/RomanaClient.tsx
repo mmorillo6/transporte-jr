@@ -6,6 +6,8 @@ import { parseRomana, confirmarImport, crearRutaDesdeRomana } from '@/app/action
 import type { RomanaPreview, RomanaTrip, UnknownProveedorRow } from '@/app/actions/importarRomana'
 import { updateSystemConfig } from '@/app/actions/systemConfig'
 import type { SystemConfigItem } from '@/app/actions/systemConfig'
+import { updateOwnerNpr } from '@/app/actions/owners'
+import type { OwnerParam } from '@/app/actions/owners'
 
 // ─── Utilidades de similitud de placas ────────────────────────────────────────
 
@@ -68,7 +70,7 @@ function DiffPlate({ wrong, correct }: { wrong: string; correct: string }) {
   )
 }
 
-export default function RomanaClient({ openPeriodId, systemConfig = [] }: { openPeriodId?: string; systemConfig?: SystemConfigItem[] }) {
+export default function RomanaClient({ openPeriodId, systemConfig = [], owners = [] }: { openPeriodId?: string; systemConfig?: SystemConfigItem[]; owners?: OwnerParam[] }) {
   const router  = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -144,6 +146,10 @@ export default function RomanaClient({ openPeriodId, systemConfig = [] }: { open
     Object.fromEntries(systemConfig.map(c => [c.key, c.value]))
   )
   const [savingConfig, setSavingConfig] = useState(false)
+  const [nprEdits, setNprEdits]   = useState<Record<string, string>>(
+    Object.fromEntries(owners.map(o => [o.id, String(o.nprPercent)]))
+  )
+  const [savingNpr, setSavingNpr] = useState<string | null>(null)
 
   // Placas sin resolver: existen en el preview pero no tienen truckId ni mapeo asignado
   const placasSinResolver = preview
@@ -1059,40 +1065,38 @@ export default function RomanaClient({ openPeriodId, systemConfig = [] }: { open
           )}
 
           {/* ── Panel de parámetros y viáticos ── */}
-          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 space-y-4">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 space-y-5">
             <p className="text-white text-sm font-semibold">Confirmar parámetros antes de importar</p>
 
             {/* Viáticos detectados */}
-            {preview.viaticosPreview.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-zinc-400 text-xs font-medium uppercase tracking-wide">Viáticos detectados</p>
-                {preview.viaticosPreview.map(vp => (
+            <div className="space-y-2">
+              <p className="text-zinc-400 text-xs font-medium uppercase tracking-wide">Viáticos detectados en el archivo</p>
+              {preview.viaticosPreview.length > 0 ? (
+                preview.viaticosPreview.map(vp => (
                   <div key={vp.routeId} className="bg-zinc-800 rounded-xl px-3 py-2.5 flex items-center justify-between gap-3 flex-wrap">
                     <div>
                       <p className="text-white text-sm font-medium">{vp.routeName}</p>
                       <p className="text-zinc-500 text-xs">
                         {vp.tripsCount > 0 && `${vp.tripsCount} viajes × $${vp.perTrip}`}
-                        {vp.doubleDaysCount > 0 && `${vp.doubleDaysCount} días dobles × $${vp.perDoubleDay}`}
+                        {vp.doubleDaysCount > 0 && ` · ${vp.doubleDaysCount} días dobles × $${vp.perDoubleDay}`}
                       </p>
                     </div>
                     <p className="text-amber-400 font-semibold font-mono">${vp.total.toFixed(2)}</p>
                   </div>
-                ))}
-              </div>
-            )}
-            {preview.viaticosPreview.length === 0 && (
-              <p className="text-zinc-600 text-xs">No se detectaron viáticos en este archivo.</p>
-            )}
+                ))
+              ) : (
+                <p className="text-zinc-600 text-xs">No se detectaron viáticos en este archivo.</p>
+              )}
+            </div>
 
             {/* Parámetros globales editables */}
             {systemConfig.length > 0 && (
               <div className="space-y-2">
-                <p className="text-zinc-400 text-xs font-medium uppercase tracking-wide">Parámetros del sistema</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <p className="text-zinc-400 text-xs font-medium uppercase tracking-wide">Parámetros globales</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {systemConfig.map(cfg => (
                     <div key={cfg.key} className="bg-zinc-800 rounded-xl px-3 py-2.5">
                       <label className="block text-zinc-400 text-xs mb-1">{cfg.label}</label>
-                      {cfg.description && <p className="text-zinc-600 text-[11px] mb-1.5">{cfg.description}</p>}
                       <div className="flex items-center gap-2">
                         <span className="text-zinc-500 text-sm">$</span>
                         <input
@@ -1118,6 +1122,60 @@ export default function RomanaClient({ openPeriodId, systemConfig = [] }: { open
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* NPR % por dueño */}
+            {owners.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-zinc-400 text-xs font-medium uppercase tracking-wide">NPR % por dueño de camión</p>
+                <p className="text-zinc-600 text-[11px]">Verifica que el porcentaje de cada dueño sea correcto antes de generar la nómina.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {owners.map(owner => {
+                    const current = nprEdits[owner.id] ?? String(owner.nprPercent)
+                    const changed = current !== String(owner.nprPercent)
+                    const isSaving = savingNpr === owner.id
+                    return (
+                      <div key={owner.id} className={`bg-zinc-800 rounded-xl px-3 py-2.5 transition-colors ${changed ? 'border border-amber-500/30' : ''}`}>
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <p className="text-white text-xs font-medium truncate">{owner.name}</p>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${
+                            owner.type === 'PROPIO'
+                              ? 'bg-zinc-700 text-zinc-400'
+                              : 'bg-violet-500/10 text-violet-400'
+                          }`}>
+                            {owner.type === 'PROPIO' ? 'Propio' : 'Afiliado'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={current}
+                            onChange={e => setNprEdits(prev => ({ ...prev, [owner.id]: e.target.value }))}
+                            step="1" min="0" max="100"
+                            className="w-16 bg-zinc-700 border border-zinc-600 text-white rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-amber-500"
+                          />
+                          <span className="text-zinc-500 text-sm">%</span>
+                          {changed && (
+                            <button
+                              onClick={async () => {
+                                setSavingNpr(owner.id)
+                                await updateOwnerNpr(owner.id, parseFloat(current) || 0)
+                                setSavingNpr(null)
+                                // Actualizar el valor base para que el badge desaparezca
+                                setNprEdits(prev => ({ ...prev, [owner.id]: current }))
+                              }}
+                              disabled={!!isSaving}
+                              className="ml-auto text-[11px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 px-2 py-1 rounded-lg transition-colors whitespace-nowrap"
+                            >
+                              {isSaving ? '...' : 'Guardar'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
