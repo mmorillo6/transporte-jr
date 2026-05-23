@@ -1,55 +1,29 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { applyGastosComunes } from '@/app/actions/expenses'
-
-type Item = { description: string; category: string; amount: string; includeAfiliados: boolean }
-
-const STORAGE_KEY = 'gastos-comunes-defaults'
-
-const FACTORY_DEFAULTS: Item[] = [
-  { description: 'NOMINA MECANICOS', category: 'MECANICA',      amount: '',      includeAfiliados: false },
-  { description: 'STARLINK',         category: 'ADMINISTRATIVO', amount: '10.91', includeAfiliados: true  },
-  { description: 'GASTOS COMUNES',   category: 'OPERATIVO',      amount: '3.80',  includeAfiliados: false },
-]
-
-function loadSavedDefaults(): Item[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return FACTORY_DEFAULTS.map(d => ({ ...d }))
-    return JSON.parse(raw)
-  } catch {
-    return FACTORY_DEFAULTS.map(d => ({ ...d }))
-  }
-}
+import { saveGastosComunesDefaults, type GastoDefault } from '@/app/actions/systemConfig'
 
 export default function GastosComunesClient({
   periodId,
   periodEnd,
   truckCount,
+  defaults,
+  autoOpen = false,
 }: {
   periodId: string
   periodEnd: string
   truckCount: number
+  defaults: GastoDefault[]
+  autoOpen?: boolean
 }) {
   const router = useRouter()
-  const [open, setOpen]           = useState(false)
-  const [items, setItems]         = useState<Item[]>(FACTORY_DEFAULTS.map(d => ({ ...d })))
-  const [saving, setSaving]       = useState(false)
-  const [hasCustom, setHasCustom] = useState(false)
+  const [open, setOpen]     = useState(autoOpen)
+  const [items, setItems]   = useState<GastoDefault[]>(defaults.map(d => ({ ...d })))
+  const [saving, setSaving] = useState(false)
 
-  // Load saved defaults on first open
-  useEffect(() => {
-    if (!open) return
-    const saved = loadSavedDefaults()
-    setItems(saved)
-    try {
-      setHasCustom(!!localStorage.getItem(STORAGE_KEY))
-    } catch { /* ignore */ }
-  }, [open])
-
-  function update(i: number, field: keyof Item, val: string | boolean) {
+  function update(i: number, field: keyof GastoDefault, val: string | boolean) {
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [field]: val } : it))
   }
 
@@ -59,23 +33,10 @@ export default function GastosComunesClient({
     return `$${(n / truckCount).toFixed(2)}`
   }
 
-  function saveAsDefault() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
-      setHasCustom(true)
-      toast.success('Valores guardados como predeterminados')
-    } catch {
-      toast.error('No se pudieron guardar los predeterminados')
-    }
-  }
-
-  function resetDefaults() {
-    try {
-      localStorage.removeItem(STORAGE_KEY)
-      setHasCustom(false)
-    } catch { /* ignore */ }
-    setItems(FACTORY_DEFAULTS.map(d => ({ ...d })))
-    toast('Valores restaurados a los originales')
+  async function handleSaveDefault() {
+    const res = await saveGastosComunesDefaults(items)
+    if (res && 'error' in res) toast.error(res.error)
+    else toast.success('Valores guardados como predeterminados')
   }
 
   async function handleApply() {
@@ -99,7 +60,6 @@ export default function GastosComunesClient({
     if (res && 'error' in res && res.error) { toast.error(res.error); return }
     if (res && 'created' in res) {
       toast.success(`${res.created} gasto(s) creados — divididos entre ${truckCount} camiones`)
-      setItems(loadSavedDefaults())
       setOpen(false)
       router.refresh()
     }
@@ -107,7 +67,7 @@ export default function GastosComunesClient({
 
   const totalNuevo = items.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0)
 
-  const inputRow = (it: Item, i: number) => ({
+  const inputRow = (it: GastoDefault, i: number) => ({
     desc: (
       <input
         type="text"
@@ -156,28 +116,28 @@ export default function GastosComunesClient({
   })
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+    <div className={`border rounded-2xl overflow-hidden transition-colors ${autoOpen && open ? 'bg-zinc-900 border-amber-500/30' : 'bg-zinc-900 border-zinc-800'}`}>
       <button
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-zinc-800/30 transition-colors"
       >
         <div className="flex items-center gap-3">
           <span className="text-white font-semibold text-sm">Gastos comunes del período</span>
-          <span className="text-zinc-500 text-xs hidden sm:inline">Starlink, gastos comunes — divididos entre {truckCount} camiones</span>
+          {autoOpen && open && (
+            <span className="text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">Pendiente</span>
+          )}
+          <span className="text-zinc-500 text-xs hidden sm:inline">Starlink, mecánicos — divididos entre {truckCount} camiones</span>
         </div>
-        <div className="flex items-center gap-2">
-          {hasCustom && <span className="text-amber-500 text-xs">★ custom</span>}
-          <span className="text-zinc-400 text-lg">{open ? '▲' : '▼'}</span>
-        </div>
+        <span className="text-zinc-400 text-lg">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
         <div className="border-t border-zinc-800 p-5 space-y-4">
           <p className="text-zinc-500 text-xs">
-            Ingresa el monto total de cada gasto. El sistema lo divide entre los {truckCount} camiones activos del período.
+            Verifica los montos y modifica si es necesario. El sistema divide el total entre los {truckCount} camiones activos.
           </p>
 
-          {/* Mobile: cards apiladas */}
+          {/* Mobile: cards */}
           <div className="sm:hidden space-y-3">
             {items.map((it, i) => {
               const row = inputRow(it, i)
@@ -228,22 +188,12 @@ export default function GastosComunesClient({
           </table>
 
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={saveAsDefault}
-                className="text-zinc-500 hover:text-zinc-300 text-xs underline transition-colors"
-              >
-                Guardar como predeterminado
-              </button>
-              {hasCustom && (
-                <button
-                  onClick={resetDefaults}
-                  className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors"
-                >
-                  Restaurar originales
-                </button>
-              )}
-            </div>
+            <button
+              onClick={handleSaveDefault}
+              className="text-zinc-500 hover:text-zinc-300 text-xs underline transition-colors"
+            >
+              Guardar como predeterminado
+            </button>
             <div className="flex items-center gap-4">
               {totalNuevo > 0 && (
                 <div className="text-sm">

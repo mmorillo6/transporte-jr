@@ -8,6 +8,7 @@ import PayrollTableClient from './PayrollTableClient'
 import { getTotalAlmacenPendiente } from '@/app/actions/almacen'
 import GastosMasivosClient from './GastosMasivosClient'
 import GastosComunesClient from './GastosComunesClient'
+import { getGastosComunesDefaults } from '@/app/actions/systemConfig'
 import GastosGeneralesClient from './GastosGeneralesClient'
 
 async function getPeriodData(periodId: string, role: string, ownerId: string | null) {
@@ -85,7 +86,7 @@ export default async function PeriodDetailPage({
     ownerId = user?.ownerId ?? null
   }
 
-  const [period, totalAlmacenPendiente, loansData, cxcAurumin, cxcLuisPena, mecanicoExpensesCount, gastosGeneralesCount, gastosComunesCount] = await Promise.all([
+  const [period, totalAlmacenPendiente, loansData, cxcAurumin, cxcLuisPena, mecanicoExpensesCount, gastosGeneralesCount, gastosComunesCount, gastosDefaults] = await Promise.all([
     getPeriodData(periodId, session.role, ownerId),
     getTotalAlmacenPendiente(),
     prisma.loan.findMany({ where: { balance: { gt: 0 } }, select: { balance: true } }),
@@ -107,6 +108,7 @@ export default async function PeriodDetailPage({
     prisma.expense.count({ where: { periodId, truckId: null } }),
     // Gastos comunes aplicados a camiones (Starlink, etc.)
     prisma.expense.count({ where: { periodId, truckId: { not: null } } }),
+    getGastosComunesDefaults(),
   ])
   if (!period) notFound()
 
@@ -580,6 +582,8 @@ export default async function PeriodDetailPage({
               periodId={periodId}
               periodEnd={periodEndISO}
               truckCount={trucksForGastos.length}
+              defaults={gastosDefaults}
+              autoOpen={gastosComunesCount === 0}
             />
           )}
 
