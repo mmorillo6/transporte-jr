@@ -78,7 +78,7 @@ export default function RomanaClient({ openPeriodId, systemConfig = [], owners =
   const [loading,   setLoading]   = useState(false)
   const [saving,    setSaving]    = useState(false)
   const [error,     setError]     = useState('')
-  const [resultado, setResultado] = useState<{ imported: number } | null>(null)
+  const [resultado, setResultado] = useState<{ imported: number; periodId: string | null } | null>(null)
   const [showTrips, setShowTrips] = useState<string | null>(null) // client name to expand
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -286,13 +286,49 @@ export default function RomanaClient({ openPeriodId, systemConfig = [], owners =
       {error && <p className="text-red-400 text-sm px-1">{error}</p>}
 
       {resultado && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-5 py-4">
-          <p className="text-emerald-400 font-semibold">{resultado.imported} viajes importados correctamente</p>
-          <p className="text-zinc-400 text-sm mt-1">Ya están disponibles en el módulo de Viajes y en el generador de Relaciones.</p>
-          <button onClick={() => { setPreview(null); setResultado(null); if (fileRef.current) fileRef.current.value = '' }}
-            className="text-emerald-400 hover:text-emerald-300 text-xs mt-2 transition-colors">
-            Importar otro archivo →
-          </button>
+        <div className="space-y-3">
+          {/* Confirmación */}
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-5 py-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-emerald-400 font-semibold">{resultado.imported} viajes importados correctamente</p>
+              <p className="text-zinc-500 text-xs mt-0.5">¿Hay otro archivo del mismo período? Puedes cargarlo ahora.</p>
+            </div>
+            <button onClick={() => { setPreview(null); setResultado(null); if (fileRef.current) fileRef.current.value = '' }}
+              className="text-emerald-400 hover:text-emerald-300 text-xs whitespace-nowrap border border-emerald-500/30 rounded-lg px-3 py-1.5 transition-colors">
+              + Importar otro
+            </button>
+          </div>
+
+          {/* Próximos pasos */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+            <p className="text-white font-semibold text-sm mb-4">¿Qué hacer ahora?</p>
+            <div className="space-y-3">
+
+              <Step n={1} done label="Romana importada" sublabel={`${resultado.imported} viajes cargados`} />
+
+              <StepLink
+                n={2}
+                href={resultado.periodId ? `/nomina/${resultado.periodId}` : '/nomina'}
+                label="Generar la relación"
+                sublabel="Abre el período → botón «Generar relación» → revisa los montos"
+              />
+
+              <StepLink
+                n={3}
+                href={resultado.periodId ? `/nomina/${resultado.periodId}` : '/nomina'}
+                label="Ingresar gastos comunes"
+                sublabel="Nómina mecánicos, administrativo y otros gastos del período"
+              />
+
+              <StepLink
+                n={4}
+                href={resultado.periodId ? `/nomina/${resultado.periodId}` : '/nomina'}
+                label="Notificar a los dueños"
+                sublabel="Envía el resumen por email y WhatsApp a cada propietario"
+              />
+
+            </div>
+          </div>
         </div>
       )}
 
@@ -1207,5 +1243,33 @@ export default function RomanaClient({ openPeriodId, systemConfig = [], owners =
         </div>
       )}
     </div>
+  )
+}
+
+function Step({ n, done, label, sublabel }: { n: number; done?: boolean; label: string; sublabel: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold mt-0.5 ${done ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}>
+        {done ? '✓' : n}
+      </div>
+      <div>
+        <p className={`text-sm font-medium ${done ? 'text-emerald-400' : 'text-zinc-300'}`}>{label}</p>
+        <p className="text-zinc-500 text-xs mt-0.5">{sublabel}</p>
+      </div>
+    </div>
+  )
+}
+
+function StepLink({ n, href, label, sublabel }: { n: number; href: string; label: string; sublabel: string }) {
+  return (
+    <Link href={href} className="flex items-start gap-3 group">
+      <div className="w-7 h-7 rounded-full bg-zinc-800 group-hover:bg-amber-500/20 flex items-center justify-center flex-shrink-0 text-xs font-bold text-zinc-500 group-hover:text-amber-400 mt-0.5 transition-colors">
+        {n}
+      </div>
+      <div className="flex-1">
+        <p className="text-sm font-medium text-zinc-300 group-hover:text-amber-400 transition-colors">{label} →</p>
+        <p className="text-zinc-500 text-xs mt-0.5">{sublabel}</p>
+      </div>
+    </Link>
   )
 }

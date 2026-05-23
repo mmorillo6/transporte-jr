@@ -512,12 +512,12 @@ export async function confirmarImport(trips: RomanaTrip[], openPeriodId?: string
       periodId:    openPeriodId ?? null,
     }))
 
-  if (data.length === 0) return { imported: 0 }
+  if (data.length === 0) return { imported: 0, periodId: openPeriodId ?? null }
 
   await prisma.trip.createMany({ data })
 
   revalidatePath('/viajes')
   revalidatePath('/relaciones')
   revalidatePath('/dashboard')
-  return { imported: data.length }
+  return { imported: data.length, periodId: openPeriodId ?? null }
 }
