@@ -85,7 +85,7 @@ export default function PerfilClient({
         <div className="bg-zinc-800/60 border border-zinc-700 rounded-xl p-3 space-y-2 text-xs">
           <p className="text-zinc-300 font-medium">Cómo obtener tu API key:</p>
           <ol className="text-zinc-400 space-y-1 list-decimal list-inside">
-            <li>Guarda este número en tu teléfono: <span className="text-white font-mono">+34 644 61 45 44</span></li>
+            <li>Guarda este número en tu teléfono: <span className="text-white font-mono">+34 623 78 64 49</span></li>
             <li>Mándale este mensaje exacto por WhatsApp:<br />
               <span className="text-amber-300 font-mono">I allow callmebot to send me messages</span>
             </li>
