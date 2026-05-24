@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Image from 'next/image'
 import { loginAction } from '@/app/actions/auth'
 
 export default function LoginPage() {
@@ -25,9 +26,12 @@ export default function LoginPage() {
 
         {/* Logo / Header */}
         <div className="flex justify-center mb-10">
-          <img
+          <Image
             src="/assets/logos/logo-full.png"
             alt="Transporte José Rodríguez"
+            width={1219}
+            height={386}
+            priority
             className="w-full max-w-[480px] h-auto"
           />
         </div>

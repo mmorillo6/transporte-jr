@@ -1,5 +1,5 @@
 'use client'
-import { useState, Fragment } from 'react'
+import { useState, Fragment, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createUser, updateUser, toggleUserActive, deleteUser } from '@/app/actions/config'
 import { toast } from 'sonner'
@@ -163,6 +163,13 @@ export default function UsuariosClient({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [filterRole, setFilterRole] = useState('')
+  const accordionRef = useRef<HTMLTableRowElement>(null)
+
+  useEffect(() => {
+    if (editingId && accordionRef.current) {
+      accordionRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [editingId])
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`¿Eliminar al usuario "${name}"? Esta acción no se puede deshacer.`)) return
@@ -289,7 +296,7 @@ export default function UsuariosClient({
                       </td>
                     </tr>
                     {editingId === user.id && (
-                      <tr className="border-b border-amber-500/20">
+                      <tr ref={accordionRef} className="border-b border-amber-500/20">
                         <td colSpan={7} className="p-0">
                           <UserForm
                             key={user.id}
