@@ -78,7 +78,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
   const driverNames = owner.trucks.map(t => (t as any).driver?.name).filter(Boolean)
 
   // Viajes del período actual para estos camiones
-  const [periodTrips, recentTrips, payrollHistory, maintenanceAlerts, driverLoans] = await Promise.all([
+  const [periodTrips, recentTrips, payrollHistory, maintenanceAlerts, driverLoans, ownerLoans] = await Promise.all([
     openPeriod && truckIds.length > 0
       ? prisma.trip.findMany({
           where: { truckId: { in: truckIds }, periodId: openPeriod.id },
@@ -122,6 +122,11 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
           where: { balance: { gt: 0 }, driverName: { in: driverNames } },
         })
       : Promise.resolve([]),
+
+    // Préstamos del dueño a descontar del pago de Luis Peña
+    prisma.loan.findMany({
+      where: { balance: { gt: 0 }, driverName: owner.name },
+    }),
   ])
 
   // Agrupar nómina por período
@@ -282,8 +287,10 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         const saldoAurumin = Math.round((
           brutoAurumin - gastos - nomChofer - nomMecanicos - administrativo - nprAurumin - prestamos + saldoAnterior - abono
         ) * 100) / 100
-        // Saldo Luis Peña = bruto - NPR (Fernando no pone otros gastos en LP)
-        const saldoLP = Math.round((brutoLP - nprLP) * 100) / 100
+        // Préstamos del dueño a descontar de LP
+        const prestamosLP = ownerLoans.reduce((s, l) => s + l.balance, 0)
+        // Saldo Luis Peña = bruto - NPR - préstamos dueño
+        const saldoLP = Math.round((brutoLP - nprLP - prestamosLP) * 100) / 100
 
         const money = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         const Row = ({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) => (
@@ -329,14 +336,9 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                 <div className="bg-zinc-900 border border-blue-500/20 rounded-2xl p-4">
                   <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-3">Luis Peña (Chino Peña)</p>
                   <div>
-                    <Row label="Saldo anterior" value={0} />
                     <Row label="Facturación" value={brutoLP} highlight />
-                    <Row label="Gastos operativos" value={0} />
-                    <Row label="Nómina chofer" value={0} />
-                    <Row label="Nómina mecánicos" value={0} />
-                    <Row label="Administrativo" value={0} />
                     <Row label={`${owner.nprPercent}% NPR`} value={-nprLP} />
-                    <Row label="Abono recibido" value={0} />
+                    {prestamosLP > 0 && <Row label="Préstamo Fernando" value={-prestamosLP} />}
                     <div className="flex justify-between items-center pt-2 mt-1 border-t border-zinc-700">
                       <span className="text-white font-semibold text-sm">Saldo final</span>
                       <span className="font-mono font-bold text-lg text-blue-400">${money(saldoLP)}</span>
