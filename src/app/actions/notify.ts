@@ -92,5 +92,9 @@ export async function notifyPeriodReady(periodId: string): Promise<NotifyResult>
     skipped.push({ name: '—', reason: 'No hay dueños/afiliados vinculados a camiones de este período' })
   }
 
+  if (sent.length > 0) {
+    await prisma.period.update({ where: { id: periodId }, data: { notifiedAt: new Date() } })
+  }
+
   return { sent, skipped }
 }

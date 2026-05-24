@@ -269,86 +269,91 @@ export default async function PeriodDetailPage({
         )}
       </div>
 
-      {/* ── Wizard de cierre — solo período abierto para encargado/dueño ── */}
-      {period.status === 'OPEN' && ['DUENO', 'ENCARGADO'].includes(session.role) && (() => {
-        const tripsWithoutTicket = trips.filter((t: any) => !t.ticketNo).length
+      {/* ── Checklist de progreso — solo encargado/dueño ── */}
+      {['DUENO', 'ENCARGADO'].includes(session.role) && (() => {
+        const notifiedAt = (period as any).notifiedAt
         const steps = [
           {
-            label: 'Viajes importados',
+            label: 'Romana importada',
             done: trips.length > 0,
-            detail: trips.length > 0 ? `${trips.length} viajes` : 'Sin viajes aún',
-            href: '/romana',
-            action: 'Importar romana',
+            detail: trips.length > 0 ? `${trips.length} viajes` : 'Sin viajes',
+            href: trips.length === 0 ? '/romana' : null,
           },
           {
-            label: 'Nómina generada',
+            label: 'Relación generada',
             done: payroll.length > 0,
-            detail: payroll.length > 0 ? `${payroll.length} camiones` : 'Sin nómina',
+            detail: payroll.length > 0 ? `${payroll.length} camiones` : 'Pendiente',
             href: null,
-            action: null,
           },
           {
-            label: 'Gastos aplicados',
+            label: 'Gastos comunes',
             done: gastosComunesCount > 0,
-            detail: gastosComunesCount > 0 ? `${gastosComunesCount} gastos` : 'Sin gastos en camiones',
+            detail: gastosComunesCount > 0 ? 'Aplicados' : 'Pendiente',
             href: null,
-            action: 'Usar panel ↓',
           },
           {
-            label: 'Mecánicos',
-            done: mecanicoExpensesCount > 0,
-            detail: mecanicoExpensesCount > 0 ? 'Ingresados' : 'Sin gastos MECANICA',
-            href: '/mantenimiento?tab=trabajos',
-            action: 'Registrar trabajos',
+            label: 'Período cerrado',
+            done: period.status === 'CLOSED',
+            detail: period.status === 'CLOSED' ? 'Cerrado' : 'Abierto',
+            href: null,
           },
           {
-            label: 'Tickets completos',
-            done: tripsWithoutTicket === 0,
-            detail: tripsWithoutTicket === 0 ? 'Todos completos' : `${tripsWithoutTicket} sin ticket`,
-            href: '/viajes',
-            action: 'Revisar viajes',
+            label: 'Dueños notificados',
+            done: !!notifiedAt,
+            detail: notifiedAt ? 'Enviado' : period.status !== 'CLOSED' ? 'Cerrar primero' : 'Pendiente',
+            href: null,
           },
         ]
         const doneCount = steps.filter(s => s.done).length
-        const allDone   = doneCount === steps.length
 
         return (
-          <div className={`rounded-2xl border p-4 ${allDone ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-zinc-900 border-zinc-800'}`}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-5 py-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-semibold text-white">Progreso de cierre</p>
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${allDone ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-400'}`}>
-                {doneCount}/{steps.length} pasos
-              </span>
+              <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">Estado del período</p>
+              <span className="text-xs text-zinc-500">{doneCount}/{steps.length} completados</span>
             </div>
-            {/* Barra de progreso */}
-            <div className="w-full h-1.5 bg-zinc-800 rounded-full mb-4 overflow-hidden">
-              <div
-                className="h-full bg-emerald-500 rounded-full transition-all"
-                style={{ width: `${(doneCount / steps.length) * 100}%` }}
-              />
-            </div>
-            {/* Pasos */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <div className="flex items-center gap-0">
               {steps.map((step, i) => (
-                <div key={i} className={`rounded-xl p-3 text-xs ${step.done ? 'bg-emerald-500/10' : 'bg-zinc-800/60'}`}>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className={`text-base leading-none ${step.done ? 'text-emerald-400' : 'text-zinc-600'}`}>
-                      {step.done ? '✓' : '○'}
-                    </span>
-                    <span className={`font-semibold ${step.done ? 'text-emerald-300' : 'text-zinc-400'}`}>
-                      {step.label}
-                    </span>
+                <div key={i} className="flex items-center flex-1">
+                  {/* Paso */}
+                  <div className="flex flex-col items-center flex-1 min-w-0">
+                    {step.href ? (
+                      <Link href={step.href} className="group flex flex-col items-center">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mb-1.5 border-2 transition-colors ${
+                          step.done
+                            ? 'bg-emerald-500 border-emerald-500 text-white'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-500 group-hover:border-amber-500 group-hover:text-amber-400'
+                        }`}>
+                          {step.done ? '✓' : i + 1}
+                        </div>
+                        <span className={`text-[11px] text-center font-medium leading-tight ${step.done ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {step.label}
+                        </span>
+                        <span className={`text-[10px] text-center mt-0.5 ${step.done ? 'text-emerald-600' : 'text-zinc-600'}`}>
+                          {step.detail}
+                        </span>
+                      </Link>
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold mb-1.5 border-2 ${
+                          step.done
+                            ? 'bg-emerald-500 border-emerald-500 text-white'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-500'
+                        }`}>
+                          {step.done ? '✓' : i + 1}
+                        </div>
+                        <span className={`text-[11px] text-center font-medium leading-tight ${step.done ? 'text-emerald-400' : 'text-zinc-400'}`}>
+                          {step.label}
+                        </span>
+                        <span className={`text-[10px] text-center mt-0.5 ${step.done ? 'text-emerald-600' : 'text-zinc-600'}`}>
+                          {step.detail}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <p className={`text-[11px] ${step.done ? 'text-emerald-500/80' : 'text-zinc-600'}`}>
-                    {step.detail}
-                  </p>
-                  {!step.done && step.href && (
-                    <Link href={step.href} className="text-[11px] text-amber-400 hover:text-amber-300 mt-1 block transition-colors">
-                      {step.action} →
-                    </Link>
-                  )}
-                  {!step.done && !step.href && step.action && (
-                    <span className="text-[11px] text-zinc-500 mt-1 block">{step.action}</span>
+                  {/* Línea conectora */}
+                  {i < steps.length - 1 && (
+                    <div className={`h-0.5 w-4 flex-shrink-0 mx-0.5 rounded-full mb-5 ${step.done ? 'bg-emerald-500' : 'bg-zinc-700'}`} />
                   )}
                 </div>
               ))}

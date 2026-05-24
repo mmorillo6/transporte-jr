@@ -148,12 +148,13 @@ model Trip {
 // ─── PERÍODOS QUINCENALES ─────────────────────────────────────────────────────
 
 model Period {
-  id        String       @id @default(cuid())
-  startDate DateTime
-  endDate   DateTime
-  status    PeriodStatus @default(OPEN)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id          String       @id @default(cuid())
+  startDate   DateTime
+  endDate     DateTime
+  status      PeriodStatus @default(OPEN)
+  notifiedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   trips    Trip[]
   payroll  PayrollEntry[]
