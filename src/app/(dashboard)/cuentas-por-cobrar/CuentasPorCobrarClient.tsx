@@ -30,14 +30,16 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
   const [filter, setFilter]     = useState<'all' | 'PENDING' | 'PARTIAL' | 'PAID'>('all')
   const [showForm, setShowForm]  = useState(false)
   const [editing, setEditing]    = useState<CxC | null>(null)
-  const [payingId, setPayingId]  = useState<string | null>(null)
+  const [payingCxC, setPayingCxC] = useState<CxC | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState('')
   const [expanded, setExpanded]  = useState<string | null>(null)
   const [loading, setLoading]    = useState(false)
   const [error, setError]        = useState('')
 
   const today = new Date().toISOString().slice(0, 10)
 
-  const filtered = filter === 'all' ? cuentas : cuentas.filter(c => c.status === filter)
+  const filtered = (filter === 'all' ? cuentas : cuentas.filter(c => c.status === filter))
+    .sort((a, b) => b.balance - a.balance)
 
   const totalPendiente = cuentas.filter(c => c.status !== 'PAID').reduce((s, c) => s + c.balance, 0)
   const totalCobrado   = cuentas.filter(c => c.status === 'PAID').reduce((s, c) => s + c.totalAmount, 0)
@@ -60,11 +62,11 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
 
   async function handlePayment(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (!payingId) return
+    if (!payingCxC) return
     setLoading(true); setError('')
-    const res = await addPayment(payingId, new FormData(e.currentTarget))
+    const res = await addPayment(payingCxC.id, new FormData(e.currentTarget))
     if (res?.error) { setError(res.error); setLoading(false) }
-    else { setPayingId(null); router.refresh(); setLoading(false) }
+    else { setPayingCxC(null); setPaymentAmount(''); router.refresh(); setLoading(false) }
   }
 
   async function handleDelete(id: string) {
@@ -207,13 +209,22 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
       )}
 
       {/* Payment form */}
-      {payingId && (
-        <div className="bg-zinc-900 border border-blue-500/20 rounded-2xl p-5">
+      {payingCxC && (
+        <div className="bg-zinc-900 border border-emerald-500/30 rounded-2xl p-5">
           <div className="flex items-start justify-between mb-4">
             <div>
               <h3 className="text-white font-semibold">Registrar cobro recibido</h3>
               <p className="text-zinc-500 text-xs mt-0.5">Se actualizará el saldo y se registrará automáticamente en Caja</p>
             </div>
+          </div>
+          {/* CxC context — shows exactly which account this applies to */}
+          <div className="bg-zinc-800 border border-emerald-500/20 rounded-xl px-4 py-3 mb-4">
+            <p className="text-zinc-400 text-xs mb-0.5">Aplicando a:</p>
+            <p className="text-white font-semibold text-sm">{payingCxC.clientName} — {payingCxC.concept}</p>
+            {payingCxC.periodLabel && <p className="text-zinc-500 text-xs">{payingCxC.periodLabel}</p>}
+            <p className="text-amber-400 font-bold text-sm mt-1">
+              Saldo pendiente: ${payingCxC.balance.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+            </p>
           </div>
           <form onSubmit={handlePayment} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -221,7 +232,14 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
                 <label className="block text-xs text-zinc-400 mb-1.5">Monto recibido $ *</label>
                 <input name="amount" type="number" step="0.01" min="0.01" required autoFocus
                   placeholder="0.00"
+                  value={paymentAmount}
+                  onChange={e => setPaymentAmount(e.target.value)}
                   className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500 placeholder:text-zinc-600" />
+                {paymentAmount && parseFloat(paymentAmount) > payingCxC.balance && (
+                  <p className="text-red-400 text-xs mt-1">
+                    ⚠ El monto (${parseFloat(paymentAmount).toFixed(2)}) supera el saldo pendiente (${payingCxC.balance.toFixed(2)}). ¿Es correcto?
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs text-zinc-400 mb-1.5">Fecha *</label>
@@ -253,7 +271,7 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
                 className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-2.5 text-sm transition-colors">
                 {loading ? 'Guardando...' : 'Confirmar cobro'}
               </button>
-              <button type="button" onClick={() => { setPayingId(null); setError('') }}
+              <button type="button" onClick={() => { setPayingCxC(null); setPaymentAmount(''); setError('') }}
                 className="px-4 py-2.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl text-sm transition-colors">
                 Cancelar
               </button>
@@ -316,7 +334,7 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
                             </button>
                           )}
                           {c.status !== 'PAID' && (
-                            <button onClick={() => { setPayingId(c.id); setError('') }}
+                            <button onClick={() => { setPayingCxC(c); setPaymentAmount(''); setError('') }}
                               className="text-xs text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-1.5 font-semibold transition-colors whitespace-nowrap">
                               Registrar pago recibido
                             </button>
