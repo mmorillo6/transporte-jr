@@ -128,7 +128,10 @@ export default function PayrollTableClient({
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
       {/* ── Encabezado ── */}
       <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-white font-semibold text-sm">Relación final — choferes</h2>
+        <div>
+          <h2 className="text-white font-semibold text-sm">Relación final — choferes</h2>
+          <p className="text-zinc-600 text-[11px] mt-0.5">Pagos a dueños · Los cobros de Aurumin van en Cuentas por Cobrar</p>
+        </div>
         {canPay && pendingCount > 0 && !isClosed && (
           <div className="flex items-center gap-2">
             {payingAll ? (

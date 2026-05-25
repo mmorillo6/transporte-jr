@@ -66,6 +66,14 @@ function formatDate(d: Date | string) {
   return new Date(y, m - 1, day, 12).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+function getQuincenaLabel(startDate: Date | string): string {
+  const iso = new Date(startDate).toISOString().slice(0, 10)
+  const [y, m, d] = iso.split('-').map(Number)
+  const q = d <= 15 ? '1ª' : '2ª'
+  const month = new Date(y, m - 1, 1).toLocaleDateString('es-VE', { month: 'long' })
+  return `${q} quincena · ${month.charAt(0).toUpperCase() + month.slice(1)} ${y}`
+}
+
 export default async function PeriodDetailPage({
   params,
 }: {
@@ -244,9 +252,12 @@ export default async function PeriodDetailPage({
           </Link>
           <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold text-white leading-tight">
-              Relación {formatDate(period.startDate)} — {formatDate(period.endDate)}
+              {getQuincenaLabel(period.startDate)}
             </h1>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            <p className="text-zinc-500 text-xs mt-0.5">
+              {formatDate(period.startDate)} — {formatDate(period.endDate)} · Solo este período
+            </p>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                 period.status === 'OPEN'
                   ? 'bg-emerald-500/10 text-emerald-400'
@@ -284,6 +295,12 @@ export default async function PeriodDetailPage({
             done: payroll.length > 0,
             detail: payroll.length > 0 ? `${payroll.length} camiones` : 'Pendiente',
             href: null,
+          },
+          {
+            label: 'Cobros Aurumin',
+            done: abonosAurumin > 0,
+            detail: abonosAurumin > 0 ? `$${abonosAurumin.toFixed(0)} cobrado` : 'Sin registrar',
+            href: '/cuentas-por-cobrar',
           },
           {
             label: 'Gastos comunes',
@@ -415,11 +432,13 @@ export default async function PeriodDetailPage({
                       ${(saldoTotalAurumin > 0 ? saldoTotalAurumin : auruminDebe).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
-                  {!cxcActualAurumin && grossAurumin > 0 && (
-                    <Link href="/caja?tab=cobrar" className="text-xs text-zinc-500 hover:text-amber-400 transition-colors">
-                      + Registrar CxC para este período →
+                  <div className="pt-1.5 border-t border-zinc-800/50 mt-1">
+                    <Link href="/cuentas-por-cobrar" className="text-xs text-zinc-500 hover:text-amber-400 transition-colors flex items-center gap-1">
+                      <span>+</span>
+                      <span>¿Aurumin pagó o abonó algo? Registrar cobro</span>
                     </Link>
-                  )}
+                    <p className="text-zinc-700 text-[10px] mt-0.5">No necesitas cerrar el período para esto</p>
+                  </div>
                 </div>
               </div>
 
