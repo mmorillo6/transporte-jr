@@ -77,6 +77,31 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
 
   return (
     <div className="space-y-4">
+      {/* Guía de uso */}
+      <div className="bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4">
+        <p className="text-white font-semibold text-sm mb-2">Cómo usar esta sección</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex gap-3 items-start">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span className="text-emerald-400 text-sm font-bold">↓</span>
+            </div>
+            <div>
+              <p className="text-emerald-400 font-semibold text-sm">Aurumin / Chino me pagó algo</p>
+              <p className="text-zinc-500 text-xs mt-0.5">Busca su fila abajo y presiona el botón verde <strong className="text-emerald-400">"Registrar pago recibido"</strong>. Esto reduce el saldo pendiente y registra el ingreso en Caja automáticamente.</p>
+            </div>
+          </div>
+          <div className="flex gap-3 items-start">
+            <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span className="text-amber-400 text-sm font-bold">+</span>
+            </div>
+            <div>
+              <p className="text-amber-400 font-semibold text-sm">Hay una nueva factura que cobrar</p>
+              <p className="text-zinc-500 text-xs mt-0.5">Usa <strong className="text-amber-400">"Nueva factura"</strong> solo cuando el cliente tiene una deuda nueva (al cerrar un período). Esto <strong className="text-red-400">aumenta</strong> el saldo pendiente.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
@@ -104,15 +129,18 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
           ))}
         </div>
         <button onClick={() => { setShowForm(true); setEditing(null); setError('') }}
-          className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold rounded-xl px-4 py-2 text-sm transition-colors">
-          + Nueva cuenta
+          className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 font-medium rounded-xl px-4 py-2 text-sm transition-colors">
+          + Nueva factura por cobrar
         </button>
       </div>
 
       {/* Create / Edit form */}
       {formOpen && (
         <div className="bg-zinc-900 border border-amber-500/20 rounded-2xl p-5">
-          <h3 className="text-white font-semibold mb-4">{editing ? 'Editar cuenta' : 'Registrar cuenta por cobrar'}</h3>
+          <div className="mb-4">
+            <h3 className="text-white font-semibold">{editing ? 'Editar factura' : 'Nueva factura por cobrar'}</h3>
+            {!editing && <p className="text-amber-400/80 text-xs mt-0.5">Esto registra una deuda nueva del cliente. Si ya te pagaron, cancela y usa "Registrar pago recibido" en la fila correspondiente.</p>}
+          </div>
           <form onSubmit={editing ? handleUpdate : handleCreate} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -284,13 +312,13 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
                           {c.payments.length > 0 && (
                             <button onClick={() => setExpanded(expanded === c.id ? null : c.id)}
                               className="text-zinc-600 hover:text-zinc-300 text-xs transition-colors whitespace-nowrap">
-                              {expanded === c.id ? '▴ ocultar' : `▾ ${c.payments.length} abono${c.payments.length !== 1 ? 's' : ''}`}
+                              {expanded === c.id ? '▴ ocultar' : `▾ ${c.payments.length} pago${c.payments.length !== 1 ? 's' : ''}`}
                             </button>
                           )}
                           {c.status !== 'PAID' && (
                             <button onClick={() => { setPayingId(c.id); setError('') }}
-                              className="text-xs text-blue-400 bg-blue-400/10 hover:bg-blue-400/20 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap">
-                              + Abono
+                              className="text-xs text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-1.5 font-semibold transition-colors whitespace-nowrap">
+                              Registrar pago recibido
                             </button>
                           )}
                           <button onClick={() => { setEditing(c); setShowForm(false); setError('') }}
