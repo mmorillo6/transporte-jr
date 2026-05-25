@@ -39,7 +39,23 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
   const today = new Date().toISOString().slice(0, 10)
 
   const filtered = (filter === 'all' ? cuentas : cuentas.filter(c => c.status === filter))
-    .sort((a, b) => b.balance - a.balance)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+  // Per client, only the most recent unpaid entry can receive payments
+  const newestUnpaidByClient = new Map<string, string>()
+  for (const c of cuentas) {
+    if (c.status !== 'PAID') {
+      const existingId = newestUnpaidByClient.get(c.clientName)
+      if (!existingId) {
+        newestUnpaidByClient.set(c.clientName, c.id)
+      } else {
+        const existing = cuentas.find(x => x.id === existingId)!
+        if (new Date(c.date) > new Date(existing.date)) {
+          newestUnpaidByClient.set(c.clientName, c.id)
+        }
+      }
+    }
+  }
 
   const totalPendiente = cuentas.filter(c => c.status !== 'PAID').reduce((s, c) => s + c.balance, 0)
   const totalCobrado   = cuentas.filter(c => c.status === 'PAID').reduce((s, c) => s + c.totalAmount, 0)
@@ -333,11 +349,14 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
                               {expanded === c.id ? '▴ ocultar' : `▾ ${c.payments.length} pago${c.payments.length !== 1 ? 's' : ''}`}
                             </button>
                           )}
-                          {c.status !== 'PAID' && (
+                          {c.status !== 'PAID' && newestUnpaidByClient.get(c.clientName) === c.id && (
                             <button onClick={() => { setPayingCxC(c); setPaymentAmount(''); setError('') }}
                               className="text-xs text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg px-3 py-1.5 font-semibold transition-colors whitespace-nowrap">
                               Registrar pago recibido
                             </button>
+                          )}
+                          {c.status !== 'PAID' && newestUnpaidByClient.get(c.clientName) !== c.id && (
+                            <span className="text-xs text-zinc-600 whitespace-nowrap">deuda anterior</span>
                           )}
                           <button onClick={() => { setEditing(c); setShowForm(false); setError('') }}
                             className="text-zinc-600 hover:text-amber-400 transition-colors">
