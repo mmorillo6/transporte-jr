@@ -59,6 +59,7 @@ export async function addPayment(cxcId: string, data: FormData) {
   const newPaid    = cxc.amountPaid + amount
   const newBalance = cxc.totalAmount - newPaid
   const status     = newBalance <= 0 ? 'PAID' : 'PARTIAL'
+  const currency   = method?.toUpperCase().includes('USDT') ? 'USDT' : 'EFECTIVO'
 
   await prisma.$transaction([
     prisma.cxCPayment.create({ data: { cxcId, amount, date, method, notes } }),
@@ -66,8 +67,21 @@ export async function addPayment(cxcId: string, data: FormData) {
       where: { id: cxcId },
       data: { amountPaid: newPaid, balance: Math.max(0, newBalance), status: status as 'PAID' | 'PARTIAL' },
     }),
+    // Registrar automáticamente en Caja
+    prisma.cashEntry.create({
+      data: {
+        type: 'INGRESO',
+        currency: currency as 'EFECTIVO' | 'USDT',
+        amount,
+        concept: `Cobro ${cxc.clientName} — ${cxc.concept}`,
+        source: cxc.clientName,
+        notes: notes || null,
+        date,
+      },
+    }),
   ])
   revalidatePath('/cuentas-por-cobrar')
+  revalidatePath('/caja')
   return {}
 }
 

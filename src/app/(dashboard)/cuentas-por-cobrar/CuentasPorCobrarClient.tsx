@@ -181,11 +181,16 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
       {/* Payment form */}
       {payingId && (
         <div className="bg-zinc-900 border border-blue-500/20 rounded-2xl p-5">
-          <h3 className="text-white font-semibold mb-4">Registrar abono</h3>
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-white font-semibold">Registrar cobro recibido</h3>
+              <p className="text-zinc-500 text-xs mt-0.5">Se actualizará el saldo y se registrará automáticamente en Caja</p>
+            </div>
+          </div>
           <form onSubmit={handlePayment} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1.5">Monto abonado $ *</label>
+                <label className="block text-xs text-zinc-400 mb-1.5">Monto recibido $ *</label>
                 <input name="amount" type="number" step="0.01" min="0.01" required autoFocus
                   placeholder="0.00"
                   className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500 placeholder:text-zinc-600" />
@@ -198,9 +203,15 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1.5">Método</label>
-                <input name="method" placeholder="Transferencia, efectivo, USDT..."
-                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500 placeholder:text-zinc-600" />
+                <label className="block text-xs text-zinc-400 mb-1.5">Método de pago</label>
+                <select name="method"
+                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500">
+                  <option value="USDT">USDT</option>
+                  <option value="Transferencia">Transferencia</option>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Zelle">Zelle</option>
+                  <option value="Otro">Otro</option>
+                </select>
               </div>
               <div>
                 <label className="block text-xs text-zinc-400 mb-1.5">Notas</label>
@@ -211,8 +222,8 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
             {error && <p className="text-red-400 text-sm">{error}</p>}
             <div className="flex gap-3">
               <button type="submit" disabled={loading}
-                className="bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-2.5 text-sm transition-colors">
-                {loading ? 'Guardando...' : 'Registrar abono'}
+                className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-2.5 text-sm transition-colors">
+                {loading ? 'Guardando...' : 'Confirmar cobro'}
               </button>
               <button type="button" onClick={() => { setPayingId(null); setError('') }}
                 className="px-4 py-2.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl text-sm transition-colors">

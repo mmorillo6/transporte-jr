@@ -301,30 +301,52 @@ export default function RomanaClient({ openPeriodId, systemConfig = [], owners =
 
           {/* Próximos pasos */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-            <p className="text-white font-semibold text-sm mb-4">¿Qué hacer ahora?</p>
+            <p className="text-white font-semibold text-sm mb-1">¿Qué hacer ahora?</p>
+            <p className="text-zinc-500 text-xs mb-4">Sigue estos pasos en orden para cerrar el período correctamente</p>
             <div className="space-y-3">
 
-              <Step n={1} done label="Romana importada" sublabel={`${resultado.imported} viajes cargados`} />
+              <Step n={1} done label="Romana importada" sublabel={`${resultado.imported} viajes cargados en el período`} />
 
               <StepLink
                 n={2}
                 href={resultado.periodId ? `/nomina/${resultado.periodId}` : '/nomina'}
                 label="Generar la relación"
-                sublabel="Abre el período → botón «Generar relación» → revisa los montos"
+                sublabel="Abre el período → botón «Generar relación» → revisa que los montos cuadren"
               />
 
               <StepLink
                 n={3}
                 href={resultado.periodId ? `/nomina/${resultado.periodId}` : '/nomina'}
                 label="Ingresar gastos comunes"
-                sublabel="Nómina mecánicos, administrativo y otros gastos del período"
+                sublabel="Nómina mecánicos ($175/carro), Starlink, admin — se aplican a todos los camiones"
               />
 
               <StepLink
                 n={4}
+                href="/cuentas-por-cobrar"
+                label="Registrar cobros de Aurumin / Luis Peña"
+                sublabel="¿Pagaron o abonaron algo? Regístralo aquí — se reflejará en Caja automáticamente"
+              />
+
+              <StepLink
+                n={5}
+                href={resultado.periodId ? `/nomina/${resultado.periodId}` : '/nomina'}
+                label="Marcar choferes como pagados"
+                sublabel="En «Relación final — choferes» usa «Pagar todos» o marca uno por uno con el método"
+              />
+
+              <StepLink
+                n={6}
+                href={resultado.periodId ? `/nomina/${resultado.periodId}` : '/nomina'}
+                label="Cerrar el período"
+                sublabel="Botón «Cerrar período» — solo cuando todo esté revisado y pagado"
+              />
+
+              <StepLink
+                n={7}
                 href={resultado.periodId ? `/nomina/${resultado.periodId}` : '/nomina'}
                 label="Notificar a los dueños"
-                sublabel="Envía el resumen por email y WhatsApp a cada propietario"
+                sublabel="Envía el resumen por email y WhatsApp a cada propietario (requiere período cerrado)"
               />
 
             </div>
