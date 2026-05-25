@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { markPayrollEntryPaid, markAllPeriodPaid, updatePayrollAbono } from '@/app/actions/payroll'
 import { toast } from 'sonner'
 
-const PAYMENT_METHODS = ['Efectivo', 'Transferencia', 'Cheque', 'Zelle', 'Otro']
+const PAYMENT_METHODS = ['Efectivo', 'Transferencia', 'USDT', 'Zelle', 'Otro']
 
 type Entry = {
   id: string
