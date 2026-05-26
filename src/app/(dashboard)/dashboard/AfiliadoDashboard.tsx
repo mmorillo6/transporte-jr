@@ -78,7 +78,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
   const driverNames = owner.trucks.map(t => (t as any).driver?.name).filter(Boolean)
 
   // Viajes del período actual para estos camiones
-  const [periodTrips, recentTrips, payrollHistory, maintenanceAlerts, driverLoans, ownerLoans] = await Promise.all([
+  const [periodTrips, recentTrips, payrollHistory, maintenanceAlerts, driverLoans, ownerLoans, mecExpenses] = await Promise.all([
     openPeriod && truckIds.length > 0
       ? prisma.trip.findMany({
           where: { truckId: { in: truckIds }, periodId: openPeriod.id },
@@ -127,6 +127,14 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
     prisma.loan.findMany({
       where: { balance: { gt: 0 }, driverName: owner.name },
     }),
+
+    // Gastos mecánica del período abierto (para separar nómina vs repuestos)
+    openPeriod && truckIds.length > 0
+      ? prisma.expense.findMany({
+          where: { truckId: { in: truckIds }, periodId: openPeriod.id, category: 'MECANICA' },
+          select: { description: true, amount: true },
+        })
+      : Promise.resolve([]),
   ])
 
   // Agrupar nómina por período
@@ -265,13 +273,18 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         )
 
         // Agregar todos los camiones del dueño en este período
-        const gastos       = openEntries.reduce((s, e) => s + (e.commissionFee ?? 0), 0)
-        const nomChofer    = openEntries.reduce((s, e) => s + e.driverWage, 0)
-        const nomMecanicos = openEntries.reduce((s, e) => s + (e.mechanicFee ?? 0), 0)
+        const gastos         = openEntries.reduce((s, e) => s + (e.commissionFee ?? 0), 0)
+        const nomChofer      = openEntries.reduce((s, e) => s + e.driverWage, 0)
         const administrativo = openEntries.reduce((s, e) => s + (e.adminFee ?? 0), 0)
-        const prestamos    = openEntries.reduce((s, e) => s + (e.deductions ?? 0), 0)
-        const abono        = openEntries.reduce((s, e) => s + (e.abono ?? 0), 0)
-        const saldoAnterior = openEntries.reduce((s, e) => s + (e.saldoInicial ?? 0), 0)
+        const prestamos      = openEntries.reduce((s, e) => s + (e.deductions ?? 0), 0)
+        const abono          = openEntries.reduce((s, e) => s + (e.abono ?? 0), 0)
+        const saldoAnterior  = openEntries.reduce((s, e) => s + (e.saldoInicial ?? 0), 0)
+
+        // Mecánica: nómina va bajo Aurumin, repuestos van bajo Luis Peña
+        const mecNomina   = mecExpenses.filter(e => e.description?.toLowerCase().includes('nómina') || e.description?.toLowerCase().includes('nomina')).reduce((s, e) => s + e.amount, 0)
+        const mecRepuesto = mecExpenses.filter(e => !e.description?.toLowerCase().includes('nómina') && !e.description?.toLowerCase().includes('nomina')).reduce((s, e) => s + e.amount, 0)
+        // Fallback: si no hay desglose de expenses, usar el total del payrollEntry bajo Aurumin
+        const nomMecanicos = mecExpenses.length > 0 ? mecNomina : openEntries.reduce((s, e) => s + (e.mechanicFee ?? 0), 0)
 
         // Facturación split por cliente (desde los viajes del período)
         const auruminTrips = periodTrips.filter(t => (t as any).route?.clientName !== 'LUIS PEÑA')
@@ -283,14 +296,14 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         const nprAurumin  = Math.round(brutoAurumin * nprPct * 100) / 100
         const nprLP       = Math.round(brutoLP * nprPct * 100) / 100
 
-        // Saldo Aurumin = bruto - gastos - chofer - mecánicos - admin - NPR - préstamos + saldoAnterior - abono
+        // Saldo Aurumin = bruto - gastos - chofer - nómina mecánicos - admin - NPR - préstamos + saldoAnterior - abono
         const saldoAurumin = Math.round((
           brutoAurumin - gastos - nomChofer - nomMecanicos - administrativo - nprAurumin - prestamos + saldoAnterior - abono
         ) * 100) / 100
         // Préstamos del dueño a descontar de LP
         const prestamosLP = ownerLoans.reduce((s, l) => s + l.balance, 0)
-        // Saldo Luis Peña = bruto - NPR - préstamos dueño
-        const saldoLP = Math.round((brutoLP - nprLP - prestamosLP) * 100) / 100
+        // Saldo Luis Peña = bruto - NPR - préstamos dueño - repuestos mecánica
+        const saldoLP = Math.round((brutoLP - nprLP - prestamosLP - mecRepuesto) * 100) / 100
 
         const money = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
         const Row = ({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) => (
@@ -338,6 +351,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                   <div>
                     <Row label="Facturación" value={brutoLP} highlight />
                     <Row label={`${owner.nprPercent}% NPR`} value={-nprLP} />
+                    {mecRepuesto > 0 && <Row label="Repuesto mecánico" value={-mecRepuesto} />}
                     {prestamosLP > 0 && <Row label="Préstamo Fernando" value={-prestamosLP} />}
                     <div className="flex justify-between items-center pt-2 mt-1 border-t border-zinc-700">
                       <span className="text-white font-semibold text-sm">Saldo final</span>
