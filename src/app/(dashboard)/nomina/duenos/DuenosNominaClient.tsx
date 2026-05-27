@@ -293,7 +293,7 @@ export default function DuenosNominaClient({
                         ? Math.round(truck.nprFee * (truck.auruminGross / totalGross) * 100) / 100
                         : 0
                       const nprLP = truck.nprFee - nprAurumin
-                      const lpSaldo = Math.round((truck.lpGross - nprLP) * 100) / 100
+                      const lpSaldo = Math.round((truck.lpGross - nprLP - truck.deductions) * 100) / 100
                       const auruminSaldo = Math.round((
                         (truck.saldoInicial ?? 0)
                         + truck.auruminGross
@@ -302,7 +302,6 @@ export default function DuenosNominaClient({
                         - truck.mechFee
                         - truck.adminFee
                         - nprAurumin
-                        - truck.deductions
                         - truck.abono
                       ) * 100) / 100
 
@@ -344,7 +343,6 @@ export default function DuenosNominaClient({
                                 {truck.mechFee > 0    && <FinRow label="Nóm. mecánico" value={`-$${fmt(truck.mechFee)}`}    color="text-purple-400" />}
                                 {truck.adminFee > 0   && <FinRow label="Administrativo" value={`-$${fmt(truck.adminFee)}`}  color="text-zinc-400" />}
                                 {nprAurumin > 0       && <FinRow label={`${row.owner.nprPercent}% NPR`} value={`-$${fmt(nprAurumin)}`} color="text-red-400" />}
-                                {truck.deductions > 0 && <FinRow label="Deducciones"   value={`-$${fmt(truck.deductions)}`} color="text-red-400" />}
                                 {truck.abono > 0      && <FinRow label="Abono recibido" value={`-$${fmt(truck.abono)}`}    color="text-emerald-400" />}
                                 <div className="border-t border-zinc-700 pt-1.5 flex justify-between">
                                   <span className="text-white text-xs font-semibold">Saldo Aurumin</span>
@@ -364,6 +362,7 @@ export default function DuenosNominaClient({
                                 <FinRow label="Gastos op."        value="$0.00"                    color="text-zinc-600" />
                                 <FinRow label="Nóm. chofer"       value="$0.00"                    color="text-zinc-600" />
                                 {nprLP > 0 && <FinRow label={`${row.owner.nprPercent}% NPR`} value={`-$${fmt(nprLP)}`} color="text-red-400" />}
+                                {truck.deductions > 0 && <FinRow label="Repuesto/Préstamo" value={`-$${fmt(truck.deductions)}`} color="text-red-400" />}
                                 <FinRow label="Abono recibido"    value="$0.00"                    color="text-zinc-600" />
                                 <div className="border-t border-zinc-700 pt-1.5 flex justify-between">
                                   <span className="text-white text-xs font-semibold">Saldo LP</span>
