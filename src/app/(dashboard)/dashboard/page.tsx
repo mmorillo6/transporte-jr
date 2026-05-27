@@ -12,7 +12,7 @@ async function getStats() {
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
   // ── Datos básicos ─────────────────────────────────────────────────────────
-  const [totalTrucks, activeTrucks, openAlerts, truckStatuses, openPeriod, cashEntries, loans, cuentasPorCobrar, recentClosedPeriods] = await Promise.all([
+  const [totalTrucks, activeTrucks, openAlerts, truckStatuses, openPeriod, cashEntries, loans, cuentasPorCobrar, recentClosedPeriods, pendingTasksConfig] = await Promise.all([
     prisma.truck.count(),
     prisma.truck.count({ where: { active: true } }),
     prisma.maintenanceAlert.count({ where: { status: 'PENDING' } }),
@@ -32,7 +32,13 @@ async function getStats() {
       take: 6,
       select: { id: true, startDate: true, endDate: true },
     }),
+    prisma.systemConfig.findUnique({ where: { key: 'pendingTasks' } }),
   ])
+
+  type PendingTask = { id: string; truck: string; label: string; detail: string }
+  const pendingTasks: PendingTask[] = pendingTasksConfig
+    ? (() => { try { return JSON.parse(pendingTasksConfig.value) } catch { return [] } })()
+    : []
 
   // ── Caja ─────────────────────────────────────────────────────────────────
   let balanceEfectivo = 0, balanceUsdt = 0
@@ -249,6 +255,7 @@ async function getStats() {
     periodsSinCxC,
     needsNewPeriod,
     lastClosedEndDate,
+    pendingTasks,
   }
 }
 
@@ -335,6 +342,35 @@ export default async function DashboardPage() {
             className="text-xs bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 font-medium rounded-xl px-3 py-2 transition-colors flex-shrink-0 whitespace-nowrap"
           >
             Abrir período →
+          </Link>
+        </div>
+      )}
+
+      {/* ── Alerta: tareas pendientes de datos ──────────────────────────────── */}
+      {showFinancials && stats.pendingTasks.length > 0 && (
+        <div className="bg-blue-500/5 border border-blue-500/30 rounded-2xl p-4 flex items-start gap-3">
+          <span className="text-blue-400 text-lg flex-shrink-0">📋</span>
+          <div className="flex-1">
+            <p className="text-blue-400 font-semibold text-sm mb-2">
+              {stats.pendingTasks.length === 1
+                ? 'Hay 1 dato pendiente de ingresar'
+                : `Hay ${stats.pendingTasks.length} datos pendientes de ingresar`}
+            </p>
+            <ul className="space-y-2">
+              {stats.pendingTasks.map(task => (
+                <li key={task.id} className="flex items-start gap-2">
+                  <span className="text-blue-500 text-xs mt-0.5 flex-shrink-0">•</span>
+                  <div>
+                    <p className="text-zinc-300 text-xs font-medium">{task.label}</p>
+                    <p className="text-zinc-500 text-xs">{task.detail}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <Link href="/caja"
+            className="text-xs bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 font-medium rounded-xl px-3 py-2 transition-colors flex-shrink-0 whitespace-nowrap">
+            Ir a Finanzas →
           </Link>
         </div>
       )}
