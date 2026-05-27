@@ -29,6 +29,15 @@ async function getActivePeriodDetails(periodId: string) {
   }
 }
 
+async function getPendingCxC() {
+  const result = await prisma.cuentaPorCobrar.aggregate({
+    where: { status: { not: 'PAID' } },
+    _sum: { balance: true },
+    _count: true,
+  })
+  return { total: result._sum.balance ?? 0, count: result._count }
+}
+
 function formatDate(d: Date) {
   const [y, m, day] = new Date(d).toISOString().slice(0, 10).split('-').map(Number)
   return new Date(y, m - 1, day, 12).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -48,6 +57,10 @@ export default async function NominaPage() {
 
   const details = activePeriod && ['DUENO', 'ENCARGADO'].includes(session.role)
     ? await getActivePeriodDetails(activePeriod.id)
+    : null
+
+  const pendingCxC = session.role === 'DUENO' && activePeriod
+    ? await getPendingCxC()
     : null
 
   // Period progress calculations
@@ -117,7 +130,7 @@ export default async function NominaPage() {
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className={`grid gap-2 ${session.role === 'DUENO' ? 'grid-cols-4' : 'grid-cols-3'}`}>
             <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
               <p className="text-zinc-500 text-xs mb-1">Viajes</p>
               <p className="text-white font-semibold text-lg">{activePeriod._count.trips}</p>
@@ -132,6 +145,14 @@ export default async function NominaPage() {
                 {hasPayroll ? '✓ Lista' : 'Pendiente'}
               </p>
             </div>
+            {session.role === 'DUENO' && pendingCxC && (
+              <div className="bg-zinc-800/50 rounded-xl p-3 text-center">
+                <p className="text-zinc-500 text-xs mb-1">Por cobrar</p>
+                <p className={`font-semibold text-sm ${pendingCxC.total > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {pendingCxC.total > 0 ? `$${pendingCxC.total.toFixed(0)}` : '✓ Al día'}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Alert: trucks without trips */}
@@ -152,34 +173,79 @@ export default async function NominaPage() {
           {/* Checklist */}
           <div className="space-y-2">
             <p className="text-zinc-500 text-xs font-medium uppercase tracking-wide">Lista de pasos</p>
-            <CheckStep
-              done={hasTrips}
-              label="Cargar romana del período"
-              sublabel={details.lastTrip
-                ? `Último viaje: ${formatShort(details.lastTrip.date)}`
-                : 'Sin viajes aún — ve a Romana e importa el archivo'}
-              href="/romana"
-              cta={!hasTrips ? 'Ir a Romana →' : undefined}
-            />
-            <CheckStep
-              done={hasPayroll}
-              label="Generar nómina"
-              sublabel={hasPayroll ? 'Nómina calculada correctamente' : 'Entra al período y presiona «Generar nómina»'}
-              href={`/nomina/${activePeriod.id}`}
-              cta={!hasPayroll && hasTrips ? 'Generar →' : undefined}
-            />
-            <CheckStep
-              done={false}
-              label="Revisar gastos y deducciones"
-              sublabel="Nómina mecánicos, gastos op., préstamos, abonos"
-              href={`/nomina/${activePeriod.id}`}
-            />
-            <CheckStep
-              done={false}
-              label="Cerrar período y notificar dueños"
-              sublabel="Solo cuando todo esté revisado y pagado"
-              href={`/nomina/${activePeriod.id}`}
-            />
+            {session.role === 'DUENO' ? (
+              <>
+                <CheckStep
+                  done={hasTrips}
+                  label="Romana cargada"
+                  sublabel={details.lastTrip
+                    ? `Último viaje: ${formatShort(details.lastTrip.date)}`
+                    : 'Sin viajes registrados en este período'}
+                  href="/romana"
+                />
+                <CheckStep
+                  done={hasPayroll}
+                  label="Nómina generada"
+                  sublabel={hasPayroll ? 'Cálculos aplicados correctamente' : 'Pendiente — pídele al encargado que la genere'}
+                  href={`/nomina/${activePeriod.id}`}
+                />
+                <CheckStep
+                  done={false}
+                  label="Revisar saldos de cada dueño"
+                  sublabel={pendingCxC && pendingCxC.count > 0
+                    ? `${pendingCxC.count} cuenta${pendingCxC.count !== 1 ? 's' : ''} pendiente${pendingCxC.count !== 1 ? 's' : ''} · $${pendingCxC.total.toFixed(2)} por cobrar`
+                    : 'Verifica que cada propietario reciba lo correcto'}
+                  href="/nomina/duenos"
+                  cta={hasPayroll ? 'Ver saldos →' : undefined}
+                />
+                <CheckStep
+                  done={pendingCxC ? pendingCxC.total === 0 : false}
+                  label="Cobros pendientes (Aurumin / LP)"
+                  sublabel={pendingCxC && pendingCxC.total > 0
+                    ? `$${pendingCxC.total.toFixed(2)} sin cobrar`
+                    : 'Sin cobros pendientes'}
+                  href="/caja"
+                  cta={pendingCxC && pendingCxC.total > 0 ? 'Ver cuentas →' : undefined}
+                />
+                <CheckStep
+                  done={false}
+                  label="Cerrar período"
+                  sublabel="Solo cuando todo esté revisado y confirmado"
+                  href={`/nomina/${activePeriod.id}`}
+                />
+              </>
+            ) : (
+              <>
+                <CheckStep
+                  done={hasTrips}
+                  label="Cargar romana del período"
+                  sublabel={details.lastTrip
+                    ? `Último viaje: ${formatShort(details.lastTrip.date)}`
+                    : 'Sin viajes aún — ve a Romana e importa el archivo'}
+                  href="/romana"
+                  cta={!hasTrips ? 'Ir a Romana →' : undefined}
+                />
+                <CheckStep
+                  done={hasPayroll}
+                  label="Generar nómina"
+                  sublabel={hasPayroll ? 'Nómina calculada correctamente' : 'Entra al período y presiona «Generar nómina»'}
+                  href={`/nomina/${activePeriod.id}`}
+                  cta={!hasPayroll && hasTrips ? 'Generar →' : undefined}
+                />
+                <CheckStep
+                  done={false}
+                  label="Revisar gastos y deducciones"
+                  sublabel="Nómina mecánicos, gastos op., préstamos, abonos"
+                  href={`/nomina/${activePeriod.id}`}
+                />
+                <CheckStep
+                  done={false}
+                  label="Cerrar período y notificar dueños"
+                  sublabel="Solo cuando todo esté revisado y pagado"
+                  href={`/nomina/${activePeriod.id}`}
+                />
+              </>
+            )}
           </div>
         </div>
       )}
