@@ -4,25 +4,28 @@ import { usePathname } from 'next/navigation'
 import { logoutAction } from '@/app/actions/auth'
 import type { SessionPayload } from '@/lib/session'
 
+// sub: true → se renderiza indentado bajo el ítem anterior
+// divider: true → línea separadora antes del ítem
 const navItems = [
-  { href: '/mi-cuenta',      label: 'Mi cuenta',      icon: '◯', roles: ['CHOFER', 'MECANICO'] },
-  { href: '/dashboard',      label: 'Dashboard',      icon: '◈', roles: ['DUENO', 'ENCARGADO', 'AFILIADO'] },
-  { href: '/romana',         label: 'Romana',          icon: '⊕', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/viajes',         label: 'Viajes',          icon: '⟳', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/camiones',       label: 'Flota',            icon: '◧', roles: ['DUENO', 'ENCARGADO', 'AFILIADO'] },
-  { href: '/nomina',         label: 'Nómina',          icon: '◑', roles: ['DUENO', 'ENCARGADO', 'AFILIADO'] },
-  { href: '/mantenimiento',  label: 'Mantenimiento',   icon: '⚙', roles: ['DUENO', 'ENCARGADO', 'MECANICO'] },
-  { href: '/despacho',       label: 'Despacho',        icon: '◈', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/dias-internos',  label: 'Reg. Manual',     icon: '⏱', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/caja',           label: 'Finanzas',        icon: '◎', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/almacen',        label: 'Almacén',         icon: '▣', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/relaciones',     label: 'Relaciones',      icon: '◎', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/analisis',       label: 'Análisis',        icon: '◎', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/reportes',       label: 'Reportes',        icon: '◈', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/rutas',          label: 'Minas & Rutas',   icon: '◉', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/usuarios',       label: 'Usuarios',        icon: '◫', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/perfil',         label: 'Mi perfil',       icon: '◯', roles: ['DUENO', 'ENCARGADO', 'AFILIADO', 'MECANICO', 'CHOFER'] },
-]
+  { href: '/mi-cuenta',     label: 'Mi cuenta',        icon: '◯', roles: ['CHOFER', 'MECANICO'] },
+  { href: '/dashboard',     label: 'Dashboard',         icon: '◈', roles: ['DUENO', 'AFILIADO'] },
+  { href: '/romana',        label: 'Romana',            icon: '⊕', roles: ['DUENO', 'ENCARGADO'] },
+  { href: '/despacho',      label: 'Despacho',          icon: '◈', roles: ['DUENO', 'ENCARGADO'] },
+  { href: '/nomina',        label: 'Nómina',            icon: '◑', roles: ['DUENO', 'ENCARGADO', 'AFILIADO'] },
+  { href: '/nomina/duenos', label: 'Saldos dueños',     icon: '◒', roles: ['DUENO', 'ENCARGADO'], sub: true },
+  { href: '/analisis',      label: 'Desglose dueños',   icon: '◎', roles: ['DUENO', 'ENCARGADO'], sub: true },
+  { href: '/mantenimiento', label: 'Mantenimiento',     icon: '⚙', roles: ['DUENO', 'ENCARGADO', 'MECANICO'] },
+  { href: '/camiones',      label: 'Flota',             icon: '◧', roles: ['DUENO', 'ENCARGADO', 'AFILIADO'] },
+  { href: '/viajes',        label: 'Viajes',            icon: '⟳', roles: ['DUENO'], sub: true },
+  { href: '/usuarios',      label: 'Usuarios',          icon: '◫', roles: ['DUENO'], sub: true },
+  { href: '/almacen',       label: 'Almacén',           icon: '▣', roles: ['DUENO', 'ENCARGADO'] },
+  { href: '/dias-internos', label: 'Internos-Estéril',  icon: '⏱', roles: ['DUENO', 'ENCARGADO'] },
+  { href: '/caja',          label: 'Finanzas',          icon: '◎', roles: ['DUENO', 'ENCARGADO'] },
+  { href: '/relaciones',    label: 'Relaciones',        icon: '◎', roles: ['DUENO', 'ENCARGADO'], sub: true },
+  { href: '/reportes',      label: 'Reportes',          icon: '◈', roles: ['DUENO'], divider: true },
+  { href: '/rutas',         label: 'Minas & Rutas',     icon: '◉', roles: ['DUENO'] },
+  { href: '/perfil',        label: 'Mi perfil',         icon: '◯', roles: ['DUENO', 'ENCARGADO', 'AFILIADO', 'MECANICO', 'CHOFER'], divider: true },
+] as const
 
 export default function Sidebar({
   session,
@@ -34,7 +37,7 @@ export default function Sidebar({
   onToggle?: () => void
 }) {
   const pathname = usePathname()
-  const visible = navItems.filter(item => item.roles.includes(session.role))
+  const visible = navItems.filter(item => (item.roles as readonly string[]).includes(session.role))
 
   return (
     <aside className={`hidden lg:flex flex-col fixed inset-y-0 left-0 bg-zinc-900 border-r border-zinc-800 z-40 transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'}`}>
@@ -63,25 +66,50 @@ export default function Sidebar({
       </div>
 
       {/* Nav */}
-      <nav className={`flex-1 py-4 space-y-0.5 overflow-y-auto ${collapsed ? 'px-2' : 'px-3'}`}>
+      <nav className={`flex-1 py-4 overflow-y-auto ${collapsed ? 'px-2 space-y-0.5' : 'px-3 space-y-0.5'}`}>
         {visible.map(item => {
-          const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+          const isSub = (item as any).sub === true
+          const hasDivider = (item as any).divider === true
+          // Nómina sub-item: active when path starts with /nomina/duenos exactly
+          const active = item.href === '/nomina/duenos'
+            ? pathname === item.href || pathname.startsWith(item.href + '?') || pathname.startsWith(item.href + '/')
+            : item.href === '/nomina'
+            ? pathname === item.href || (pathname.startsWith('/nomina/') && pathname !== '/nomina/duenos' && !pathname.startsWith('/nomina/duenos/'))
+            : item.href === '/dashboard'
+            ? pathname === item.href
+            : pathname.startsWith(item.href)
+
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={collapsed ? item.label : undefined}
-              className={`flex items-center rounded-xl text-sm font-medium transition-colors ${
-                collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5'
-              } ${
-                active
-                  ? 'bg-amber-500/10 text-amber-400'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-              }`}
-            >
-              <span className="text-base w-5 text-center flex-shrink-0">{item.icon}</span>
-              {!collapsed && item.label}
-            </Link>
+            <div key={item.href}>
+              {hasDivider && !collapsed && (
+                <div className="border-t border-zinc-800/70 my-1.5" />
+              )}
+              <Link
+                href={item.href}
+                title={collapsed ? item.label : undefined}
+                className={`flex items-center rounded-xl font-medium transition-colors ${
+                  isSub
+                    ? collapsed
+                      ? 'justify-center px-0 py-1.5 text-xs'
+                      : 'gap-2 pl-8 pr-3 py-1.5 text-xs'
+                    : collapsed
+                    ? 'justify-center px-0 py-2.5 text-sm'
+                    : 'gap-3 px-3 py-2.5 text-sm'
+                } ${
+                  active
+                    ? 'bg-amber-500/10 text-amber-400'
+                    : isSub
+                    ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                {isSub && !collapsed && (
+                  <span className="text-zinc-600 text-[10px] mr-0.5">└</span>
+                )}
+                <span className={`text-center flex-shrink-0 ${isSub ? 'text-sm w-4' : 'text-base w-5'}`}>{item.icon}</span>
+                {!collapsed && <span>{item.label}</span>}
+              </Link>
+            </div>
           )
         })}
       </nav>

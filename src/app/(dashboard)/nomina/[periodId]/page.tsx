@@ -266,6 +266,12 @@ export default async function PeriodDetailPage({
                 {period.status === 'OPEN' ? 'Abierto' : 'Cerrado'}
               </span>
               <span className="text-zinc-500 text-sm">{trips.length} viajes · {payroll.length} camiones</span>
+              {['DUENO', 'ENCARGADO'].includes(session.role) && (
+                <Link href={`/nomina/duenos?period=${periodId}`}
+                  className="text-xs text-zinc-500 hover:text-amber-400 transition-colors">
+                  Ver por dueño →
+                </Link>
+              )}
             </div>
           </div>
         </div>

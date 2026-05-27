@@ -6,23 +6,24 @@ import { logoutAction } from '@/app/actions/auth'
 import type { SessionPayload } from '@/lib/session'
 
 const navItems = [
-  { href: '/mi-cuenta',     label: 'Mi cuenta',    icon: '◯', roles: ['CHOFER', 'MECANICO'] },
-  { href: '/dashboard',     label: 'Dashboard',    icon: '◈', roles: ['DUENO', 'ENCARGADO', 'AFILIADO'] },
-  { href: '/romana',        label: 'Romana',        icon: '⊕', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/viajes',        label: 'Viajes',        icon: '⟳', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/camiones',      label: 'Flota',          icon: '◧', roles: ['DUENO', 'ENCARGADO', 'AFILIADO'] },
-  { href: '/nomina',        label: 'Nómina',        icon: '◑', roles: ['DUENO', 'ENCARGADO', 'AFILIADO'] },
-  { href: '/mantenimiento', label: 'Mantenim.',     icon: '⚙', roles: ['DUENO', 'ENCARGADO', 'MECANICO'] },
-  { href: '/despacho',      label: 'Despacho',      icon: '◈', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/dias-internos', label: 'Reg. Manual',   icon: '⏱', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/caja',          label: 'Finanzas',      icon: '◎', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/almacen',       label: 'Almacén',       icon: '▣', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/relaciones',    label: 'Relaciones',    icon: '◎', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/analisis',      label: 'Análisis',      icon: '◎', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/reportes',      label: 'Reportes',      icon: '◈', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/rutas',         label: 'Minas',         icon: '◉', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/usuarios',      label: 'Usuarios',      icon: '◫', roles: ['DUENO', 'ENCARGADO'] },
-  { href: '/perfil',        label: 'Mi perfil',     icon: '◯', roles: ['DUENO', 'ENCARGADO', 'AFILIADO', 'MECANICO', 'CHOFER'] },
+  { href: '/mi-cuenta',     label: 'Mi cuenta',        icon: '◯', roles: ['CHOFER', 'MECANICO'] },
+  { href: '/dashboard',     label: 'Dashboard',         icon: '◈', roles: ['DUENO', 'AFILIADO'] },
+  { href: '/romana',        label: 'Romana',            icon: '⊕', roles: ['DUENO', 'ENCARGADO'] },
+  { href: '/despacho',      label: 'Despacho',          icon: '◈', roles: ['DUENO', 'ENCARGADO'] },
+  { href: '/nomina',        label: 'Nómina',            icon: '◑', roles: ['DUENO', 'ENCARGADO', 'AFILIADO'] },
+  { href: '/nomina/duenos', label: 'Saldos dueños',     icon: '◒', roles: ['DUENO', 'ENCARGADO'], sub: true },
+  { href: '/analisis',      label: 'Desglose dueños',   icon: '◎', roles: ['DUENO', 'ENCARGADO'], sub: true },
+  { href: '/mantenimiento', label: 'Mantenimiento',     icon: '⚙', roles: ['DUENO', 'ENCARGADO', 'MECANICO'] },
+  { href: '/camiones',      label: 'Flota',             icon: '◧', roles: ['DUENO', 'ENCARGADO', 'AFILIADO'] },
+  { href: '/viajes',        label: 'Viajes',            icon: '⟳', roles: ['DUENO'], sub: true },
+  { href: '/usuarios',      label: 'Usuarios',          icon: '◫', roles: ['DUENO'], sub: true },
+  { href: '/almacen',       label: 'Almacén',           icon: '▣', roles: ['DUENO', 'ENCARGADO'] },
+  { href: '/dias-internos', label: 'Internos-Estéril',  icon: '⏱', roles: ['DUENO', 'ENCARGADO'] },
+  { href: '/caja',          label: 'Finanzas',          icon: '◎', roles: ['DUENO', 'ENCARGADO'] },
+  { href: '/relaciones',    label: 'Relaciones',        icon: '◎', roles: ['DUENO', 'ENCARGADO'], sub: true },
+  { href: '/reportes',      label: 'Reportes',          icon: '◈', roles: ['DUENO'], divider: true },
+  { href: '/rutas',         label: 'Minas & Rutas',     icon: '◉', roles: ['DUENO'] },
+  { href: '/perfil',        label: 'Mi perfil',         icon: '◯', roles: ['DUENO', 'ENCARGADO', 'AFILIADO', 'MECANICO', 'CHOFER'], divider: true },
 ]
 
 export default function MobileNav({ session }: { session: SessionPayload }) {
@@ -69,21 +70,38 @@ export default function MobileNav({ session }: { session: SessionPayload }) {
             {/* Nav */}
             <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
               {visible.map(item => {
-                const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+                const isSub = (item as any).sub === true
+                const hasDivider = (item as any).divider === true
+                const active = item.href === '/nomina/duenos'
+                  ? pathname === item.href || pathname.startsWith(item.href + '/')
+                  : item.href === '/nomina'
+                  ? pathname === item.href || (pathname.startsWith('/nomina/') && pathname !== '/nomina/duenos' && !pathname.startsWith('/nomina/duenos/'))
+                  : item.href === '/dashboard'
+                  ? pathname === item.href
+                  : pathname.startsWith(item.href)
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-colors ${
-                      active
-                        ? 'bg-amber-500/10 text-amber-400'
-                        : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-                    }`}
-                  >
-                    <span className="text-base w-5 text-center">{item.icon}</span>
-                    {item.label}
-                  </Link>
+                  <div key={item.href}>
+                    {hasDivider && <div className="border-t border-zinc-800/70 my-1.5" />}
+                    <Link
+                      href={item.href}
+                      onClick={() => setOpen(false)}
+                      className={`flex items-center rounded-xl font-medium transition-colors ${
+                        isSub
+                          ? 'gap-2 pl-8 pr-3 py-2 text-xs'
+                          : 'gap-3 px-3 py-3 text-sm'
+                      } ${
+                        active
+                          ? 'bg-amber-500/10 text-amber-400'
+                          : isSub
+                          ? 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/60'
+                          : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                      }`}
+                    >
+                      {isSub && <span className="text-zinc-600 text-[10px] mr-0.5">└</span>}
+                      <span className={`text-center flex-shrink-0 ${isSub ? 'text-sm w-4' : 'text-base w-5'}`}>{item.icon}</span>
+                      {item.label}
+                    </Link>
+                  </div>
                 )
               })}
             </nav>
