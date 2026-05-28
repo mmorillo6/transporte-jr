@@ -7,7 +7,7 @@ import type { SessionPayload } from '@/lib/session'
 
 const navItems = [
   { href: '/mi-cuenta',     label: 'Mi cuenta',        icon: '◯', roles: ['CHOFER', 'MECANICO'] },
-  { href: '/dashboard',     label: 'Dashboard',         icon: '◈', roles: ['DUENO', 'AFILIADO'] },
+  { href: '/dashboard',     label: 'Dashboard',         icon: '◈', roles: ['DUENO', 'ENCARGADO', 'AFILIADO'] },
   { href: '/romana',        label: 'Romana',            icon: '⊕', roles: ['DUENO', 'ENCARGADO'] },
   { href: '/despacho',      label: 'Despacho',          icon: '◈', roles: ['DUENO', 'ENCARGADO'] },
   { href: '/nomina',        label: 'Nómina',            icon: '◑', roles: ['DUENO', 'ENCARGADO', 'AFILIADO'] },
