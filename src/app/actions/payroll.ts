@@ -378,8 +378,10 @@ export async function updatePayrollAbono(entryId: string, abono: number) {
   return { ok: true }
 }
 
+type Disposition = 'CAJA_CHICA' | 'AURUMIN' | 'LUIS_PENA' | 'SIGUIENTE'
+
 // ─── Cerrar período — crea CashEntry para carros negativos ────────────────────
-export async function closePeriod(periodId: string) {
+export async function closePeriod(periodId: string, dispositions?: Record<string, Disposition>) {
   const session = await getSession()
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {
     return { error: 'No autorizado' }
@@ -403,9 +405,11 @@ export async function closePeriod(periodId: string) {
   if (entries.length === 0) return { error: 'Genera la nómina antes de cerrar el período' }
   if (!period) return { error: 'Período no encontrado' }
 
-  // Carros con saldo negativo → préstamo de caja chica
-  // Excepción: camiones de José Rodríguez — el déficit se descuenta de su cobro, no genera préstamo
+  // Carros con saldo negativo — procesar según disposición elegida
   const negativos = entries.filter(e => e.netAmount < 0 && !e.cashEntryId)
+  let prestamos = 0
+  let auruminDeficit = 0
+  let lpDeficit = 0
 
   for (const entry of negativos) {
     const truck = await prisma.truck.findUnique({
@@ -413,8 +417,14 @@ export async function closePeriod(periodId: string) {
       select: { plate: true, owner: { select: { name: true } } },
     })
 
-    if (truck?.owner?.name === 'José Rodríguez') continue
+    const isJose = truck?.owner?.name === 'José Rodríguez'
+    const disp: Disposition = isJose ? 'SIGUIENTE' : (dispositions?.[entry.id] ?? 'CAJA_CHICA')
 
+    if (disp === 'SIGUIENTE') continue
+    if (disp === 'AURUMIN')   { auruminDeficit += Math.abs(entry.netAmount); continue }
+    if (disp === 'LUIS_PENA') { lpDeficit      += Math.abs(entry.netAmount); continue }
+
+    // CAJA_CHICA — EGRESO de efectivo
     const cashEntry = await prisma.cashEntry.create({
       data: {
         type:     'EGRESO',
@@ -426,24 +436,28 @@ export async function closePeriod(periodId: string) {
         truckId:  entry.truckId,
       },
     })
-
     await prisma.payrollEntry.update({
       where: { id: entry.id },
-      data: { cashEntryId: cashEntry.id },
+      data:  { cashEntryId: cashEntry.id },
     })
+    prestamos++
   }
 
-  // Auto-crear CxC por cliente
+  // Auto-crear CxC por cliente (descontando déficits absorbidos)
   const fmtD = (d: Date) =>
     new Date(d).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })
   const periodLabel = `${fmtD(period.startDate)} al ${fmtD(period.endDate)}`
 
-  const grossAurumin  = period.trips
-    .filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
-    .reduce((s, t) => s + t.amount, 0)
-  const grossLuisPena = period.trips
-    .filter(t => (t.route as any)?.clientName === 'LUIS PEÑA')
-    .reduce((s, t) => s + t.amount, 0)
+  const grossAurumin  = Math.max(0,
+    period.trips
+      .filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
+      .reduce((s, t) => s + t.amount, 0) - auruminDeficit
+  )
+  const grossLuisPena = Math.max(0,
+    period.trips
+      .filter(t => (t.route as any)?.clientName === 'LUIS PEÑA')
+      .reduce((s, t) => s + t.amount, 0) - lpDeficit
+  )
 
   const cxcCreadas: string[] = []
   for (const [clientName, gross] of [['AURUMIN', grossAurumin], ['LUIS PEÑA', grossLuisPena]] as const) {
@@ -475,7 +489,35 @@ export async function closePeriod(periodId: string) {
   revalidatePath('/caja')
   revalidatePath('/cuentas-por-cobrar')
   revalidatePath('/reportes/deuda')
-  return { ok: true, prestamos: negativos.length, cxcCreadas }
+  return { ok: true, prestamos, cxcCreadas }
+}
+
+// ─── Crear período manualmente ────────────────────────────────────────────────
+export async function crearPeriodo(startDateStr: string, endDateStr: string) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {
+    return { error: 'No autorizado' }
+  }
+
+  const existing = await prisma.period.findFirst({ where: { status: 'OPEN' } })
+  if (existing) return { error: 'Ya existe un período abierto' }
+
+  const startDate = new Date(startDateStr + 'T00:00:00.000Z')
+  const endDate   = new Date(endDateStr   + 'T23:59:59.000Z')
+
+  const period = await prisma.period.create({
+    data: { startDate, endDate, status: 'OPEN' },
+  })
+
+  // Asignar viajes huérfanos (periodId=null) cuya fecha cae dentro del nuevo período
+  await prisma.trip.updateMany({
+    where: { periodId: null, date: { gte: startDate, lte: endDate } },
+    data: { periodId: period.id },
+  })
+
+  revalidatePath('/nomina')
+  revalidatePath('/romana')
+  return { ok: true, periodId: period.id }
 }
 
 // ─── Reabrir período ───────────────────────────────────────────────────────────

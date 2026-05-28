@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
 import NominaActions from './NominaActions'
+import CrearPeriodoBtn from './CrearPeriodoBtn'
 
 async function getPeriods() {
   const periods = await prisma.period.findMany({
@@ -81,9 +82,14 @@ export default async function NominaPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Nómina</h1>
-        <p className="text-zinc-500 text-sm mt-0.5">Calcula el pago quincenal por camión: facturación, viáticos, comisiones, NPR y deducciones. También muestra la nómina de choferes por período.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Nómina</h1>
+          <p className="text-zinc-500 text-sm mt-0.5">Calcula el pago quincenal por camión: facturación, viáticos, comisiones, NPR y deducciones. También muestra la nómina de choferes por período.</p>
+        </div>
+        {!activePeriod && ['DUENO', 'ENCARGADO'].includes(session.role) && (
+          <CrearPeriodoBtn />
+        )}
       </div>
 
       {/* ── Período activo: guía de estado ── */}
