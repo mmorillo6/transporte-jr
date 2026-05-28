@@ -118,11 +118,13 @@ export default function DuenosNominaClient({
       ? Math.round(truck.nprFee * (truck.auruminGross / totalGross) * 100) / 100
       : 0
     const nprLP = truck.nprFee - nprAurumin
-    const auruminSaldo = Math.round((
+    let auruminSaldo = Math.round((
       (truck.saldoInicial ?? 0)
       + truck.auruminGross - truck.commFee - truck.driverWage
       - truck.mechFee - truck.adminFee - nprAurumin - truck.abono
     ) * 100) / 100
+    // LP cubre el déficit de Aurumin cuando ya fue pagado en efectivo
+    if (truck.paidAt && auruminSaldo < 0) auruminSaldo = 0
     const lpSaldo = truck.paidAt
       ? 0
       : Math.round((truck.lpGross - nprLP - truck.deductions) * 100) / 100
