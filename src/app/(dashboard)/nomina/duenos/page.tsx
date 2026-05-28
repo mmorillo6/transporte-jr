@@ -90,6 +90,7 @@ export default async function DuenosNominaPage({
   // Group by owner
   type TruckRow = {
     truckId: string
+    payrollEntryId: string
     plate: string
     driverName: string
     auruminGross: number
@@ -158,6 +159,7 @@ export default async function DuenosNominaPage({
 
     const truckRow: TruckRow = {
       truckId: entry.truckId,
+      payrollEntryId: entry.id,
       plate: entry.truck?.plate ?? '',
       driverName: entry.truck?.driver?.name ?? '—',
       auruminGross,

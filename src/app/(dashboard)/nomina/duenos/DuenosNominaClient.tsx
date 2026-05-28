@@ -2,9 +2,11 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { markPayrollEntryPaid, recordAbonoAurumin } from '@/app/actions/payroll'
 
 type TruckRow = {
   truckId: string
+  payrollEntryId: string
   plate: string
   driverName: string
   auruminGross: number
@@ -106,6 +108,42 @@ export default function DuenosNominaClient({
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [openOwner, setOpenOwner] = useState<string | null>(null)
+  const [paying, setPaying] = useState<Set<string>>(new Set())
+  const [abonoFor, setAbonoFor] = useState<string | null>(null)
+  const [abonoAmt, setAbonoAmt] = useState('')
+
+  function computeTruckSaldos(truck: TruckRow) {
+    const totalGross = truck.auruminGross + truck.lpGross
+    const nprAurumin = totalGross > 0
+      ? Math.round(truck.nprFee * (truck.auruminGross / totalGross) * 100) / 100
+      : 0
+    const nprLP = truck.nprFee - nprAurumin
+    const auruminSaldo = Math.round((
+      (truck.saldoInicial ?? 0)
+      + truck.auruminGross - truck.commFee - truck.driverWage
+      - truck.mechFee - truck.adminFee - nprAurumin - truck.abono
+    ) * 100) / 100
+    const lpSaldo = truck.paidAt
+      ? 0
+      : Math.round((truck.lpGross - nprLP - truck.deductions) * 100) / 100
+    return { auruminSaldo, lpSaldo, nprAurumin, nprLP }
+  }
+
+  async function handlePayLP(payrollEntryId: string) {
+    setPaying(prev => new Set(prev).add(payrollEntryId))
+    await markPayrollEntryPaid(payrollEntryId, 'EFECTIVO')
+    setPaying(prev => { const s = new Set(prev); s.delete(payrollEntryId); return s })
+    router.refresh()
+  }
+
+  async function handleAbono(payrollEntryId: string) {
+    const amount = parseFloat(abonoAmt.replace(',', '.'))
+    if (!amount || amount <= 0) return
+    await recordAbonoAurumin(payrollEntryId, amount)
+    setAbonoFor(null)
+    setAbonoAmt('')
+    router.refresh()
+  }
 
   const selectedPeriod = periods.find(p => p.id === selectedPeriodId)
 
@@ -247,38 +285,50 @@ export default function DuenosNominaClient({
                   <div className="flex-1" />
 
                   {/* Financial summary */}
-                  <div className="flex items-center gap-4 text-xs flex-wrap">
-                    {t.auruminGross > 0 && (
-                      <div className="text-right">
-                        <p className="text-zinc-500">Aurumin</p>
-                        <p className="text-amber-400 font-semibold font-mono">${fmt(t.auruminGross)}</p>
+                  {(() => {
+                    const ownerSaldo = row.trucks.reduce((sum, tr) => {
+                      const { auruminSaldo, lpSaldo } = computeTruckSaldos(tr)
+                      return sum + auruminSaldo + lpSaldo
+                    }, 0)
+                    const allLpPaid = row.trucks.filter(tr => tr.lpGross > 0).every(tr => tr.paidAt)
+                    return (
+                      <div className="flex items-center gap-4 text-xs flex-wrap">
+                        {t.auruminGross > 0 && (
+                          <div className="text-right">
+                            <p className="text-zinc-500">Aurumin</p>
+                            <p className="text-amber-400 font-semibold font-mono">${fmt(t.auruminGross)}</p>
+                          </div>
+                        )}
+                        {t.lpGross > 0 && (
+                          <div className="text-right">
+                            <p className="text-zinc-500">LP</p>
+                            <p className={`font-semibold font-mono ${allLpPaid ? 'text-zinc-500 line-through' : 'text-blue-400'}`}>
+                              ${fmt(t.lpGross)}
+                            </p>
+                            {allLpPaid && <p className="text-emerald-500 text-[10px]">pagado</p>}
+                          </div>
+                        )}
+                        {totalGastos > 0 && (
+                          <div className="text-right">
+                            <p className="text-zinc-500">Gastos</p>
+                            <p className="text-red-400 font-semibold font-mono">-${fmt(totalGastos)}</p>
+                          </div>
+                        )}
+                        {hasTireDebt && (
+                          <div className="text-right">
+                            <p className="text-zinc-500">Cauchos debe</p>
+                            <p className="text-orange-400 font-semibold font-mono">-${fmt(totalTireDebt)}</p>
+                          </div>
+                        )}
+                        <div className="text-right min-w-[80px]">
+                          <p className="text-zinc-500">Saldo</p>
+                          <p className={`font-bold font-mono text-sm ${ownerSaldo < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {ownerSaldo < 0 ? '-' : ''}${fmt(Math.abs(ownerSaldo))}
+                          </p>
+                        </div>
                       </div>
-                    )}
-                    {t.lpGross > 0 && (
-                      <div className="text-right">
-                        <p className="text-zinc-500">LP</p>
-                        <p className="text-blue-400 font-semibold font-mono">${fmt(t.lpGross)}</p>
-                      </div>
-                    )}
-                    {totalGastos > 0 && (
-                      <div className="text-right">
-                        <p className="text-zinc-500">Gastos</p>
-                        <p className="text-red-400 font-semibold font-mono">-${fmt(totalGastos)}</p>
-                      </div>
-                    )}
-                    {hasTireDebt && (
-                      <div className="text-right">
-                        <p className="text-zinc-500">Cauchos debe</p>
-                        <p className="text-orange-400 font-semibold font-mono">-${fmt(totalTireDebt)}</p>
-                      </div>
-                    )}
-                    <div className="text-right min-w-[80px]">
-                      <p className="text-zinc-500">Saldo</p>
-                      <p className={`font-bold font-mono text-sm ${t.netAmount < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                        {t.netAmount < 0 ? '-' : ''}${fmt(Math.abs(t.netAmount))}
-                      </p>
-                    </div>
-                  </div>
+                    )
+                  })()}
                 </div>
 
                 {/* Expanded detail */}
@@ -287,23 +337,8 @@ export default function DuenosNominaClient({
 
                     {/* Per-truck breakdown */}
                     {row.trucks.map(truck => {
-                      const nprPct = row.owner.nprPercent / 100
-                      const totalGross = truck.auruminGross + truck.lpGross
-                      const nprAurumin = totalGross > 0
-                        ? Math.round(truck.nprFee * (truck.auruminGross / totalGross) * 100) / 100
-                        : 0
-                      const nprLP = truck.nprFee - nprAurumin
-                      const lpSaldo = Math.round((truck.lpGross - nprLP - truck.deductions) * 100) / 100
-                      const auruminSaldo = Math.round((
-                        (truck.saldoInicial ?? 0)
-                        + truck.auruminGross
-                        - truck.commFee
-                        - truck.driverWage
-                        - truck.mechFee
-                        - truck.adminFee
-                        - nprAurumin
-                        - truck.abono
-                      ) * 100) / 100
+                      const { auruminSaldo, lpSaldo, nprAurumin, nprLP } = computeTruckSaldos(truck)
+                      const lpRawSaldo = Math.round((truck.lpGross - nprLP - truck.deductions) * 100) / 100
 
                       return (
                         <div key={truck.truckId} className="space-y-3">
@@ -344,12 +379,39 @@ export default function DuenosNominaClient({
                                 {truck.adminFee > 0   && <FinRow label="Administrativo" value={`-$${fmt(truck.adminFee)}`}  color="text-zinc-400" />}
                                 {nprAurumin > 0       && <FinRow label={`${row.owner.nprPercent}% NPR`} value={`-$${fmt(nprAurumin)}`} color="text-red-400" />}
                                 {truck.abono > 0      && <FinRow label="Abono recibido" value={`-$${fmt(truck.abono)}`}    color="text-emerald-400" />}
-                                <div className="border-t border-zinc-700 pt-1.5 flex justify-between">
+                                <div className="border-t border-zinc-700 pt-1.5 flex justify-between items-center">
                                   <span className="text-white text-xs font-semibold">Saldo Aurumin</span>
                                   <span className={`font-mono font-bold text-sm ${auruminSaldo < 0 ? 'text-red-400' : 'text-amber-400'}`}>
                                     {auruminSaldo < 0 ? '-' : ''}${fmt(Math.abs(auruminSaldo))}
                                   </span>
                                 </div>
+                                {/* Botón abono Aurumin */}
+                                {abonoFor === truck.payrollEntryId ? (
+                                  <div className="flex gap-1 pt-1" onClick={e => e.stopPropagation()}>
+                                    <input
+                                      type="number" min="0" step="0.01"
+                                      value={abonoAmt}
+                                      onChange={e => setAbonoAmt(e.target.value)}
+                                      placeholder="Monto $"
+                                      className="flex-1 bg-zinc-700 border border-zinc-600 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-amber-500 w-0"
+                                      autoFocus
+                                    />
+                                    <button onClick={() => handleAbono(truck.payrollEntryId)}
+                                      className="bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold rounded-lg px-2.5 py-1.5 transition-colors">
+                                      ✓
+                                    </button>
+                                    <button onClick={() => { setAbonoFor(null); setAbonoAmt('') }}
+                                      className="bg-zinc-700 hover:bg-zinc-600 text-zinc-400 text-xs rounded-lg px-2 py-1.5 transition-colors">
+                                      ✕
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={e => { e.stopPropagation(); setAbonoFor(truck.payrollEntryId); setAbonoAmt('') }}
+                                    className="w-full text-xs text-amber-500 hover:text-amber-400 border border-amber-500/20 hover:border-amber-500/40 rounded-lg py-1.5 transition-colors mt-1">
+                                    + Registrar abono Aurumin
+                                  </button>
+                                )}
                               </div>
                             )}
 
@@ -359,17 +421,27 @@ export default function DuenosNominaClient({
                                 <p className="text-blue-400 text-xs font-bold uppercase tracking-widest">Luis Peña</p>
                                 <FinRow label="Saldo anterior"   value="$0.00"                    color="text-zinc-600" />
                                 <FinRow label="Facturación"       value={`$${fmt(truck.lpGross)}`} color="text-white" />
-                                <FinRow label="Gastos op."        value="$0.00"                    color="text-zinc-600" />
-                                <FinRow label="Nóm. chofer"       value="$0.00"                    color="text-zinc-600" />
                                 {nprLP > 0 && <FinRow label={`${row.owner.nprPercent}% NPR`} value={`-$${fmt(nprLP)}`} color="text-red-400" />}
                                 {truck.deductions > 0 && <FinRow label="Repuesto/Préstamo" value={`-$${fmt(truck.deductions)}`} color="text-red-400" />}
-                                <FinRow label="Abono recibido"    value="$0.00"                    color="text-zinc-600" />
-                                <div className="border-t border-zinc-700 pt-1.5 flex justify-between">
+                                <div className="border-t border-zinc-700 pt-1.5 flex justify-between items-center">
                                   <span className="text-white text-xs font-semibold">Saldo LP</span>
-                                  <span className="font-mono font-bold text-sm text-blue-400">
-                                    ${fmt(lpSaldo)}
-                                  </span>
+                                  {truck.paidAt ? (
+                                    <span className="text-emerald-400 text-xs font-semibold">✓ Pagado en efectivo</span>
+                                  ) : (
+                                    <span className="font-mono font-bold text-sm text-blue-400">
+                                      ${fmt(lpRawSaldo)}
+                                    </span>
+                                  )}
                                 </div>
+                                {/* Botón pagar LP */}
+                                {!truck.paidAt && (
+                                  <button
+                                    disabled={paying.has(truck.payrollEntryId)}
+                                    onClick={e => { e.stopPropagation(); handlePayLP(truck.payrollEntryId) }}
+                                    className="w-full text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/20 hover:border-emerald-500/40 rounded-lg py-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {paying.has(truck.payrollEntryId) ? 'Registrando...' : '✓ Marcar LP pagado en efectivo'}
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
@@ -412,25 +484,35 @@ export default function DuenosNominaClient({
                     })}
 
                     {/* Owner total */}
-                    <div className="bg-zinc-800/60 rounded-xl px-4 py-3 flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-zinc-400 text-xs">Total {row.owner.name}</p>
-                        <div className="flex gap-4 text-xs">
-                          {row.totals.auruminGross > 0 && (
-                            <span className="text-amber-400">Aurumin: ${fmt(row.totals.auruminGross)}</span>
-                          )}
-                          {row.totals.lpGross > 0 && (
-                            <span className="text-blue-400">LP: ${fmt(row.totals.lpGross)}</span>
-                          )}
+                    {(() => {
+                      const ownerSaldo = row.trucks.reduce((sum, tr) => {
+                        const { auruminSaldo, lpSaldo } = computeTruckSaldos(tr)
+                        return sum + auruminSaldo + lpSaldo
+                      }, 0)
+                      return (
+                        <div className="bg-zinc-800/60 rounded-xl px-4 py-3 flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <p className="text-zinc-400 text-xs">Total {row.owner.name}</p>
+                            <div className="flex gap-4 text-xs">
+                              {row.totals.auruminGross > 0 && (
+                                <span className="text-amber-400">Aurumin: ${fmt(row.totals.auruminGross)}</span>
+                              )}
+                              {row.totals.lpGross > 0 && (
+                                <span className={row.trucks.filter(t=>t.lpGross>0).every(t=>t.paidAt) ? 'text-zinc-500 line-through' : 'text-blue-400'}>
+                                  LP: ${fmt(row.totals.lpGross)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-zinc-500 text-xs">Saldo pendiente</p>
+                            <p className={`font-bold font-mono text-lg ${ownerSaldo < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                              {ownerSaldo < 0 ? '-' : ''}${fmt(Math.abs(ownerSaldo))}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-zinc-500 text-xs">Saldo neto</p>
-                        <p className={`font-bold font-mono text-lg ${row.totals.netAmount < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                          {row.totals.netAmount < 0 ? '-' : ''}${fmt(Math.abs(row.totals.netAmount))}
-                        </p>
-                      </div>
-                    </div>
+                      )
+                    })()}
 
                     {/* Tire debts */}
                     {row.tireDebts.length > 0 && (

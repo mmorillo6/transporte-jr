@@ -507,6 +507,28 @@ export async function markPayrollEntryPaid(id: string, paymentMethod: string) {
   })
 
   revalidatePath(`/nomina/${entry.periodId}`)
+  revalidatePath('/nomina/duenos')
+  return { ok: true }
+}
+
+// ─── Registrar abono Aurumin (pago parcial contra saldo acumulado) ────────────
+export async function recordAbonoAurumin(id: string, amount: number) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {
+    return { error: 'No autorizado' }
+  }
+  if (amount <= 0) return { error: 'Monto inválido' }
+
+  const entry = await prisma.payrollEntry.findUnique({ where: { id } })
+  if (!entry) return { error: 'Entrada no encontrada' }
+
+  await prisma.payrollEntry.update({
+    where: { id },
+    data: { abono: { increment: amount } },
+  })
+
+  revalidatePath('/nomina/duenos')
+  revalidatePath(`/nomina/${entry.periodId}`)
   return { ok: true }
 }
 
