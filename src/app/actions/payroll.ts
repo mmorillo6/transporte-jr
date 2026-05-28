@@ -404,6 +404,7 @@ export async function closePeriod(periodId: string) {
   if (!period) return { error: 'Período no encontrado' }
 
   // Carros con saldo negativo → préstamo de caja chica
+  // Excepción: camiones de José Rodríguez — el déficit se descuenta de su cobro, no genera préstamo
   const negativos = entries.filter(e => e.netAmount < 0 && !e.cashEntryId)
 
   for (const entry of negativos) {
@@ -411,6 +412,8 @@ export async function closePeriod(periodId: string) {
       where: { id: entry.truckId },
       select: { plate: true, owner: { select: { name: true } } },
     })
+
+    if (truck?.owner?.name === 'José Rodríguez') continue
 
     const cashEntry = await prisma.cashEntry.create({
       data: {
