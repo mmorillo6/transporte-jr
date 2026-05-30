@@ -168,6 +168,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     if (!truck) continue
 
     const isPropio   = truck.owner.type === 'PROPIO'
+    const isAfiliado = truck.owner.type === 'AFILIADO'
     const isNPROwner = truck.owner.isNPROwner
     const nprPct     = truck.owner.nprPercent / 100
 
@@ -179,8 +180,8 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     // Nómina chofer (suma del wage por viaje según ruta)
     const driverWage = trips.reduce((s, t) => s + (t.route?.driverWage ?? 0), 0)
 
-    // NPR — se calcula siempre; para isNPROwner no se descuenta del neto pero se guarda
-    const nprFee = grossAmount * nprPct
+    // NPR — 0 para isNPROwner (José); para afiliados y propios = nprPercent × bruto
+    const nprFee = isNPROwner ? 0 : grossAmount * nprPct
 
     // Mecánica y admin — solo PROPIO con viajes Aurumin; Luis Peña no lleva estos costos
     const tieneAurumin = propiosConAurumin.has(truckId)
@@ -219,11 +220,11 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     const abono = 0
 
     // Saldo final
-    // isNPROwner (José): NPR no se descuenta del neto, solo se registra
+    // isAfiliado: driverWage se guarda para display pero NO se descuenta (pagan sus choferes directo)
     const netAmount = grossAmount
       - gastosOp
-      - driverWage
-      - (isNPROwner ? 0 : nprFee)   // José no paga NPR (es suyo)
+      - (isAfiliado ? 0 : driverWage)
+      - nprFee
       - mechanicFee
       - adminFee
       - loanDeductions

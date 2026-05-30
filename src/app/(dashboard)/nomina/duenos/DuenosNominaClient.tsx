@@ -112,15 +112,17 @@ export default function DuenosNominaClient({
   const [abonoFor, setAbonoFor] = useState<string | null>(null)
   const [abonoAmt, setAbonoAmt] = useState('')
 
-  function computeTruckSaldos(truck: TruckRow) {
+  function computeTruckSaldos(truck: TruckRow, ownerType?: string) {
+    const isAfiliado = ownerType === 'AFILIADO'
     const totalGross = truck.auruminGross + truck.lpGross
     const nprAurumin = totalGross > 0
       ? Math.round(truck.nprFee * (truck.auruminGross / totalGross) * 100) / 100
       : 0
     const nprLP = truck.nprFee - nprAurumin
+    // Afiliados pagan sus choferes directo — driverWage es informativo, no se descuenta
     let auruminSaldo = Math.round((
       (truck.saldoInicial ?? 0)
-      + truck.auruminGross - truck.commFee - truck.driverWage
+      + truck.auruminGross - truck.commFee - (isAfiliado ? 0 : truck.driverWage)
       - truck.mechFee - truck.adminFee - nprAurumin - truck.abono
     ) * 100) / 100
     // LP cubre el déficit de Aurumin cuando ya fue pagado en efectivo
@@ -289,7 +291,7 @@ export default function DuenosNominaClient({
                   {/* Financial summary */}
                   {(() => {
                     const ownerSaldo = row.trucks.reduce((sum, tr) => {
-                      const { auruminSaldo, lpSaldo } = computeTruckSaldos(tr)
+                      const { auruminSaldo, lpSaldo } = computeTruckSaldos(tr, row.owner.type)
                       return sum + auruminSaldo + lpSaldo
                     }, 0)
                     const allLpPaid = row.trucks.filter(tr => tr.lpGross > 0).every(tr => tr.paidAt)
@@ -339,7 +341,7 @@ export default function DuenosNominaClient({
 
                     {/* Per-truck breakdown */}
                     {row.trucks.map(truck => {
-                      const { auruminSaldo, lpSaldo, nprAurumin, nprLP } = computeTruckSaldos(truck)
+                      const { auruminSaldo, lpSaldo, nprAurumin, nprLP } = computeTruckSaldos(truck, row.owner.type)
                       const lpRawSaldo = Math.round((truck.lpGross - nprLP - truck.deductions) * 100) / 100
 
                       return (
@@ -376,7 +378,11 @@ export default function DuenosNominaClient({
                                 )}
                                 <FinRow label="Facturación"     value={`$${fmt(truck.auruminGross)}`}   color="text-white" />
                                 {truck.commFee > 0    && <FinRow label="Gastos op."     value={`-$${fmt(truck.commFee)}`}    color="text-red-400" />}
-                                {truck.driverWage > 0 && <FinRow label="Nóm. chofer"   value={`-$${fmt(truck.driverWage)}`} color="text-orange-400" />}
+                                {truck.driverWage > 0 && (
+                                  row.owner.type === 'AFILIADO'
+                                    ? <FinRow label="Nóm. chofer (directo)" value={`$${fmt(truck.driverWage)}`} color="text-zinc-500" />
+                                    : <FinRow label="Nóm. chofer"           value={`-$${fmt(truck.driverWage)}`} color="text-orange-400" />
+                                )}
                                 {truck.mechFee > 0    && <FinRow label="Nóm. mecánico" value={`-$${fmt(truck.mechFee)}`}    color="text-purple-400" />}
                                 {truck.adminFee > 0   && <FinRow label="Administrativo" value={`-$${fmt(truck.adminFee)}`}  color="text-zinc-400" />}
                                 {nprAurumin > 0       && <FinRow label={`${row.owner.nprPercent}% NPR`} value={`-$${fmt(nprAurumin)}`} color="text-red-400" />}
@@ -488,7 +494,7 @@ export default function DuenosNominaClient({
                     {/* Owner total */}
                     {(() => {
                       const ownerSaldo = row.trucks.reduce((sum, tr) => {
-                        const { auruminSaldo, lpSaldo } = computeTruckSaldos(tr)
+                        const { auruminSaldo, lpSaldo } = computeTruckSaldos(tr, row.owner.type)
                         return sum + auruminSaldo + lpSaldo
                       }, 0)
                       return (
