@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createCashEntry, deleteCashEntry } from '@/app/actions/cash'
+import { createCashEntry, deleteCashEntry, registrarApertura } from '@/app/actions/cash'
 import { toast } from 'sonner'
 
 type Entry = {
@@ -34,6 +34,10 @@ export default function CajaClient({
   const [tipo, setTipo] = useState<'INGRESO' | 'EGRESO'>('INGRESO')
   const [moneda, setMoneda] = useState<'EFECTIVO' | 'USDT'>('EFECTIVO')
   const [filterCurrency, setFilterCurrency] = useState<'ALL' | 'EFECTIVO' | 'USDT'>('ALL')
+  const [showAjuste, setShowAjuste] = useState(false)
+  const [ajusteEfectivo, setAjusteEfectivo] = useState('')
+  const [ajusteUsdt, setAjusteUsdt] = useState('')
+  const [loadingAjuste, setLoadingAjuste] = useState(false)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -44,6 +48,20 @@ export default function CajaClient({
     if (res.error) { toast.error(res.error); return }
     toast.success('Movimiento registrado')
     setShowForm(false)
+    router.refresh()
+  }
+
+  async function handleAjuste() {
+    const ef = parseFloat(ajusteEfectivo)
+    const us = ajusteUsdt !== '' ? parseFloat(ajusteUsdt) : undefined
+    if (isNaN(ef)) { toast.error('Ingresa el saldo de efectivo'); return }
+    if (us !== undefined && isNaN(us)) { toast.error('Monto USDT inválido'); return }
+    setLoadingAjuste(true)
+    const res = await registrarApertura(ef, us)
+    setLoadingAjuste(false)
+    if (!res.ok) { toast.error('Error al ajustar'); return }
+    toast.success(res.adjusted > 0 ? 'Saldo ajustado correctamente' : 'No se necesitó ajuste — el saldo ya era correcto')
+    setShowAjuste(false)
     router.refresh()
   }
 
@@ -90,10 +108,17 @@ export default function CajaClient({
             </button>
           ))}
         </div>
-        <button onClick={() => setShowForm(v => !v)}
-          className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold rounded-xl px-4 py-2 text-sm transition-colors">
-          + Movimiento
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setAjusteEfectivo(balanceEfectivo.toFixed(2)); setAjusteUsdt(balanceUsdt.toFixed(2)); setShowAjuste(true) }}
+            className="bg-zinc-700 hover:bg-zinc-600 text-zinc-300 hover:text-white font-medium rounded-xl px-4 py-2 text-sm transition-colors">
+            Ajustar saldo
+          </button>
+          <button onClick={() => setShowForm(v => !v)}
+            className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold rounded-xl px-4 py-2 text-sm transition-colors">
+            + Movimiento
+          </button>
+        </div>
       </div>
 
       {/* Form */}
@@ -181,6 +206,50 @@ export default function CajaClient({
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Modal ajuste de saldo */}
+      {showAjuste && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm shadow-2xl">
+            <div className="px-5 py-4 border-b border-zinc-800">
+              <h2 className="text-white font-semibold">Ajustar saldo inicial</h2>
+              <p className="text-zinc-500 text-xs mt-0.5">Ingresa los saldos reales. Se creará un ajuste por la diferencia.</p>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1.5">Saldo Efectivo real ($)</label>
+                <input
+                  type="number" step="0.01"
+                  value={ajusteEfectivo}
+                  onChange={e => setAjusteEfectivo(e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+                />
+                <p className="text-zinc-600 text-xs mt-1">Sistema actual: ${balanceEfectivo.toFixed(2)}</p>
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1.5">Saldo USDT real ($)</label>
+                <input
+                  type="number" step="0.01"
+                  value={ajusteUsdt}
+                  onChange={e => setAjusteUsdt(e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+                />
+                <p className="text-zinc-600 text-xs mt-1">Sistema actual: ${balanceUsdt.toFixed(2)}</p>
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-zinc-800 flex justify-end gap-3">
+              <button onClick={() => setShowAjuste(false)}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-sm transition-colors">
+                Cancelar
+              </button>
+              <button onClick={handleAjuste} disabled={loadingAjuste}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-lg text-sm transition-colors">
+                {loadingAjuste ? 'Ajustando...' : 'Aplicar ajuste'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

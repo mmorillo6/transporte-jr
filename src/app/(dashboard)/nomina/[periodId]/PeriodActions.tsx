@@ -6,6 +6,15 @@ import type { PayrollParams, LoanForPayroll } from '@/app/actions/payroll'
 import { exportPeriodExcel } from '@/app/actions/exportPayroll'
 import { toast } from 'sonner'
 
+type Disposition = 'CAJA_CHICA' | 'AURUMIN' | 'LUIS_PENA' | 'SIGUIENTE'
+
+type NegativoTruck = {
+  id: string
+  plate: string
+  ownerName: string
+  netAmount: number
+}
+
 type ChecklistData = {
   payrollCount: number
   tripsWithoutTicket: number
@@ -14,6 +23,7 @@ type ChecklistData = {
   totalAlmacenPendiente: number
   totalLoansPendientes: number
   mecanicoExpensesCount: number
+  negativoTrucks?: NegativoTruck[]
 }
 
 export default function PeriodActions({ periodId, periodStatus, role, checklistData }: {
@@ -33,6 +43,7 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
   const [loadingParams, setLoadingParams] = useState(false)
   const [skipLoanIds, setSkipLoanIds] = useState<Set<string>>(new Set())
   const [adminFeeOverride, setAdminFeeOverride] = useState<string>('')
+  const [dispositions, setDispositions] = useState<Record<string, Disposition>>({})
 
   const isOpen = periodStatus === 'OPEN'
 
@@ -61,7 +72,7 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
 
   async function handleClose() {
     setClosing(true)
-    const res = await closePeriod(periodId)
+    const res = await closePeriod(periodId, dispositions)
     if ('error' in res && res.error) toast.error(res.error)
     else {
       const r = res as { ok: boolean; prestamos: number; cxcCreadas: string[] }
@@ -73,6 +84,15 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
     }
     setClosing(false)
     setShowChecklist(false)
+  }
+
+  function openChecklist() {
+    const defaults: Record<string, Disposition> = {}
+    for (const t of checklistData?.negativoTrucks ?? []) {
+      defaults[t.id] = t.ownerName === 'José Rodríguez' ? 'SIGUIENTE' : 'CAJA_CHICA'
+    }
+    setDispositions(defaults)
+    setShowChecklist(true)
   }
 
   async function handleReopen() {
@@ -137,7 +157,7 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
         {['DUENO', 'ENCARGADO'].includes(role) && (
           isOpen ? (
             <button
-              onClick={() => setShowChecklist(true)}
+              onClick={openChecklist}
               disabled={closing}
               className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-semibold rounded-lg text-sm transition-colors"
             >
@@ -303,12 +323,60 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
                 <CheckItem type="warn" text={`${cl.unpaidEntries} carro${cl.unpaidEntries !== 1 ? 's' : ''} con pago pendiente de cobro`} />
               )}
 
-              {/* Carros negativos */}
-              {cl.negativoEntries > 0 && (
-                <CheckItem
-                  type="info"
-                  text={`${cl.negativoEntries} carro${cl.negativoEntries !== 1 ? 's' : ''} en negativo → se generarán préstamos de caja chica`}
-                />
+              {/* Carros negativos — selección de disposición por carro */}
+              {(cl.negativoTrucks ?? []).length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2.5">
+                    <span className="mt-0.5 text-xs font-bold text-amber-400 w-4 flex-shrink-0">⚠</span>
+                    <span className="text-sm text-amber-400">
+                      {cl.negativoTrucks!.length} carro{cl.negativoTrucks!.length !== 1 ? 's' : ''} en negativo — elige cómo cubrir cada déficit:
+                    </span>
+                  </div>
+                  {cl.negativoTrucks!.map(t => {
+                    const isJose = t.ownerName === 'José Rodríguez'
+                    const cur = dispositions[t.id] ?? 'CAJA_CHICA'
+                    const opts: { value: Disposition; label: string }[] = [
+                      { value: 'CAJA_CHICA', label: 'Caja chica' },
+                      { value: 'AURUMIN',    label: 'Aurumin' },
+                      { value: 'LUIS_PENA',  label: 'Luis Peña' },
+                      { value: 'SIGUIENTE',  label: 'Arrastra' },
+                    ]
+                    return (
+                      <div key={t.id} className="ml-6 bg-zinc-800/60 rounded-xl p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-white text-sm font-medium font-mono">{t.plate}</span>
+                          <span className="text-red-400 text-sm font-semibold">
+                            −${Math.abs(t.netAmount).toFixed(2)}
+                          </span>
+                        </div>
+                        <p className="text-zinc-500 text-xs">{t.ownerName}</p>
+                        {isJose ? (
+                          <p className="text-zinc-500 text-xs italic">Arrastra automáticamente (regla José Rodríguez)</p>
+                        ) : (
+                          <div className="flex gap-1 flex-wrap">
+                            {opts.map(o => (
+                              <button
+                                key={o.value}
+                                type="button"
+                                onClick={() => setDispositions(prev => ({ ...prev, [t.id]: o.value }))}
+                                className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                                  cur === o.value
+                                    ? o.value === 'CAJA_CHICA' ? 'bg-red-500/20 text-red-400'
+                                    : o.value === 'AURUMIN'    ? 'bg-blue-500/20 text-blue-400'
+                                    : o.value === 'LUIS_PENA'  ? 'bg-emerald-500/20 text-emerald-400'
+                                    : 'bg-zinc-600 text-zinc-300'
+                                    : 'bg-zinc-700 text-zinc-500 hover:text-zinc-300'
+                                }`}
+                              >
+                                {o.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               )}
 
               {/* Almacén */}

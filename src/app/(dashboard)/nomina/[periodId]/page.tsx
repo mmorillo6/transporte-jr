@@ -238,6 +238,14 @@ export default async function PeriodDetailPage({
     totalAlmacenPendiente,
     totalLoansPendientes,
     mecanicoExpensesCount,
+    negativoTrucks: payroll
+      .filter((e: any) => e.netAmount < 0)
+      .map((e: any) => ({
+        id:        e.id,
+        plate:     e.truck?.plate ?? e.truckId,
+        ownerName: e.truck?.owner?.name ?? '',
+        netAmount: e.netAmount,
+      })),
   }
 
   return (

@@ -48,3 +48,44 @@ export async function getCashBalances() {
   }
   return { efectivo, usdt }
 }
+
+export async function registrarApertura(efectivo: number, usdt?: number) {
+  const current = await getCashBalances()
+  const today = new Date()
+  let count = 0
+
+  const difEfectivo = Math.round((efectivo - current.efectivo) * 100) / 100
+  if (difEfectivo !== 0) {
+    await prisma.cashEntry.create({
+      data: {
+        type:     difEfectivo > 0 ? 'INGRESO' : 'EGRESO',
+        currency: 'EFECTIVO',
+        amount:   Math.abs(difEfectivo),
+        concept:  'Ajuste de saldo inicial',
+        source:   'APERTURA',
+        date:     today,
+      },
+    })
+    count++
+  }
+
+  if (usdt !== undefined) {
+    const difUsdt = Math.round((usdt - current.usdt) * 100) / 100
+    if (difUsdt !== 0) {
+      await prisma.cashEntry.create({
+        data: {
+          type:     difUsdt > 0 ? 'INGRESO' : 'EGRESO',
+          currency: 'USDT',
+          amount:   Math.abs(difUsdt),
+          concept:  'Ajuste de saldo inicial',
+          source:   'APERTURA',
+          date:     today,
+        },
+      })
+      count++
+    }
+  }
+
+  revalidatePath('/caja')
+  return { ok: true, adjusted: count }
+}
