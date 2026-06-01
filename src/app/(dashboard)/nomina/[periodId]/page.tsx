@@ -10,6 +10,7 @@ import GastosMasivosClient from './GastosMasivosClient'
 import GastosComunesClient from './GastosComunesClient'
 import { getGastosComunesDefaults } from '@/app/actions/systemConfig'
 import GastosGeneralesClient from './GastosGeneralesClient'
+import MechanicChargesClient from './MechanicChargesClient'
 
 async function getPeriodData(periodId: string, role: string, ownerId: string | null) {
   const period = await prisma.period.findUnique({
@@ -20,7 +21,7 @@ async function getPeriodData(periodId: string, role: string, ownerId: string | n
           truck: {
             include: {
               driver: { select: { name: true } },
-              owner: { select: { id: true, name: true, type: true, nprPercent: true } },
+              owner: { select: { id: true, name: true, type: true, nprPercent: true, isNPROwner: true } },
             },
           },
           route: { select: { name: true, rateType: true, driverWage: true, clientName: true } },
@@ -94,7 +95,7 @@ export default async function PeriodDetailPage({
     ownerId = user?.ownerId ?? null
   }
 
-  const [period, totalAlmacenPendiente, loansData, cxcAurumin, cxcLuisPena, mecanicoExpensesCount, gastosGeneralesCount, gastosComunesCount, gastosDefaults] = await Promise.all([
+  const [period, totalAlmacenPendiente, loansData, cxcAurumin, cxcLuisPena, mecanicoExpensesCount, gastosGeneralesCount, gastosComunesCount, gastosDefaults, pendingMechanicCharges, allPeriodsForCharges, allTrucksForCharges, allOwnersForCharges] = await Promise.all([
     getPeriodData(periodId, session.role, ownerId),
     getTotalAlmacenPendiente(),
     prisma.loan.findMany({ where: { balance: { gt: 0 } }, select: { balance: true } }),
@@ -117,11 +118,46 @@ export default async function PeriodDetailPage({
     // Gastos comunes aplicados a camiones (Starlink, etc.)
     prisma.expense.count({ where: { periodId, truckId: { not: null } } }),
     getGastosComunesDefaults(),
+    // Cargos mecánica pendientes para este período
+    prisma.pendingMechanicCharge.findMany({
+      where: { targetPeriodId: periodId, appliedAt: null },
+      include: {
+        truck: { select: { plate: true } },
+        owner: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    }),
+    // Períodos disponibles para seleccionar en el formulario de cargos
+    prisma.period.findMany({
+      orderBy: { startDate: 'desc' },
+      take: 10,
+      select: { id: true, startDate: true, endDate: true },
+    }),
+    // Camiones activos
+    prisma.truck.findMany({
+      where: { active: true },
+      select: { id: true, plate: true },
+      orderBy: { plate: 'asc' },
+    }),
+    // Dueños activos
+    prisma.owner.findMany({
+      where: { active: true },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
   ])
   if (!period) notFound()
 
   const payroll = period.payroll as any[]
   const trips = period.trips
+
+  // Detectar si hay viajes importados DESPUÉS de la última generación de nómina
+  const hasNewerTrips = (() => {
+    if (payroll.length === 0 || trips.length === 0) return false
+    const lastPayrollAt = Math.min(...payroll.map((e: any) => new Date(e.createdAt).getTime()))
+    const lastTripAt    = Math.max(...(trips as any[]).map((t: any) => new Date(t.createdAt).getTime()))
+    return lastTripAt > lastPayrollAt
+  })()
 
   // Summary totals
   const totalGross = payroll.reduce((s, e) => s + e.grossAmount, 0)
@@ -227,6 +263,10 @@ export default async function PeriodDetailPage({
     }))
     .filter((t: { id: string; plate: string; driverName: string }) => t.plate)
 
+  const propioCountForGastos = new Set(
+    (payroll as any[]).filter((e: any) => e.truck?.owner?.type === 'PROPIO').map((e: any) => e.truckId)
+  ).size
+
   const periodStartISO = new Date(period.startDate).toISOString().slice(0, 10)
   const periodEndISO   = new Date(period.endDate).toISOString().slice(0, 10)
 
@@ -293,6 +333,17 @@ export default async function PeriodDetailPage({
           </div>
         )}
       </div>
+
+      {/* ── Alerta: viajes nuevos después de última generación ── */}
+      {hasNewerTrips && period.status === 'OPEN' && ['DUENO', 'ENCARGADO'].includes(session.role) && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3 flex items-center gap-3">
+          <span className="text-amber-400 text-lg">⚠</span>
+          <div>
+            <p className="text-amber-300 text-sm font-semibold">Romana importada después de la última generación</p>
+            <p className="text-amber-400/70 text-xs mt-0.5">Hay viajes nuevos que no están reflejados en la nómina actual. Regenera la nómina para actualizar todos los totales y sueldos de choferes.</p>
+          </div>
+        </div>
+      )}
 
       {/* ── Checklist de progreso — solo encargado/dueño ── */}
       {['DUENO', 'ENCARGADO'].includes(session.role) && (() => {
@@ -614,12 +665,30 @@ export default async function PeriodDetailPage({
             </Link>
           )}
 
+          {/* Admin fee + Nómina mecánicos + Cargos mecánica */}
+          {['DUENO', 'ENCARGADO'].includes(session.role) && (
+            <MechanicChargesClient
+              periodId={periodId}
+              currentAdminFeeBase={(period as any).adminFeeBase ?? null}
+              currentMechanicFeeBase={(period as any).mechanicFeeBase ?? null}
+              pendingCharges={pendingMechanicCharges as any}
+              allPeriods={allPeriodsForCharges.map(p => ({
+                id: p.id,
+                startDate: new Date(p.startDate).toISOString(),
+                endDate:   new Date(p.endDate).toISOString(),
+              }))}
+              allTrucks={allTrucksForCharges}
+              allOwners={allOwnersForCharges}
+            />
+          )}
+
           {/* Gastos comunes — divididos entre todos los camiones */}
           {['DUENO', 'ENCARGADO'].includes(session.role) && (
             <GastosComunesClient
               periodId={periodId}
               periodEnd={periodEndISO}
               truckCount={trucksForGastos.length}
+              propioCount={propioCountForGastos}
               defaults={gastosDefaults}
               autoOpen={gastosComunesCount === 0}
             />

@@ -210,10 +210,11 @@ async function getStats() {
     return !allCxcDates.some(d => d.getTime() >= start && d.getTime() <= end)
   })
 
-  // Camiones de José en el período actual (para su cuenta personal)
+  // Camiones de José en el período actual (para su cuenta personal + tarjeta NPR)
   const joseOwner = await prisma.owner.findFirst({ where: { id: 'owner-jose' } })
   let joseTrucksPayroll: {
     plate: string; driverName: string; grossAmount: number; netAmount: number; nprFee: number
+    commissionFee: number; driverWage: number; mechanicFee: number; adminFee: number
   }[] = []
   if (openPeriod && joseOwner) {
     const entries = await prisma.payrollEntry.findMany({
@@ -221,11 +222,15 @@ async function getStats() {
       include: { truck: { include: { driver: { select: { name: true } } } } },
     })
     joseTrucksPayroll = entries.map(e => ({
-      plate:       e.truck.plate,
-      driverName:  e.truck.driver?.name ?? '—',
-      grossAmount: e.grossAmount,
-      netAmount:   e.netAmount,
-      nprFee:      e.nprFee,
+      plate:         e.truck.plate,
+      driverName:    e.truck.driver?.name ?? '—',
+      grossAmount:   e.grossAmount,
+      netAmount:     e.netAmount,
+      nprFee:        e.nprFee,
+      commissionFee: e.commissionFee,
+      driverWage:    e.driverWage,
+      mechanicFee:   e.mechanicFee ?? 0,
+      adminFee:      e.adminFee ?? 0,
     }))
   }
 
@@ -571,61 +576,111 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* ── Cuenta de José (sus camiones este período) ──────────────────────── */}
-      {showFinancials && stats.joseTrucksPayroll.length > 0 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-            <div>
-              <h2 className="text-white font-semibold text-sm">Cuenta — José Rodríguez</h2>
-              <p className="text-zinc-500 text-xs mt-0.5">Sus camiones en el período actual · neto = lo que le queda a él</p>
+      {/* ── NPR — José Rodríguez ─────────────────────────────────────────────── */}
+      {showFinancials && stats.joseTrucksPayroll.length > 0 && (() => {
+        const nprVehicle = stats.joseTrucksPayroll.find(e => e.plate === 'A15AE9Y')
+        const totalNpr   = stats.joseTrucksPayroll.reduce((s, e) => s + e.nprFee, 0)
+        return (
+          <div className="space-y-3">
+            {/* Tabla todos los trucks */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+                <div>
+                  <h2 className="text-white font-semibold text-sm">NPR — José Rodríguez</h2>
+                  <p className="text-zinc-500 text-xs mt-0.5">Sus camiones · período actual · 5% NPR suma como ingreso</p>
+                </div>
+                <Link href="/reportes"
+                  className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 hover:text-white rounded-lg px-3 py-1.5 transition-colors">
+                  Descargar completo →
+                </Link>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-800 bg-zinc-800/30">
+                      <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs">Placa</th>
+                      <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs">Chofer</th>
+                      <th className="text-right text-zinc-500 font-medium px-4 py-2.5 text-xs">Bruto</th>
+                      <th className="text-right text-emerald-500 font-medium px-4 py-2.5 text-xs">+5% NPR</th>
+                      <th className="text-right text-zinc-500 font-medium px-4 py-2.5 text-xs">Neto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.joseTrucksPayroll.map((e, i) => (
+                      <tr key={e.plate} className={`border-b border-zinc-800/40 ${e.plate === 'A15AE9Y' ? 'bg-violet-500/5' : i % 2 === 1 ? 'bg-zinc-800/10' : ''}`}>
+                        <td className="px-4 py-2.5 font-mono text-white font-medium text-sm">
+                          {e.plate}
+                          {e.plate === 'A15AE9Y' && <span className="ml-2 text-violet-400 text-xs font-sans font-normal">Vehículo NPR</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-zinc-400 text-xs">{e.driverName}</td>
+                        <td className="px-4 py-2.5 text-right text-zinc-300 text-xs">${e.grossAmount.toFixed(2)}</td>
+                        <td className="px-4 py-2.5 text-right text-emerald-400 text-xs font-medium">+${e.nprFee.toFixed(2)}</td>
+                        <td className={`px-4 py-2.5 text-right font-bold text-sm ${e.netAmount < 0 ? 'text-red-400' : 'text-amber-400'}`}>
+                          ${e.netAmount.toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-zinc-700 bg-zinc-800/30">
+                      <td colSpan={2} className="px-4 py-2.5 text-white font-semibold text-xs">Total NPR</td>
+                      <td className="px-4 py-2.5 text-right text-zinc-300 font-semibold text-xs">
+                        ${stats.joseTrucksPayroll.reduce((s, e) => s + e.grossAmount, 0).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-emerald-400 font-bold text-xs">
+                        +${totalNpr.toFixed(2)}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-bold text-amber-400">
+                        ${stats.joseTrucksPayroll.reduce((s, e) => s + e.netAmount, 0).toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
-            <Link href="/reportes"
-              className="text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 hover:text-white rounded-lg px-3 py-1.5 transition-colors">
-              Descargar completo →
-            </Link>
+
+            {/* P&L detallado de A15AE9Y */}
+            {nprVehicle && (
+              <div className="bg-zinc-900 border border-violet-500/20 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h2 className="text-white font-semibold text-sm">Vehículo NPR — A15AE9Y</h2>
+                    <p className="text-zinc-500 text-xs mt-0.5">Desglose P&L · período actual · chofer: {nprVehicle.driverName}</p>
+                  </div>
+                  <span className="text-violet-400 text-xs bg-violet-500/10 border border-violet-500/20 rounded-lg px-2 py-1">NPR</span>
+                </div>
+                <div className="space-y-1.5">
+                  {([
+                    { label: 'Facturación',        value: nprVehicle.grossAmount,   color: 'text-zinc-300',   sign: '' },
+                    { label: '+5% NPR (ingreso)',   value: nprVehicle.nprFee,        color: 'text-emerald-400', sign: '+' },
+                    { label: 'Gastos operativos',   value: nprVehicle.commissionFee, color: 'text-red-400',    sign: '−' },
+                    { label: 'Nómina chofer',       value: nprVehicle.driverWage,    color: 'text-zinc-400',   sign: '−' },
+                    { label: 'Mecánica',            value: nprVehicle.mechanicFee,   color: 'text-zinc-400',   sign: '−' },
+                    { label: 'Administrativo',      value: nprVehicle.adminFee,      color: 'text-zinc-400',   sign: '−' },
+                  ] as { label: string; value: number; color: string; sign: string }[]).filter(r => r.value > 0).map(row => (
+                    <div key={row.label} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-mono font-bold w-3 text-right ${row.color}`}>{row.sign}</span>
+                        <span className="text-zinc-400 text-sm">{row.label}</span>
+                      </div>
+                      <span className={`font-medium text-sm ${row.color}`}>${row.value.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  <div className="border-t border-zinc-700 pt-2 mt-1 flex items-center justify-between">
+                    <span className="text-white font-semibold text-sm">Neto</span>
+                    <span className={`font-bold text-lg ${nprVehicle.netAmount < 0 ? 'text-red-400' : 'text-amber-400'}`}>
+                      ${nprVehicle.netAmount.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-zinc-600 text-xs mt-3">
+                  Para registrar gastos de A15AE9Y: Caja → Gastos → placa A15AE9Y
+                </p>
+              </div>
+            )}
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-zinc-800 bg-zinc-800/30">
-                  <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs">Placa</th>
-                  <th className="text-left text-zinc-500 font-medium px-4 py-2.5 text-xs">Chofer</th>
-                  <th className="text-right text-zinc-500 font-medium px-4 py-2.5 text-xs">Bruto</th>
-                  <th className="text-right text-zinc-500 font-medium px-4 py-2.5 text-xs">5% NPR</th>
-                  <th className="text-right text-zinc-500 font-medium px-4 py-2.5 text-xs">Neto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.joseTrucksPayroll.map((e, i) => (
-                  <tr key={e.plate} className={`border-b border-zinc-800/40 ${i % 2 === 1 ? 'bg-zinc-800/10' : ''}`}>
-                    <td className="px-4 py-2.5 font-mono text-white font-medium text-sm">{e.plate}</td>
-                    <td className="px-4 py-2.5 text-zinc-400 text-xs">{e.driverName}</td>
-                    <td className="px-4 py-2.5 text-right text-zinc-300 text-xs">${e.grossAmount.toFixed(2)}</td>
-                    <td className="px-4 py-2.5 text-right text-zinc-500 text-xs">${e.nprFee.toFixed(2)}</td>
-                    <td className={`px-4 py-2.5 text-right font-bold text-sm ${e.netAmount < 0 ? 'text-red-400' : 'text-amber-400'}`}>
-                      ${e.netAmount.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-zinc-700 bg-zinc-800/30">
-                  <td colSpan={2} className="px-4 py-2.5 text-white font-semibold text-xs">Total</td>
-                  <td className="px-4 py-2.5 text-right text-zinc-300 font-semibold text-xs">
-                    ${stats.joseTrucksPayroll.reduce((s, e) => s + e.grossAmount, 0).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-2.5 text-right text-zinc-500 font-semibold text-xs">
-                    ${stats.joseTrucksPayroll.reduce((s, e) => s + e.nprFee, 0).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-bold text-amber-400">
-                    ${stats.joseTrucksPayroll.reduce((s, e) => s + e.netAmount, 0).toFixed(2)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Tendencia por período ────────────────────────────────────────────── */}
       {stats.monthlyData.length > 0 && showFinancials && (

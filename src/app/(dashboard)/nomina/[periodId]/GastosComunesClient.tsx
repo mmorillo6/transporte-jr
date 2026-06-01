@@ -9,12 +9,14 @@ export default function GastosComunesClient({
   periodId,
   periodEnd,
   truckCount,
+  propioCount,
   defaults,
   autoOpen = false,
 }: {
   periodId: string
   periodEnd: string
   truckCount: number
+  propioCount: number
   defaults: GastoDefault[]
   autoOpen?: boolean
 }) {
@@ -27,10 +29,11 @@ export default function GastosComunesClient({
     setItems(prev => prev.map((it, idx) => idx === i ? { ...it, [field]: val } : it))
   }
 
-  function perTruck(amount: string) {
+  function perTruck(amount: string, includeAfiliados: boolean) {
     const n = parseFloat(amount)
-    if (!n || truckCount === 0) return '—'
-    return `$${(n / truckCount).toFixed(2)}`
+    const count = includeAfiliados ? truckCount : propioCount
+    if (!n || count === 0) return '—'
+    return `$${(n / count).toFixed(2)}`
   }
 
   async function handleSaveDefault() {
@@ -59,7 +62,14 @@ export default function GastosComunesClient({
 
     if (res && 'error' in res && res.error) { toast.error(res.error); return }
     if (res && 'created' in res) {
-      toast.success(`${res.created} gasto(s) creados — divididos entre ${truckCount} camiones`)
+      const anyAfiliados = valid.some(it => it.includeAfiliados)
+      const anyPropios   = valid.some(it => !it.includeAfiliados)
+      const countLabel = anyAfiliados && anyPropios
+        ? `${(res as any).totalCount} camiones (mixto)`
+        : anyAfiliados
+        ? `${(res as any).totalCount} camiones (todos)`
+        : `${(res as any).propioCount} camiones propios`
+      toast.success(`${res.created} gasto(s) creados — divididos entre ${countLabel}`)
       setOpen(false)
       router.refresh()
     }
@@ -98,7 +108,7 @@ export default function GastosComunesClient({
         className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-xs text-right focus:outline-none focus:border-amber-500"
       />
     ),
-    per: <span className="text-amber-400 text-xs font-mono font-medium">{perTruck(it.amount)}</span>,
+    per: <span className="text-amber-400 text-xs font-mono font-medium">{perTruck(it.amount, it.includeAfiliados)}</span>,
     toggle: (
       <button
         type="button"
@@ -126,7 +136,7 @@ export default function GastosComunesClient({
           {autoOpen && open && (
             <span className="text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">Pendiente</span>
           )}
-          <span className="text-zinc-500 text-xs hidden sm:inline">Starlink, mecánicos — divididos entre {truckCount} camiones</span>
+          <span className="text-zinc-500 text-xs hidden sm:inline">Starlink, mecánicos — {propioCount} propios · {truckCount} total</span>
         </div>
         <span className="text-zinc-400 text-lg">{open ? '▲' : '▼'}</span>
       </button>
@@ -134,7 +144,7 @@ export default function GastosComunesClient({
       {open && (
         <div className="border-t border-zinc-800 p-5 space-y-4">
           <p className="text-zinc-500 text-xs">
-            Verifica los montos y modifica si es necesario. El sistema divide el total entre los {truckCount} camiones activos.
+            Verifica los montos y modifica si es necesario. El sistema divide entre {propioCount} propios (o {truckCount} si aplica a todos).
           </p>
 
           {/* Mobile: cards */}
@@ -199,8 +209,6 @@ export default function GastosComunesClient({
                 <div className="text-sm">
                   <span className="text-zinc-500">Total: </span>
                   <span className="text-white font-bold">${totalNuevo.toFixed(2)}</span>
-                  <span className="text-zinc-500 ml-2">→ </span>
-                  <span className="text-amber-400 font-bold">${(totalNuevo / truckCount).toFixed(2)} c/u</span>
                 </div>
               )}
               <button

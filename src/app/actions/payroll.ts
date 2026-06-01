@@ -12,7 +12,7 @@ import { getConfigValue } from './systemConfig'
 // Reglas:
 //  - ADMIN: ($50 × total carros PROPIO en flota) ÷ carros PROPIO activos este período
 //  - NPR:   owner.nprPercent % del bruto  (5% PROPIO, 10% AFILIADO)
-//           Si isNPROwner (José): NPR se calcula y guarda pero NO se descuenta del neto
+//           Si isNPROwner (José): NPR se calcula y guarda, se SUMA al neto (ingreso NPR)
 //  - GASTOS_OP: Expense records del camión en el período (excluye NOMINA, ADMINISTRATIVO, NPR, MECANICA)
 //  - SALDO_INICIAL: netAmount del período anterior (si negativo = deuda; si positivo y pagado = 0)
 //  - AFILIADO: sin adminFee ni mechanicFee (pagan por su cuenta)
@@ -79,16 +79,23 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   // 45 días excluye camiones sin actividad reciente (A55BH6D, A15AE9Y) sin afectar
   // a los que rotaron a Luis Peña temporalmente (A18AZ6C que volvería al pool)
   const fortyFiveDaysAgo = new Date(period.startDate.getTime() - 45 * 24 * 60 * 60 * 1000)
+  // Excluir José (isNPROwner) del pool — no paga admin ni mecánica
   const propioFlotaActiva = await prisma.truck.count({
     where: {
       active: true,
-      owner: { type: 'PROPIO' },
+      owner: { type: 'PROPIO', isNPROwner: false },
       trips: { some: { date: { gte: fortyFiveDaysAgo }, route: { clientName: { not: 'LUIS PEÑA' } } } },
     },
   })
-  const adminFeeBase = options.adminFeeOverride ?? await getConfigValue('adminFeePerTruck')
+  const adminFeeBase = options.adminFeeOverride ?? (period as any).adminFeeBase ?? await getConfigValue('adminFeePerTruck')
   const adminPool = adminFeeBase * propioFlotaActiva
   const adminFeePerTruck = activePropioThisPeriod > 0 ? adminPool / activePropioThisPeriod : 0
+
+  // Nómina mecánicos — Fernando ingresa total, se divide entre propios activos
+  const mechanicFeeBase = (period as any).mechanicFeeBase ?? 0
+  const mechanicFeePerTruck = mechanicFeeBase > 0 && activePropioThisPeriod > 0
+    ? mechanicFeeBase / activePropioThisPeriod
+    : 0
 
   // ── Mecánica — pool dividido entre propios con viajes Aurumin ────────────────
   // Suma MechanicWork del período + Expenses categoría MECANICA por camión.
@@ -167,26 +174,33 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     const truck = truckMap.get(truckId)
     if (!truck) continue
 
-    const isPropio   = truck.owner.type === 'PROPIO'
-    const isAfiliado = truck.owner.type === 'AFILIADO'
-    const isNPROwner = truck.owner.isNPROwner
-    const nprPct     = truck.owner.nprPercent / 100
+    const isPropio    = truck.owner.type === 'PROPIO'
+    const isAfiliado  = truck.owner.type === 'AFILIADO'
+    const isNPROwner  = truck.owner.isNPROwner
+    const isLuisRivas = truck.owner.id === 'owner-sancasimiro'
+    const nprPct      = truck.owner.nprPercent / 100
 
     // Facturación
     const totalTons   = trips.reduce((s, t) => s + (t.netWeightKg ?? 0) / 1000, 0)
     const grossAmount = trips.reduce((s, t) => s + t.amount, 0)
     const viaticos    = trips.reduce((s, t) => s + t.viatico, 0)  // viáticos de ruta
 
-    // Nómina chofer (suma del wage por viaje según ruta)
-    const driverWage = trips.reduce((s, t) => s + (t.route?.driverWage ?? 0), 0)
+    // NPR — siempre se calcula; para isNPROwner (José) se SUMA al neto (ingreso NPR)
+    const nprFee = grossAmount * nprPct
 
-    // NPR — 0 para isNPROwner (José); para afiliados y propios = nprPercent × bruto
-    const nprFee = isNPROwner ? 0 : grossAmount * nprPct
+    // Nómina chofer
+    // Luis Rivas: informativo = 20% × (bruto − NPR); no se descuenta (isAfiliado)
+    // Resto: suma del wage fijo por viaje según ruta
+    const driverWage = isLuisRivas
+      ? (grossAmount - nprFee) * 0.20
+      : trips.reduce((s, t) => s + (t.route?.driverWage ?? 0), 0)
 
-    // Mecánica y admin — solo PROPIO con viajes Aurumin; Luis Peña no lleva estos costos
+    // Mecánica y admin — solo PROPIO con viajes Aurumin; José (isNPROwner) no paga nada
     const tieneAurumin = propiosConAurumin.has(truckId)
-    const mechanicFee = (isPropio && tieneAurumin) ? (mechanicByTruck.get(truckId) ?? 0) : 0
-    const adminFee    = (isPropio && tieneAurumin) ? adminFeePerTruck : 0
+    const mechanicFee = (isPropio && tieneAurumin && !isNPROwner)
+      ? mechanicFeePerTruck + (mechanicByTruck.get(truckId) ?? 0)
+      : 0
+    const adminFee    = (isPropio && tieneAurumin && !isNPROwner) ? adminFeePerTruck : 0
 
     // Gastos operativos (Expense records) + viáticos de ruta
     const gastosOp = (gastosByTruck.get(truckId) ?? 0) + viaticos
@@ -224,7 +238,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     const netAmount = grossAmount
       - gastosOp
       - (isAfiliado ? 0 : driverWage)
-      - nprFee
+      + (isNPROwner ? nprFee : -nprFee)
       - mechanicFee
       - adminFee
       - loanDeductions
@@ -251,6 +265,8 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     })
     created.push(entry)
   }
+
+  await prisma.period.update({ where: { id: periodId }, data: { adminFeeBase, mechanicFeeBase: mechanicFeeBase || null } })
 
   revalidatePath('/nomina')
   revalidatePath(`/nomina/${periodId}`)
@@ -312,7 +328,7 @@ export async function getPayrollParams(periodId: string): Promise<PayrollParams 
       trips: { some: { date: { gte: fortyFiveDaysAgo }, route: { clientName: { not: 'LUIS PEÑA' } } } },
     },
   })
-  const adminFeeBase = await getConfigValue('adminFeePerTruck')
+  const adminFeeBase = (period as any).adminFeeBase ?? await getConfigValue('adminFeePerTruck')
   const activeCount = propiosConAurumin.size
   const adminFeePerTruck = activeCount > 0 ? (adminFeeBase * fleetCount) / activeCount : 0
 
@@ -353,14 +369,15 @@ export async function updatePayrollAbono(entryId: string, abono: number) {
 
   const truck = await prisma.truck.findUnique({
     where: { id: entry.truckId },
-    include: { owner: { select: { isNPROwner: true } } },
+    include: { owner: { select: { isNPROwner: true, type: true } } },
   })
-  const isNPROwner = truck?.owner?.isNPROwner ?? false
+  const isNPROwner  = truck?.owner?.isNPROwner ?? false
+  const isAfiliado  = truck?.owner?.type === 'AFILIADO'
 
   const netAmount = entry.grossAmount
     - entry.commissionFee
-    - entry.driverWage
-    - (isNPROwner ? 0 : (entry.nprFee ?? 0))
+    - (isAfiliado ? 0 : entry.driverWage)
+    + (isNPROwner ? (entry.nprFee ?? 0) : -(entry.nprFee ?? 0))
     - (entry.mechanicFee ?? 0)
     - (entry.adminFee ?? 0)
     - entry.deductions
@@ -609,14 +626,15 @@ export async function updatePayrollEntry(id: string, formData: FormData) {
 
   const truck = await prisma.truck.findUnique({
     where: { id: entry.truckId },
-    include: { owner: { select: { isNPROwner: true } } },
+    include: { owner: { select: { isNPROwner: true, type: true } } },
   })
-  const isNPROwner = truck?.owner?.isNPROwner ?? false
+  const isNPROwner  = truck?.owner?.isNPROwner ?? false
+  const isAfiliado  = truck?.owner?.type === 'AFILIADO'
 
   const netAmount = entry.grossAmount
     - entry.commissionFee
-    - entry.driverWage
-    - (isNPROwner ? 0 : (entry.nprFee ?? 0))
+    - (isAfiliado ? 0 : entry.driverWage)
+    + (isNPROwner ? (entry.nprFee ?? 0) : -(entry.nprFee ?? 0))
     - (entry.mechanicFee ?? 0)
     - (entry.adminFee ?? 0)
     - deductions

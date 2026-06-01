@@ -27,7 +27,7 @@ type Entry = {
   truck: {
     plate: string
     driver: { name: string } | null
-    owner: { id: string; name: string; type: string; nprPercent?: number } | null
+    owner: { id: string; name: string; type: string; nprPercent?: number; isNPROwner?: boolean } | null
   } | null
 }
 
@@ -379,8 +379,10 @@ export default function PayrollTableClient({
                   <td className="px-2 py-2 text-right text-orange-400 whitespace-nowrap">
                     {fmtNeg(entry.driverWage)}
                   </td>
-                  <td className="px-2 py-2 text-right text-red-400 whitespace-nowrap">
-                    {fmtNeg(entry.nprFee ?? 0)}
+                  <td className={`px-2 py-2 text-right whitespace-nowrap ${entry.truck?.owner?.isNPROwner ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {entry.truck?.owner?.isNPROwner
+                      ? `+${fmt(entry.nprFee ?? 0)}`
+                      : fmtNeg(entry.nprFee ?? 0)}
                   </td>
                   <td className="px-2 py-2 text-right text-purple-400 whitespace-nowrap">
                     {fmtNeg(entry.mechanicFee ?? 0)}

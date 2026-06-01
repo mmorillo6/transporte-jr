@@ -54,8 +54,9 @@ model Owner {
 
   activeSince DateTime? // fecha desde la que se cuentan sus viajes (transferencias de camión)
 
-  trucks Truck[]
-  users  User[]
+  trucks                 Truck[]
+  users                  User[]
+  pendingMechanicCharges PendingMechanicCharge[]
 }
 
 enum OwnerType {
@@ -88,10 +89,11 @@ model Truck {
   dispatches          DispatchEntry[]
   fuelEntries         FuelEntry[]
   oilUsages           OilUsage[]
-  tireRepairs         TireRepair[]
-  cashEntries         CashEntry[]
-  almacenItems        AlmacenItem[]
-  diasInternosEntries DiasInternosEntry[]
+  tireRepairs             TireRepair[]
+  cashEntries             CashEntry[]
+  almacenItems            AlmacenItem[]
+  diasInternosEntries     DiasInternosEntry[]
+  pendingMechanicCharges  PendingMechanicCharge[]
 }
 
 // ─── RUTAS / MINAS ────────────────────────────────────────────────────────────
@@ -148,22 +150,40 @@ model Trip {
 // ─── PERÍODOS QUINCENALES ─────────────────────────────────────────────────────
 
 model Period {
-  id          String       @id @default(cuid())
-  startDate   DateTime
-  endDate     DateTime
-  status      PeriodStatus @default(OPEN)
-  notifiedAt  DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id           String       @id @default(cuid())
+  startDate    DateTime
+  endDate      DateTime
+  status       PeriodStatus @default(OPEN)
+  notifiedAt      DateTime?
+  adminFeeBase    Float?
+  mechanicFeeBase Float?
+  createdAt       DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
-  trips    Trip[]
-  payroll  PayrollEntry[]
-  expenses Expense[]
+  trips                  Trip[]
+  payroll                PayrollEntry[]
+  expenses               Expense[]
+  pendingMechanicCharges PendingMechanicCharge[]
 }
 
 enum PeriodStatus {
   OPEN
   CLOSED
+}
+
+model PendingMechanicCharge {
+  id             String    @id @default(cuid())
+  description    String
+  amount         Float
+  truckId        String?
+  truck          Truck?    @relation(fields: [truckId], references: [id])
+  ownerId        String?
+  owner          Owner?    @relation(fields: [ownerId], references: [id])
+  targetPeriodId String
+  targetPeriod   Period    @relation(fields: [targetPeriodId], references: [id])
+  notes          String?
+  appliedAt      DateTime?
+  createdAt      DateTime  @default(now())
 }
 
 // ─── NÓMINA ───────────────────────────────────────────────────────────────────

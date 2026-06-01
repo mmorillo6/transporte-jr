@@ -78,7 +78,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
   const driverNames = owner.trucks.map(t => (t as any).driver?.name).filter(Boolean)
 
   // Viajes del período actual para estos camiones
-  const [periodTrips, recentTrips, payrollHistory, maintenanceAlerts, driverLoans, ownerLoans, mecExpenses] = await Promise.all([
+  const [periodTrips, recentTrips, payrollHistory, maintenanceAlerts, driverLoans, ownerLoans, mecExpenses, periodOpExpenses] = await Promise.all([
     openPeriod && truckIds.length > 0
       ? prisma.trip.findMany({
           where: { truckId: { in: truckIds }, periodId: openPeriod.id },
@@ -133,6 +133,22 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
       ? prisma.expense.findMany({
           where: { truckId: { in: truckIds }, periodId: openPeriod.id, category: 'MECANICA' },
           select: { description: true, amount: true },
+        })
+      : Promise.resolve([]),
+
+    // Gastos operativos del período (excluye overhead: nómina, admin, NPR, mecánica)
+    openPeriod && truckIds.length > 0
+      ? prisma.expense.findMany({
+          where: {
+            truckId: { in: truckIds },
+            periodId: openPeriod.id,
+            category: { notIn: ['NOMINA', 'ADMINISTRATIVO', 'NPR', 'MECANICA'] },
+          },
+          select: {
+            id: true, description: true, amount: true, category: true,
+            truck: { select: { plate: true } },
+          },
+          orderBy: { truck: { plate: 'asc' } },
         })
       : Promise.resolve([]),
   ])
@@ -267,8 +283,36 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
       {openPeriod && (() => {
         const openEntries = payrollHistory.filter(e => e.period.id === openPeriod.id)
         if (openEntries.length === 0) return (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-center">
-            <p className="text-zinc-500 text-sm">Nómina no generada aún para este período</p>
+          <div>
+            <h2 className="text-white font-semibold text-sm mb-3">Relación del período</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {owner.trucks.map(truck => {
+                const statusKey = truck.status?.status ?? 'OPERATIONAL'
+                const isInShop = statusKey === 'IN_SHOP'
+                const isOutOfService = statusKey === 'OUT_OF_SERVICE'
+                const msg = isInShop
+                  ? 'El camión no trabajó este período (en taller)'
+                  : isOutOfService
+                  ? 'El camión no trabajó este período (fuera de servicio)'
+                  : 'Nómina no generada aún para este período'
+                const borderColor = isInShop
+                  ? 'border-amber-500/20'
+                  : isOutOfService
+                  ? 'border-red-500/20'
+                  : 'border-zinc-800'
+                const textColor = isInShop
+                  ? 'text-amber-400'
+                  : isOutOfService
+                  ? 'text-red-400'
+                  : 'text-zinc-500'
+                return (
+                  <div key={truck.id} className={`bg-zinc-900 border ${borderColor} rounded-2xl p-4`}>
+                    <p className="font-mono font-bold text-sm text-white mb-1">{truck.plate}</p>
+                    <p className={`text-sm ${textColor}`}>{msg}</p>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )
 
@@ -279,6 +323,11 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         const prestamos      = openEntries.reduce((s, e) => s + (e.deductions ?? 0), 0)
         const abono          = openEntries.reduce((s, e) => s + (e.abono ?? 0), 0)
         const saldoAnterior  = openEntries.reduce((s, e) => s + (e.saldoInicial ?? 0), 0)
+
+        const opExpenses = periodOpExpenses as { id: string; description: string; amount: number; truck: { plate: string } }[]
+        const expTotal = opExpenses.reduce((s, e) => s + e.amount, 0)
+        const viaticosImplicit = Math.round((gastos - expTotal) * 100) / 100
+        const multiTruck = owner.trucks.length > 1
 
         // Mecánica: nómina va bajo Aurumin, repuestos van bajo Luis Peña
         const mecNomina   = mecExpenses.filter(e => e.description?.toLowerCase().includes('nómina') || e.description?.toLowerCase().includes('nomina')).reduce((s, e) => s + e.amount, 0)
@@ -327,7 +376,28 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                   <div>
                     {saldoAnterior !== 0 && <Row label="Saldo anterior" value={saldoAnterior} />}
                     <Row label="Facturación" value={brutoAurumin} highlight />
-                    {gastos > 0 && <Row label="Gastos operativos" value={-gastos} />}
+                    {gastos > 0 && (opExpenses.length > 0 || viaticosImplicit > 0.005 ? (
+                      <details className="border-b border-zinc-800/50 last:border-0">
+                        <summary className="flex justify-between items-center py-1.5 cursor-pointer list-none">
+                          <span className="text-zinc-400 text-sm">Gastos operativos ▾</span>
+                          <span className="font-mono text-sm text-red-400">− ${money(gastos)}</span>
+                        </summary>
+                        <div className="pl-3 pb-2 pt-0.5 space-y-1">
+                          {viaticosImplicit > 0.005 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-zinc-500">Viáticos</span>
+                              <span className="font-mono text-zinc-500">− ${money(viaticosImplicit)}</span>
+                            </div>
+                          )}
+                          {opExpenses.map(e => (
+                            <div key={e.id} className="flex justify-between text-xs">
+                              <span className="text-zinc-500">{multiTruck ? `${e.truck.plate} · ` : ''}{e.description}</span>
+                              <span className="font-mono text-zinc-500">− ${money(e.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ) : <Row label="Gastos operativos" value={-gastos} />)}
                     {nomChofer > 0 && <Row label="Nómina chofer" value={-nomChofer} />}
                     {nomMecanicos > 0 && <Row label="Nómina mecánicos" value={-nomMecanicos} />}
                     {administrativo > 0 && <Row label="Administrativo" value={-administrativo} />}

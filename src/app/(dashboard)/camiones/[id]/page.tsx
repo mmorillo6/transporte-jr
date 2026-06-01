@@ -39,6 +39,15 @@ export default async function TruckProfilePage({
 
   if (!truck) notFound()
 
+  // Afiliados solo acceden a sus propios camiones
+  if (session.role === 'AFILIADO') {
+    const userRecord = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { ownerId: true },
+    })
+    if (!userRecord?.ownerId || truck.ownerId !== userRecord.ownerId) notFound()
+  }
+
   // Only owners/managers and the truck's own driver can view
   if (session.role === 'CHOFER' && truck.driver?.name !== session.name) redirect('/mi-cuenta')
 

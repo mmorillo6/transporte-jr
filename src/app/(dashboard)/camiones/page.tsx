@@ -12,8 +12,19 @@ export default async function CamionesPage({
   if (!session) redirect('/login')
   const { tab: initialTab, nuevaPlaca } = await searchParams
 
+  // Afiliados solo ven sus propios camiones
+  let ownerFilter: string | null = null
+  if (session.role === 'AFILIADO') {
+    const userRecord = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { ownerId: true },
+    })
+    ownerFilter = userRecord?.ownerId ?? null
+  }
+
   const [trucks, owners, drivers] = await Promise.all([
     prisma.truck.findMany({
+      where: ownerFilter ? { ownerId: ownerFilter } : {},
       orderBy: { plate: 'asc' },
       include: {
         driver: { select: { id: true, name: true } },
@@ -23,6 +34,7 @@ export default async function CamionesPage({
       },
     }),
     prisma.owner.findMany({
+      where: ownerFilter ? { id: ownerFilter } : {},
       orderBy: { name: 'asc' },
       include: {
         trucks: {

@@ -46,7 +46,7 @@ export default async function TruckRelacionPage({
         truck: {
           include: {
             driver: { select: { name: true } },
-            owner:  { select: { name: true, type: true, nprPercent: true } },
+            owner:  { select: { name: true, type: true, nprPercent: true, isNPROwner: true } },
           },
         },
       },
@@ -85,7 +85,8 @@ export default async function TruckRelacionPage({
   const tripsLuisPena     = trips.filter(t => (t.route as any)?.clientName === 'LUIS PEÑA')
   const grossTripAurumin  = tripsAurumin.reduce((s, t) => s + t.amount, 0)
   const grossTripLuisPena = tripsLuisPena.reduce((s, t) => s + t.amount, 0)
-  const nprPct = (truck?.owner?.nprPercent ?? 10) / 100
+  const nprPct      = (truck?.owner?.nprPercent ?? 10) / 100
+  const isNPROwner  = truck?.owner?.isNPROwner ?? false
   const nprAurumin  = Math.round(grossTripAurumin  * nprPct * 100) / 100
   const nprLuisPena = Math.round(grossTripLuisPena * nprPct * 100) / 100
 
@@ -271,7 +272,7 @@ export default async function TruckRelacionPage({
                 - e.driverWage
                 - (e.mechanicFee ?? 0)
                 - (e.adminFee ?? 0)
-                - nprAurumin
+                + (isNPROwner ? nprAurumin : -nprAurumin)
                 - (e.deductions ?? 0)
                 - (e.abono ?? 0)
               ) * 100) / 100
@@ -284,7 +285,7 @@ export default async function TruckRelacionPage({
                   {e.driverWage > 0           && <FinRow label="Nómina chofer"      value={`-$${fmt(e.driverWage)}`}            color="text-orange-400 print:text-orange-700" />}
                   {(e.mechanicFee ?? 0) > 0   && <FinRow label="Nómina mecánicos"   value={`-$${fmt(e.mechanicFee)}`}           color="text-purple-400 print:text-purple-700" />}
                   {(e.adminFee ?? 0) > 0      && <FinRow label="Administrativo"     value={`-$${fmt(e.adminFee)}`}              color="text-zinc-400 print:text-zinc-600" />}
-                  {nprAurumin > 0             && <FinRow label={`${truck?.owner?.nprPercent ?? 10}% NPR`} value={`-$${fmt(nprAurumin)}`} color="text-red-400 print:text-red-700" />}
+                  {nprAurumin > 0             && <FinRow label={`${truck?.owner?.nprPercent ?? 10}% NPR`} value={`${isNPROwner ? '+' : '-'}$${fmt(nprAurumin)}`} color={isNPROwner ? 'text-emerald-400 print:text-emerald-700' : 'text-red-400 print:text-red-700'} />}
                   {(e.deductions ?? 0) > 0    && <FinRow label="Otras deducciones"  value={`-$${fmt(e.deductions)}`}            color="text-red-400 print:text-red-700" />}
                   {(e.abono ?? 0) > 0         && <FinRow label="Abono recibido"     value={`-$${fmt(e.abono)}`}                 color="text-emerald-400 print:text-emerald-700" />}
                   <div className="border-t border-zinc-700 print:border-zinc-300 pt-2 mt-1 flex justify-between">
@@ -309,7 +310,7 @@ export default async function TruckRelacionPage({
                   <FinRow label="Nómina chofer"     value="$0.00"                                color="text-zinc-600 print:text-zinc-500" />
                   <FinRow label="Nómina mecánicos"  value="$0.00"                                color="text-zinc-600 print:text-zinc-500" />
                   <FinRow label="Administrativo"    value="$0.00"                                color="text-zinc-600 print:text-zinc-500" />
-                  {nprLuisPena > 0 && <FinRow label={`${truck?.owner?.nprPercent ?? 10}% NPR`} value={`-$${fmt(nprLuisPena)}`} color="text-red-400 print:text-red-700" />}
+                  {nprLuisPena > 0 && <FinRow label={`${truck?.owner?.nprPercent ?? 10}% NPR`} value={`${isNPROwner ? '+' : '-'}$${fmt(nprLuisPena)}`} color={isNPROwner ? 'text-emerald-400 print:text-emerald-700' : 'text-red-400 print:text-red-700'} />}
                   <FinRow label="Abono recibido"    value="$0.00"                                color="text-zinc-600 print:text-zinc-500" />
                   <div className="border-t border-zinc-700 print:border-zinc-300 pt-2 mt-1 flex justify-between">
                     <span className="text-white font-bold text-sm print:text-black">Saldo final</span>

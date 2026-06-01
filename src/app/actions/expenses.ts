@@ -134,7 +134,10 @@ export async function applyGastosComunes(
 
   const result = await createExpensesBulk(bulk)
   revalidatePath(`/nomina/${periodId}`)
-  return result
+  // Return target counts so UI can show correct divisor in toast
+  const propioCount = propioIds.length
+  const totalCount  = allIds.length
+  return { ...result, propioCount, totalCount }
 }
 
 export async function getExpensesForPeriodTruck(periodId: string, truckId: string) {
