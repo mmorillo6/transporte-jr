@@ -36,6 +36,8 @@ export default function GastosMasivosClient({
   const [existing, setExisting]   = useState<ExistingExpense[]>([])
   const [saving, setSaving]       = useState(false)
   const [loadingExisting, setLoadingExisting] = useState(false)
+  const [pendingRows, setPendingRows] = useState<Row[]>([])
+  const [showConfirm, setShowConfirm] = useState(false)
 
   const selectedTruck = trucks.find(t => t.id === truckId)
   const total = rows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0)
@@ -72,13 +74,9 @@ export default function GastosMasivosClient({
     setRows(prev => [...prev, ...commons])
   }
 
-  async function handleSave() {
-    const valid = rows.filter(r => r.description.trim() && parseFloat(r.amount) > 0 && r.date)
-    if (valid.length === 0) { toast.error('Agrega al menos un gasto con monto'); return }
-    if (!truckId) { toast.error('Selecciona un camión'); return }
-
+  async function doSave(validRows: Row[]) {
     setSaving(true)
-    const res = await createExpensesBulk(valid.map(r => ({
+    const res = await createExpensesBulk(validRows.map(r => ({
       date:        r.date,
       description: r.description.trim().toUpperCase(),
       category:    r.category,
@@ -87,13 +85,28 @@ export default function GastosMasivosClient({
       periodId,
     })))
     setSaving(false)
-
     if (res?.error) { toast.error(res.error); return }
     toast.success(`${res.created} gasto(s) guardados`)
     setRows([emptyRow(periodStart)])
-    // Refresh existing
+    setShowConfirm(false)
+    setPendingRows([])
     const data = await getExpensesForPeriodTruck(periodId, truckId)
     setExisting(data.map(e => ({ ...e, date: new Date(e.date).toISOString().slice(0, 10) })) as ExistingExpense[])
+  }
+
+  async function handleSave() {
+    const valid = rows.filter(r => r.description.trim() && parseFloat(r.amount) > 0 && r.date)
+    if (valid.length === 0) { toast.error('Agrega al menos un gasto con monto'); return }
+    if (!truckId) { toast.error('Selecciona un camión'); return }
+
+    // Si algún gasto tiene fecha fuera del período actual, pedir confirmación
+    const outOfPeriod = valid.filter(r => r.date < periodStart || r.date > periodEnd)
+    if (outOfPeriod.length > 0) {
+      setPendingRows(valid)
+      setShowConfirm(true)
+      return
+    }
+    await doSave(valid)
   }
 
   return (
@@ -296,6 +309,45 @@ export default function GastosMasivosClient({
           <p className="text-zinc-600 text-xs">
             Los gastos se descuentan automáticamente del neto al regenerar la nómina.
           </p>
+        </div>
+      )}
+
+      {/* ── Modal de confirmación — fecha fuera del período ── */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="bg-zinc-900 border border-amber-500/30 rounded-2xl p-6 max-w-sm w-full space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="text-amber-400 text-xl">⚠</span>
+              <p className="text-white font-semibold text-sm">Fecha fuera del período actual</p>
+            </div>
+            <div className="space-y-1.5 text-xs">
+              {pendingRows.filter(r => r.date < periodStart || r.date > periodEnd).map((r, i) => (
+                <div key={i} className="flex items-center gap-2 bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
+                  <span className="text-amber-400 font-mono">{r.date}</span>
+                  <span className="text-zinc-300 truncate flex-1">{r.description || '—'}</span>
+                  <span className="text-zinc-400">${r.amount}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-zinc-400 text-xs">
+              Estos gastos tienen fecha de otro período. El sistema los asignará al período correcto según la fecha. ¿Confirmar?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => doSave(pendingRows)}
+                disabled={saving}
+                className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-xl py-2 text-sm transition-colors"
+              >
+                {saving ? 'Guardando...' : 'Sí, guardar'}
+              </button>
+              <button
+                onClick={() => { setShowConfirm(false); setPendingRows([]) }}
+                className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl py-2 text-sm transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

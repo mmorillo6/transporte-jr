@@ -289,6 +289,32 @@ export async function markExpensePartialPaid(id: string, amountPaid: number) {
   return { ok: true }
 }
 
+export async function updateExpenseInline(id: string, fields: {
+  description: string
+  amount: number
+  category: string
+}) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
+  const expense = await prisma.expense.findUnique({ where: { id }, select: { id: true } })
+  if (!expense) return { error: 'Gasto no encontrado' }
+
+  await prisma.expense.update({
+    where: { id },
+    data: {
+      description: fields.description.trim().toUpperCase(),
+      amount:      fields.amount,
+      amountPaid:  fields.amount,
+      category:    fields.category as any,
+    },
+  })
+
+  revalidatePath('/gastos')
+  revalidatePath('/nomina')
+  return { ok: true }
+}
+
 export async function deleteExpense(id: string) {
   const session = await getSession()
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {

@@ -155,10 +155,10 @@ export default async function PeriodDetailPage({
     ? await prisma.expense.findMany({
         where: { periodId, truckId: { not: null } },
         select: {
-          id: true, description: true, category: true, amount: true,
+          id: true, date: true, description: true, category: true, amount: true,
           truck: { select: { id: true, plate: true } },
         },
-        orderBy: [{ truck: { plate: 'asc' } }, { category: 'asc' }],
+        orderBy: [{ truck: { plate: 'asc' } }, { date: 'asc' }],
       })
     : []
 
