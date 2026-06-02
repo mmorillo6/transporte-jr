@@ -82,10 +82,11 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   const adminFeeBase     = options.adminFeeOverride ?? (period as any).adminFeeBase ?? await getConfigValue('adminFeePerTruck')
   const adminFeePerTruck = adminFeeBase  // costo fijo por camión propio activo
 
-  // Nómina mecánicos — Fernando ingresa total, se divide entre propios activos
-  const mechanicFeeBase = (period as any).mechanicFeeBase ?? 0
-  const mechanicFeePerTruck = mechanicFeeBase > 0 && activePropioThisPeriod > 0
-    ? mechanicFeeBase / activePropioThisPeriod
+  // Nómina mecánicos — Fernando ingresa total y puede fijar el divisor manualmente
+  const mechanicFeeBase    = (period as any).mechanicFeeBase ?? 0
+  const activePropioCount  = (period as any).activePropioOverride ?? activePropioThisPeriod
+  const mechanicFeePerTruck = mechanicFeeBase > 0 && activePropioCount > 0
+    ? mechanicFeeBase / activePropioCount
     : 0
 
   // ── Mecánica — pool dividido entre propios con viajes Aurumin ────────────────
@@ -174,7 +175,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     // Facturación
     const totalTons   = trips.reduce((s, t) => s + (t.netWeightKg ?? 0) / 1000, 0)
     const grossAmount = trips.reduce((s, t) => s + t.amount, 0)
-    const viaticos    = trips.reduce((s, t) => s + t.viatico, 0)  // viáticos de ruta
+    const viaticos    = 0  // Fernando entra viáticos como gasto VIATICO manual
 
     // NPR — siempre se calcula; para isNPROwner (José) se SUMA al neto (ingreso NPR)
     const nprFee = grossAmount * nprPct
@@ -194,7 +195,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     const adminFee    = (isPropio && tieneAurumin) ? adminFeePerTruck : 0
 
     // Gastos operativos (Expense records) + viáticos de ruta
-    const gastosOp = (gastosByTruck.get(truckId) ?? 0) + viaticos
+    const gastosOp = gastosByTruck.get(truckId) ?? 0
 
     // Préstamos: match por nombre del chofer O por nombre del dueño
     // Se excluyen los préstamos en skipLoanIds (Fernando los deseleccionó en el modal)
