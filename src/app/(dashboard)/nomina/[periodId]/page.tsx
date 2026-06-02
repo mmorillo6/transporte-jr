@@ -11,6 +11,8 @@ import GastosComunesClient from './GastosComunesClient'
 import { getGastosComunesDefaults } from '@/app/actions/systemConfig'
 import GastosGeneralesClient from './GastosGeneralesClient'
 import MechanicChargesClient from './MechanicChargesClient'
+import TruckExpensesClient from './TruckExpensesClient'
+import NextStepCard from './NextStepCard'
 
 async function getPeriodData(periodId: string, role: string, ownerId: string | null) {
   const period = await prisma.period.findUnique({
@@ -148,6 +150,18 @@ export default async function PeriodDetailPage({
   ])
   if (!period) notFound()
 
+  // Todos los gastos por camión del período (para desglose completo)
+  const truckExpenses = ['DUENO', 'ENCARGADO'].includes(session.role)
+    ? await prisma.expense.findMany({
+        where: { periodId, truckId: { not: null } },
+        select: {
+          id: true, description: true, category: true, amount: true,
+          truck: { select: { id: true, plate: true } },
+        },
+        orderBy: [{ truck: { plate: 'asc' } }, { category: 'asc' }],
+      })
+    : []
+
   const payroll = period.payroll as any[]
   const trips = period.trips
 
@@ -270,6 +284,45 @@ export default async function PeriodDetailPage({
   const periodStartISO = new Date(period.startDate).toISOString().slice(0, 10)
   const periodEndISO   = new Date(period.endDate).toISOString().slice(0, 10)
 
+  // ── "¿Qué sigue?" — guía contextual para Fernando ────────────────────────────
+  type NextStep = { num: number | '✓'; label: string; description: string; href?: string; hrefLabel?: string; variant: 'amber' | 'blue' | 'emerald' | 'purple' }
+  const nextStep: NextStep | null = (() => {
+    if (!['DUENO', 'ENCARGADO'].includes(session.role)) return null
+    if (period.status === 'CLOSED') return null
+    if (trips.length === 0) return {
+      num: 1, variant: 'amber',
+      label: 'Carga la romana',
+      description: 'Aún no hay viajes en este período. Ve a Romana, selecciona el archivo Excel y haz clic en Importar.',
+      href: '/romana', hrefLabel: 'Ir a Romana →',
+    }
+    if (payroll.length === 0) return {
+      num: 2, variant: 'blue',
+      label: 'Genera la nómina',
+      description: 'Los viajes están cargados. Ahora genera la nómina para calcular los saldos por camión. Usa el botón "Generar nómina" arriba a la derecha.',
+      href: '#period-actions', hrefLabel: 'Subir ↑',
+    }
+    if (hasNewerTrips) return null  // ya hay banner específico para este caso
+    const mechanicFeeBase = (period as any).mechanicFeeBase
+    if (!mechanicFeeBase || mechanicFeeBase === 0) return {
+      num: 3, variant: 'purple',
+      label: 'Entra la nómina de mecánicos',
+      description: `Ingresa el total a pagar a los mecánicos esta quincena (ej. $1,050). El sistema lo divide entre los ${propioCountForGastos} camiones propios. Luego regenera la nómina.`,
+      href: '#mechanic-charges', hrefLabel: 'Ir a Mecánicos ↓',
+    }
+    if (gastosComunesCount === 0) return {
+      num: 4, variant: 'amber',
+      label: 'Entra los gastos comunes',
+      description: 'Agrega gastos compartidos entre todos los camiones: Starlink, grasa, gasolina de depósito, etc. El sistema los divide automáticamente.',
+      href: '#gastos-comunes', hrefLabel: 'Ir a Gastos ↓',
+    }
+    return {
+      num: '✓', variant: 'emerald',
+      label: 'Todo listo',
+      description: 'Todos los pasos completados. Cuando Aurumin pague, registra el cobro en Cuentas por Cobrar y luego cierra el período.',
+      href: '/cuentas-por-cobrar', hrefLabel: 'Registrar cobro →',
+    }
+  })()
+
   const checklistData = {
     payrollCount:         payroll.length,
     tripsWithoutTicket:   trips.filter((t: any) => !t.ticketNo).length,
@@ -325,7 +378,7 @@ export default async function PeriodDetailPage({
         </div>
 
         {['DUENO', 'ENCARGADO'].includes(session.role) && (
-          <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
+          <div id="period-actions" className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
             {period.status === 'CLOSED' && (
               <NotifyButton periodId={periodId} />
             )}
@@ -333,6 +386,9 @@ export default async function PeriodDetailPage({
           </div>
         )}
       </div>
+
+      {/* ── ¿Qué sigue? — guía contextual para Fernando ── */}
+      {nextStep && !hasNewerTrips && <NextStepCard step={nextStep} />}
 
       {/* ── Alerta: viajes nuevos después de última generación ── */}
       {hasNewerTrips && period.status === 'OPEN' && ['DUENO', 'ENCARGADO'].includes(session.role) && (
@@ -667,6 +723,7 @@ export default async function PeriodDetailPage({
 
           {/* Admin fee + Nómina mecánicos + Cargos mecánica */}
           {['DUENO', 'ENCARGADO'].includes(session.role) && (
+            <div id="mechanic-charges">
             <MechanicChargesClient
               periodId={periodId}
               currentAdminFeeBase={(period as any).adminFeeBase ?? null}
@@ -680,10 +737,12 @@ export default async function PeriodDetailPage({
               allTrucks={allTrucksForCharges}
               allOwners={allOwnersForCharges}
             />
+            </div>
           )}
 
           {/* Gastos comunes — divididos entre todos los camiones */}
           {['DUENO', 'ENCARGADO'].includes(session.role) && (
+            <div id="gastos-comunes">
             <GastosComunesClient
               periodId={periodId}
               periodEnd={periodEndISO}
@@ -691,6 +750,17 @@ export default async function PeriodDetailPage({
               propioCount={propioCountForGastos}
               defaults={gastosDefaults}
               autoOpen={gastosComunesCount === 0}
+            />
+            </div>
+          )}
+
+          {/* Gastos por camión — desglose completo editable */}
+          {['DUENO', 'ENCARGADO'].includes(session.role) && (
+            <TruckExpensesClient
+              periodId={periodId}
+              expenses={truckExpenses as any}
+              periodEndISO={periodEndISO}
+              isOpen={period.status === 'OPEN'}
             />
           )}
 

@@ -143,6 +143,18 @@ export default function GastosComunesClient({
 
       {open && (
         <div className="border-t border-zinc-800 p-5 space-y-4">
+          {autoOpen && (
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl px-4 py-3 space-y-2">
+              <p className="text-amber-300 text-xs font-semibold">¿Qué va aquí?</p>
+              <ul className="text-amber-400/80 text-xs space-y-1 leading-relaxed">
+                <li><span className="text-amber-300 font-medium">Starlink</span> — costo del mes ÷ 2 (una quincena)</li>
+                <li><span className="text-amber-300 font-medium">Grasa / lubricantes</span> — compra compartida entre todos</li>
+                <li><span className="text-amber-300 font-medium">Gasolina general</span> — gasolina del depósito u operativa</li>
+                <li><span className="text-amber-300 font-medium">Otros gastos comunes</span> — cualquier gasto que aplique a todos</li>
+              </ul>
+              <p className="text-amber-400/60 text-xs">El sistema divide el monto entre los camiones seleccionados automáticamente.</p>
+            </div>
+          )}
           <p className="text-zinc-500 text-xs">
             Verifica los montos y modifica si es necesario. El sistema divide entre {propioCount} propios (o {truckCount} si aplica a todos).
           </p>

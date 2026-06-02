@@ -128,11 +128,12 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
       where: { balance: { gt: 0 }, driverName: owner.name },
     }),
 
-    // Gastos mecánica del período abierto (para separar nómina vs repuestos)
+    // Gastos mecánica del período abierto
     openPeriod && truckIds.length > 0
       ? prisma.expense.findMany({
           where: { truckId: { in: truckIds }, periodId: openPeriod.id, category: 'MECANICA' },
-          select: { description: true, amount: true },
+          select: { id: true, description: true, amount: true, truck: { select: { plate: true } } },
+          orderBy: { truck: { plate: 'asc' } },
         })
       : Promise.resolve([]),
 
@@ -325,15 +326,16 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         const saldoAnterior  = openEntries.reduce((s, e) => s + (e.saldoInicial ?? 0), 0)
 
         const opExpenses = periodOpExpenses as { id: string; description: string; amount: number; truck: { plate: string } }[]
+        const mecItems = mecExpenses as { id: string; description: string; amount: number; truck: { plate: string } | null }[]
         const expTotal = opExpenses.reduce((s, e) => s + e.amount, 0)
         const viaticosImplicit = Math.round((gastos - expTotal) * 100) / 100
         const multiTruck = owner.trucks.length > 1
 
-        // Mecánica: nómina va bajo Aurumin, repuestos van bajo Luis Peña
-        const mecNomina   = mecExpenses.filter(e => e.description?.toLowerCase().includes('nómina') || e.description?.toLowerCase().includes('nomina')).reduce((s, e) => s + e.amount, 0)
-        const mecRepuesto = mecExpenses.filter(e => !e.description?.toLowerCase().includes('nómina') && !e.description?.toLowerCase().includes('nomina')).reduce((s, e) => s + e.amount, 0)
-        // Fallback: si no hay desglose de expenses, usar el total del payrollEntry bajo Aurumin
-        const nomMecanicos = mecExpenses.length > 0 ? mecNomina : openEntries.reduce((s, e) => s + (e.mechanicFee ?? 0), 0)
+        // Mecánica: repuestos sin "nómina" van bajo Luis Peña
+        const mecRepuesto = mecItems.filter(e => !e.description?.toLowerCase().includes('nómina') && !e.description?.toLowerCase().includes('nomina')).reduce((s, e) => s + e.amount, 0)
+        const totalMechanicFee = openEntries.reduce((s, e) => s + (e.mechanicFee ?? 0), 0)
+        const mecItemsTotal = mecItems.reduce((s, e) => s + e.amount, 0)
+        const mecPoolFee = Math.max(0, Math.round((totalMechanicFee - mecItemsTotal) * 100) / 100)
 
         // Facturación split por cliente (desde los viajes del período)
         const auruminTrips = periodTrips.filter(t => (t as any).route?.clientName !== 'LUIS PEÑA')
@@ -345,9 +347,9 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         const nprAurumin  = Math.round(brutoAurumin * nprPct * 100) / 100
         const nprLP       = Math.round(brutoLP * nprPct * 100) / 100
 
-        // Saldo Aurumin = bruto - gastos - chofer - nómina mecánicos - admin - NPR - préstamos + saldoAnterior - abono
+        // Saldo Aurumin = bruto - gastos - chofer - mecánica - admin - NPR - préstamos + saldoAnterior - abono
         const saldoAurumin = Math.round((
-          brutoAurumin - gastos - nomChofer - nomMecanicos - administrativo - nprAurumin - prestamos + saldoAnterior - abono
+          brutoAurumin - gastos - nomChofer - totalMechanicFee - administrativo - nprAurumin - prestamos + saldoAnterior - abono
         ) * 100) / 100
         // Préstamos del dueño a descontar de LP
         const prestamosLP = ownerLoans.reduce((s, l) => s + l.balance, 0)
@@ -399,7 +401,28 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                       </details>
                     ) : <Row label="Gastos operativos" value={-gastos} />)}
                     {nomChofer > 0 && <Row label="Nómina chofer" value={-nomChofer} />}
-                    {nomMecanicos > 0 && <Row label="Nómina mecánicos" value={-nomMecanicos} />}
+                    {totalMechanicFee > 0 && (mecItems.length > 0 ? (
+                      <details className="border-b border-zinc-800/50 last:border-0">
+                        <summary className="flex justify-between items-center py-1.5 cursor-pointer list-none">
+                          <span className="text-zinc-400 text-sm">Mecánica ▾</span>
+                          <span className="font-mono text-sm text-zinc-300">− ${money(totalMechanicFee)}</span>
+                        </summary>
+                        <div className="pl-3 pb-2 pt-0.5 space-y-1">
+                          {mecPoolFee > 0.005 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-zinc-500">Nómina mecánicos (fija)</span>
+                              <span className="font-mono text-zinc-500">− ${money(mecPoolFee)}</span>
+                            </div>
+                          )}
+                          {mecItems.map(e => (
+                            <div key={e.id} className="flex justify-between text-xs">
+                              <span className="text-zinc-500">{multiTruck && e.truck ? `${e.truck.plate} · ` : ''}{e.description}</span>
+                              <span className="font-mono text-zinc-500">− ${money(e.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ) : <Row label="Mecánica" value={-totalMechanicFee} />)}
                     {administrativo > 0 && <Row label="Administrativo" value={-administrativo} />}
                     <Row label={`${owner.nprPercent}% NPR`} value={-nprAurumin} />
                     {prestamos > 0 && <Row label="Préstamos" value={-prestamos} />}

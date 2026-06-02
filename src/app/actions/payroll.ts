@@ -15,7 +15,8 @@ import { getConfigValue } from './systemConfig'
 //           Si isNPROwner (José): NPR se calcula y guarda, se SUMA al neto (ingreso NPR)
 //  - GASTOS_OP: Expense records del camión en el período (excluye NOMINA, ADMINISTRATIVO, NPR, MECANICA)
 //  - SALDO_INICIAL: netAmount del período anterior (si negativo = deuda; si positivo y pagado = 0)
-//  - AFILIADO: sin adminFee ni mechanicFee (pagan por su cuenta)
+//  - AFILIADO: sin adminFee ni mechanicFee (pagan sus mecánicos por su cuenta)
+//  - isNPROwner (José): NPR se SUMA (ingreso), admin y mecánica se cobran igual que propios
 
 export type PayrollOptions = {
   skipLoanIds?: string[]
@@ -78,18 +79,8 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   // Flota Aurumin: propios con al menos 1 viaje Aurumin en los últimos 45 días
   // 45 días excluye camiones sin actividad reciente (A55BH6D, A15AE9Y) sin afectar
   // a los que rotaron a Luis Peña temporalmente (A18AZ6C que volvería al pool)
-  const fortyFiveDaysAgo = new Date(period.startDate.getTime() - 45 * 24 * 60 * 60 * 1000)
-  // Excluir José (isNPROwner) del pool — no paga admin ni mecánica
-  const propioFlotaActiva = await prisma.truck.count({
-    where: {
-      active: true,
-      owner: { type: 'PROPIO', isNPROwner: false },
-      trips: { some: { date: { gte: fortyFiveDaysAgo }, route: { clientName: { not: 'LUIS PEÑA' } } } },
-    },
-  })
-  const adminFeeBase = options.adminFeeOverride ?? (period as any).adminFeeBase ?? await getConfigValue('adminFeePerTruck')
-  const adminPool = adminFeeBase * propioFlotaActiva
-  const adminFeePerTruck = activePropioThisPeriod > 0 ? adminPool / activePropioThisPeriod : 0
+  const adminFeeBase     = options.adminFeeOverride ?? (period as any).adminFeeBase ?? await getConfigValue('adminFeePerTruck')
+  const adminFeePerTruck = adminFeeBase  // costo fijo por camión propio activo
 
   // Nómina mecánicos — Fernando ingresa total, se divide entre propios activos
   const mechanicFeeBase = (period as any).mechanicFeeBase ?? 0
@@ -195,12 +186,12 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
       ? (grossAmount - nprFee) * 0.20
       : trips.reduce((s, t) => s + (t.route?.driverWage ?? 0), 0)
 
-    // Mecánica y admin — solo PROPIO con viajes Aurumin; José (isNPROwner) no paga nada
+    // Mecánica y admin — solo PROPIO con viajes Aurumin (incluye José)
     const tieneAurumin = propiosConAurumin.has(truckId)
-    const mechanicFee = (isPropio && tieneAurumin && !isNPROwner)
+    const mechanicFee = (isPropio && tieneAurumin)
       ? mechanicFeePerTruck + (mechanicByTruck.get(truckId) ?? 0)
       : 0
-    const adminFee    = (isPropio && tieneAurumin && !isNPROwner) ? adminFeePerTruck : 0
+    const adminFee    = (isPropio && tieneAurumin) ? adminFeePerTruck : 0
 
     // Gastos operativos (Expense records) + viáticos de ruta
     const gastosOp = (gastosByTruck.get(truckId) ?? 0) + viaticos
@@ -313,24 +304,17 @@ export async function getPayrollParams(periodId: string): Promise<PayrollParams 
   })
   const truckMap = new Map(trucks.map(t => [t.id, t]))
 
-  // Calcular fleet/active para admin fee
+  // Calcular active count para admin fee
   const propiosConAurumin = new Set(
     period.trips
       .filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
       .filter(t => truckMap.get(t.truckId)?.owner.type === 'PROPIO')
       .map(t => t.truckId)
   )
-  const fortyFiveDaysAgo = new Date(period.startDate.getTime() - 45 * 24 * 60 * 60 * 1000)
-  const fleetCount = await prisma.truck.count({
-    where: {
-      active: true,
-      owner: { type: 'PROPIO' },
-      trips: { some: { date: { gte: fortyFiveDaysAgo }, route: { clientName: { not: 'LUIS PEÑA' } } } },
-    },
-  })
-  const adminFeeBase = (period as any).adminFeeBase ?? await getConfigValue('adminFeePerTruck')
-  const activeCount = propiosConAurumin.size
-  const adminFeePerTruck = activeCount > 0 ? (adminFeeBase * fleetCount) / activeCount : 0
+  const fleetCount      = 0  // no se usa en el cálculo, se mantiene por compatibilidad
+  const adminFeeBase    = (period as any).adminFeeBase ?? await getConfigValue('adminFeePerTruck')
+  const activeCount     = propiosConAurumin.size
+  const adminFeePerTruck = adminFeeBase  // costo fijo por camión propio activo
 
   // Préstamos activos y a cuál camión se asignan
   const allLoans = await prisma.loan.findMany({ where: { balance: { gt: 0 } } })
