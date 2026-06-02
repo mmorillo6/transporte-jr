@@ -78,7 +78,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
   const driverNames = owner.trucks.map(t => (t as any).driver?.name).filter(Boolean)
 
   // Viajes del período actual para estos camiones
-  const [periodTrips, recentTrips, payrollHistory, maintenanceAlerts, driverLoans, ownerLoans, mecExpenses, periodOpExpenses] = await Promise.all([
+  const [periodTrips, recentTrips, payrollHistory, maintenanceAlerts, driverLoans, ownerLoans, mecExpenses, periodOpExpenses, periodAllExpenses] = await Promise.all([
     openPeriod && truckIds.length > 0
       ? prisma.trip.findMany({
           where: { truckId: { in: truckIds }, periodId: openPeriod.id },
@@ -150,6 +150,22 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
             truck: { select: { plate: true } },
           },
           orderBy: { truck: { plate: 'asc' } },
+        })
+      : Promise.resolve([]),
+
+    // Todos los gastos del período para el desglose completo por camión
+    openPeriod && truckIds.length > 0
+      ? prisma.expense.findMany({
+          where: {
+            truckId: { in: truckIds },
+            periodId: openPeriod.id,
+            category: { notIn: ['NOMINA', 'ADMINISTRATIVO', 'NPR'] },
+          },
+          select: {
+            id: true, date: true, description: true, amount: true, category: true,
+            truck: { select: { id: true, plate: true } },
+          },
+          orderBy: [{ truck: { plate: 'asc' } }, { date: 'asc' }],
         })
       : Promise.resolve([]),
   ])
@@ -459,6 +475,84 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
             <div className="mt-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-3 flex justify-between items-center">
               <span className="text-emerald-300 font-semibold text-sm">Total a cobrar este período</span>
               <span className="text-emerald-400 font-bold text-xl font-mono">${money(saldoAurumin + saldoLP)}</span>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Desglose de gastos del período por camión ─────────────────────── */}
+      {openPeriod && (periodAllExpenses as any[]).length > 0 && (() => {
+        const allExp = periodAllExpenses as { id: string; date: Date; description: string; amount: number; category: string; truck: { id: string; plate: string } | null }[]
+        const byTruck = new Map<string, typeof allExp>()
+        for (const e of allExp) {
+          if (!e.truck) continue
+          const key = e.truck.plate
+          if (!byTruck.has(key)) byTruck.set(key, [])
+          byTruck.get(key)!.push(e)
+        }
+
+        const catLabel: Record<string, string> = {
+          MECANICA: 'Mecánica', REPUESTO: 'Repuesto', ACEITE: 'Aceite',
+          CAUCHO: 'Caucho', VIATICO: 'Viático', OPERATIVO: 'Operativo', OTRO: 'Otro',
+        }
+        const catStyle: Record<string, string> = {
+          MECANICA:  'bg-orange-500/10 text-orange-400',
+          REPUESTO:  'bg-blue-500/10 text-blue-400',
+          ACEITE:    'bg-yellow-500/10 text-yellow-400',
+          CAUCHO:    'bg-cyan-500/10 text-cyan-400',
+          VIATICO:   'bg-purple-500/10 text-purple-400',
+          OPERATIVO: 'bg-zinc-700 text-zinc-400',
+          OTRO:      'bg-zinc-700 text-zinc-400',
+        }
+        const money = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+        return (
+          <div>
+            <h2 className="text-white font-semibold text-sm mb-3">Gastos del período por camión</h2>
+            <div className="space-y-3">
+              {Array.from(byTruck.entries()).map(([plate, expenses]) => {
+                const total = expenses.reduce((s, e) => s + e.amount, 0)
+                return (
+                  <div key={plate} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                    <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+                      <span className="text-white font-mono font-bold text-sm">{plate}</span>
+                      <span className="text-red-400 font-semibold text-sm font-mono">− ${money(total)}</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-zinc-800">
+                            <th className="text-left text-zinc-500 font-medium px-4 py-2">Fecha</th>
+                            <th className="text-left text-zinc-500 font-medium px-4 py-2">Categoría</th>
+                            <th className="text-left text-zinc-500 font-medium px-4 py-2">Descripción</th>
+                            <th className="text-right text-zinc-500 font-medium px-4 py-2">Monto</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {expenses.map(e => (
+                            <tr key={e.id} className="border-b border-zinc-800/40 last:border-0">
+                              <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{fmt(e.date)}</td>
+                              <td className="px-4 py-2">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${catStyle[e.category] ?? 'bg-zinc-700 text-zinc-400'}`}>
+                                  {catLabel[e.category] ?? e.category}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2 text-zinc-300">{e.description}</td>
+                              <td className="px-4 py-2 text-right text-zinc-400 font-mono">${money(e.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t border-zinc-700">
+                            <td colSpan={3} className="px-4 py-2.5 text-zinc-500 font-medium">Total gastos</td>
+                            <td className="px-4 py-2.5 text-right text-red-400 font-bold font-mono">${money(total)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )

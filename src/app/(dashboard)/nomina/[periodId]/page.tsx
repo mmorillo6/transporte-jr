@@ -728,6 +728,8 @@ export default async function PeriodDetailPage({
               periodId={periodId}
               currentAdminFeeBase={(period as any).adminFeeBase ?? null}
               currentMechanicFeeBase={(period as any).mechanicFeeBase ?? null}
+              currentActivePropioOverride={(period as any).activePropioOverride ?? null}
+              calculatedActivePropios={propioCountForGastos}
               pendingCharges={pendingMechanicCharges as any}
               allPeriods={allPeriodsForCharges.map(p => ({
                 id: p.id,

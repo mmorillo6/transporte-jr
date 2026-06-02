@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { addPendingMechanicCharge, markMechanicChargeApplied, updatePeriodAdminFee, updatePeriodMechanicFee } from '@/app/actions/mechanicCharges'
+import { addPendingMechanicCharge, markMechanicChargeApplied, updatePeriodAdminFee, updatePeriodMechanicFee, updateActivePropioOverride } from '@/app/actions/mechanicCharges'
 
 type Charge = {
   id: string
@@ -21,6 +21,8 @@ export default function MechanicChargesClient({
   periodId,
   currentAdminFeeBase,
   currentMechanicFeeBase,
+  currentActivePropioOverride,
+  calculatedActivePropios,
   pendingCharges,
   allPeriods,
   allTrucks,
@@ -29,6 +31,8 @@ export default function MechanicChargesClient({
   periodId: string
   currentAdminFeeBase: number | null
   currentMechanicFeeBase: number | null
+  currentActivePropioOverride: number | null
+  calculatedActivePropios: number
   pendingCharges: Charge[]
   allPeriods: PeriodOption[]
   allTrucks: TruckOption[]
@@ -63,6 +67,23 @@ export default function MechanicChargesClient({
     if (res && 'error' in res) toast.error(res.error)
     else { toast.success('Nómina mecánicos guardada — regenera la nómina para aplicar'); router.refresh() }
   }
+
+  // ── Divisor de propios (override manual) ─────────────────────────────────────
+  const [propioOverride, setPropioOverride] = useState(currentActivePropioOverride != null ? String(currentActivePropioOverride) : '')
+  const [savingOverride, setSavingOverride] = useState(false)
+
+  async function handleSaveOverride() {
+    const val = propioOverride.trim() === '' ? null : parseInt(propioOverride)
+    if (val !== null && (isNaN(val) || val <= 0)) { toast.error('Ingresa un número válido'); return }
+    setSavingOverride(true)
+    const res = await updateActivePropioOverride(periodId, val)
+    setSavingOverride(false)
+    if (res && 'error' in res) toast.error(res.error)
+    else { toast.success(val ? `Divisor fijado en ${val} carros` : 'Divisor restablecido automático'); router.refresh() }
+  }
+
+  const divisorActual = propioOverride ? parseInt(propioOverride) : calculatedActivePropios
+  const mechPerTruck  = mechFee && divisorActual > 0 ? (parseFloat(mechFee) / divisorActual).toFixed(2) : null
 
   // ── Mechanic charges ─────────────────────────────────────────────────────────
   const [open, setOpen]                 = useState(pendingCharges.length > 0)
@@ -145,14 +166,16 @@ export default function MechanicChargesClient({
       </div>
 
       {/* ── Nómina mecánicos del período ─────────────────────────────────────── */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-5 py-4">
-        <p className="text-zinc-400 text-xs font-semibold uppercase tracking-wide mb-3">Nómina mecánicos del período</p>
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-5 py-4 space-y-3">
+        <p className="text-zinc-400 text-xs font-semibold uppercase tracking-wide">Nómina mecánicos del período</p>
+
+        {/* Total */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
-            <p className="text-zinc-300 text-sm">Total a repartir entre propios activos</p>
+            <p className="text-zinc-300 text-sm">Total a repartir</p>
             <p className="text-zinc-600 text-xs mt-0.5">
               {currentMechanicFeeBase != null
-                ? `Guardado: $${currentMechanicFeeBase} total — se divide entre propios al generar`
+                ? `Guardado: $${currentMechanicFeeBase}`
                 : 'Sin valor — mecánica no se cobrará esta quincena'}
             </p>
           </div>
@@ -165,7 +188,6 @@ export default function MechanicChargesClient({
               placeholder="1050"
               className="w-20 bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:border-purple-500"
             />
-            <span className="text-zinc-500 text-xs">total</span>
             <button
               onClick={handleSaveMechFee}
               disabled={savingMech}
@@ -175,6 +197,51 @@ export default function MechanicChargesClient({
             </button>
           </div>
         </div>
+
+        {/* Divisor */}
+        <div className="flex items-center gap-3 flex-wrap border-t border-zinc-800 pt-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-zinc-300 text-sm">÷ Carros a dividir</p>
+            <p className="text-zinc-600 text-xs mt-0.5">
+              {currentActivePropioOverride != null
+                ? `Fijado en ${currentActivePropioOverride} carros (manual)`
+                : `Auto: ${calculatedActivePropios} propios con viajes Aurumin`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <input
+              type="number" step="1" min="1"
+              value={propioOverride}
+              onChange={e => setPropioOverride(e.target.value)}
+              placeholder={String(calculatedActivePropios)}
+              className="w-16 bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:border-purple-500"
+            />
+            <span className="text-zinc-500 text-xs">carros</span>
+            <button
+              onClick={handleSaveOverride}
+              disabled={savingOverride}
+              className="bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white rounded-lg px-3 py-1.5 text-xs transition-colors"
+            >
+              {savingOverride ? '...' : 'Guardar'}
+            </button>
+            {currentActivePropioOverride != null && (
+              <button
+                onClick={async () => { setPropioOverride(''); const res = await updateActivePropioOverride(periodId, null); if (res && !('error' in res)) { toast.success('Divisor restablecido automático'); router.refresh() } }}
+                className="text-zinc-500 hover:text-zinc-300 text-xs underline transition-colors"
+              >
+                Auto
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Resultado calculado */}
+        {mechPerTruck && (
+          <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl px-4 py-2 flex items-center justify-between">
+            <span className="text-purple-300 text-xs">${mechFee} ÷ {divisorActual} carros</span>
+            <span className="text-purple-400 font-bold font-mono text-sm">${mechPerTruck} / carro</span>
+          </div>
+        )}
       </div>
 
       {/* ── Cargos de mecánica ────────────────────────────────────────────────── */}
