@@ -67,3 +67,16 @@ export async function updatePeriodMechanicFee(periodId: string, mechanicFeeBase:
   revalidatePath(`/nomina/${periodId}`)
   return { ok: true }
 }
+
+export async function updateActivePropioOverride(periodId: string, override: number | null) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
+  await prisma.period.update({
+    where: { id: periodId },
+    data: { activePropioOverride: override && override > 0 ? override : null },
+  })
+
+  revalidatePath(`/nomina/${periodId}`)
+  return { ok: true }
+}

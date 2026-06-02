@@ -155,8 +155,9 @@ model Period {
   endDate      DateTime
   status       PeriodStatus @default(OPEN)
   notifiedAt      DateTime?
-  adminFeeBase    Float?
-  mechanicFeeBase Float?
+  adminFeeBase         Float?
+  mechanicFeeBase      Float?
+  activePropioOverride Int?   // divisor manual para mecánica/admin (si null, se calcula automáticamente)
   createdAt       DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
