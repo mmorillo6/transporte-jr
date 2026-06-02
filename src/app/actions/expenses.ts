@@ -78,12 +78,23 @@ export async function createExpensesBulk(items: {
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
   if (items.length === 0) return { error: 'Sin gastos para guardar' }
 
+  // Asignar periodId según la fecha del gasto, no el período actualmente abierto.
+  // Esto evita que gastos del día 15 ingresados mientras P2 está abierto queden en P2.
+  const allPeriods = await prisma.period.findMany({
+    select: { id: true, startDate: true, endDate: true },
+  })
+  function resolvePeriodId(dateStr: string, fallbackId: string): string {
+    const d = new Date(dateStr + 'T12:00:00')
+    const match = allPeriods.find(p => p.startDate <= d && p.endDate >= d)
+    return match?.id ?? fallbackId
+  }
+
   await prisma.expense.createMany({
     data: items.map(item => ({
       date:        new Date(item.date + 'T12:00:00'),
       category:    item.category as any,
       truckId:     item.truckId || null,
-      periodId:    item.periodId || null,
+      periodId:    resolvePeriodId(item.date, item.periodId),
       description: item.description.trim(),
       amount:      item.amount,
       isCredit:    false,
