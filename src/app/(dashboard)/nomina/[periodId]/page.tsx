@@ -13,6 +13,7 @@ import GastosGeneralesClient from './GastosGeneralesClient'
 import MechanicChargesClient from './MechanicChargesClient'
 import TruckExpensesClient from './TruckExpensesClient'
 import NextStepCard from './NextStepCard'
+import PeriodGuideWidget from './PeriodGuideWidget'
 
 async function getPeriodData(periodId: string, role: string, ownerId: string | null) {
   const period = await prisma.period.findUnique({
@@ -410,36 +411,50 @@ export default async function PeriodDetailPage({
             done: trips.length > 0,
             detail: trips.length > 0 ? `${trips.length} viajes` : 'Sin viajes',
             href: trips.length === 0 ? '/romana' : null,
+            hrefLabel: trips.length === 0 ? 'Ir a Romana →' : null,
+            description: 'Importa la romana para cargar los viajes del período. Ve a la sección Romana y sube el archivo.',
           },
           {
             label: 'Relación generada',
             done: payroll.length > 0,
             detail: payroll.length > 0 ? `${payroll.length} camiones` : 'Pendiente',
-            href: null,
+            href: '#period-actions',
+            hrefLabel: 'Ir al botón ↑',
+            description: 'Los viajes están listos. Usa el botón "Generar relación" arriba para calcular los saldos por camión.',
+          },
+          {
+            label: 'Gastos comunes',
+            done: gastosComunesCount > 0,
+            detail: gastosComunesCount > 0 ? 'Aplicados' : 'Pendiente',
+            href: '#gastos-comunes',
+            hrefLabel: 'Ir a Gastos Comunes ↓',
+            description: 'Aplica los gastos compartidos entre todos los camiones: Starlink, grasa, gasoil del depósito, etc.',
           },
           {
             label: 'Cobros Aurumin',
             done: abonosAurumin > 0,
             detail: abonosAurumin > 0 ? `$${abonosAurumin.toFixed(0)} cobrado` : 'Sin registrar',
             href: '/cuentas-por-cobrar',
-          },
-          {
-            label: 'Gastos comunes',
-            done: gastosComunesCount > 0,
-            detail: gastosComunesCount > 0 ? 'Aplicados' : 'Pendiente',
-            href: null,
+            hrefLabel: 'Ir a Cuentas por Cobrar →',
+            description: 'Registra el pago recibido de Aurumin en Cuentas por Cobrar para mantener el saldo actualizado.',
           },
           {
             label: 'Período cerrado',
             done: period.status === 'CLOSED',
             detail: period.status === 'CLOSED' ? 'Cerrado' : 'Abierto',
-            href: null,
+            href: '#period-actions',
+            hrefLabel: 'Ir al botón ↑',
+            description: 'Cuando todos los datos estén correctos, cierra el período con el botón arriba a la derecha.',
           },
           {
             label: 'Dueños notificados',
             done: !!notifiedAt,
             detail: notifiedAt ? 'Enviado' : period.status !== 'CLOSED' ? 'Cerrar primero' : 'Pendiente',
-            href: null,
+            href: period.status === 'CLOSED' ? '#period-actions' : null,
+            hrefLabel: period.status === 'CLOSED' ? 'Ir al botón ↑' : null,
+            description: period.status !== 'CLOSED'
+              ? 'Primero cierra el período, luego podrás enviar la notificación a los dueños.'
+              : 'Envía la notificación a los dueños para que vean el resumen de su quincena.',
           },
         ]
         const doneCount = steps.filter(s => s.done).length
@@ -893,6 +908,62 @@ export default async function PeriodDetailPage({
           </div>
         </>
       )}
+
+      {/* ── Widget flotante de guía — solo encargado/dueño en período abierto ── */}
+      {['DUENO', 'ENCARGADO'].includes(session.role) && period.status === 'OPEN' && (() => {
+        const notifiedAt = (period as any).notifiedAt
+        const guideSteps = [
+          {
+            label: 'Romana importada',
+            done: trips.length > 0,
+            detail: trips.length > 0 ? `${trips.length} viajes` : 'Sin viajes',
+            href: trips.length === 0 ? '/romana' : null,
+            hrefLabel: trips.length === 0 ? 'Ir a Romana →' : null,
+            description: 'Importa la romana para cargar los viajes del período. Ve a la sección Romana y sube el archivo.',
+          },
+          {
+            label: 'Relación generada',
+            done: payroll.length > 0,
+            detail: payroll.length > 0 ? `${payroll.length} camiones` : 'Pendiente',
+            href: '#period-actions',
+            hrefLabel: 'Ir al botón ↑',
+            description: 'Los viajes están listos. Usa el botón "Generar relación" arriba para calcular los saldos por camión.',
+          },
+          {
+            label: 'Gastos comunes',
+            done: gastosComunesCount > 0,
+            detail: gastosComunesCount > 0 ? 'Aplicados' : 'Pendiente',
+            href: '#gastos-comunes',
+            hrefLabel: 'Ir a Gastos Comunes ↓',
+            description: 'Aplica los gastos compartidos entre todos los camiones: Starlink, grasa, gasoil del depósito, etc.',
+          },
+          {
+            label: 'Cobros Aurumin',
+            done: abonosAurumin > 0,
+            detail: abonosAurumin > 0 ? `$${abonosAurumin.toFixed(0)} cobrado` : 'Sin registrar',
+            href: '/cuentas-por-cobrar',
+            hrefLabel: 'Ir a Cuentas por Cobrar →',
+            description: 'Registra el pago recibido de Aurumin en Cuentas por Cobrar para mantener el saldo actualizado.',
+          },
+          {
+            label: 'Período cerrado',
+            done: false,
+            detail: 'Abierto',
+            href: '#period-actions',
+            hrefLabel: 'Ir al botón ↑',
+            description: 'Cuando todos los datos estén correctos, cierra el período con el botón arriba a la derecha.',
+          },
+          {
+            label: 'Dueños notificados',
+            done: false,
+            detail: 'Cerrar primero',
+            href: null,
+            hrefLabel: null,
+            description: 'Primero cierra el período, luego podrás enviar la notificación a los dueños.',
+          },
+        ]
+        return <PeriodGuideWidget steps={guideSteps} periodId={periodId} />
+      })()}
     </div>
   )
 }
