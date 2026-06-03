@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
 import { getConfigValue } from './systemConfig'
+import bcrypt from 'bcryptjs'
 
 // ─── Generar / recalcular nómina de un período ────────────────────────────────
 // Fórmula de Fernando por camión:
@@ -632,5 +633,33 @@ export async function updatePayrollEntry(id: string, formData: FormData) {
   })
 
   revalidatePath(`/nomina/${entry.periodId}`)
+  return { ok: true }
+}
+
+// ─── Eliminar período completo (requiere contraseña) ─────────────────────────
+export async function deletePeriodWithPassword(periodId: string, password: string) {
+  const session = await getSession()
+  if (!session || session.role !== 'DUENO') {
+    return { error: 'Solo el dueño puede eliminar períodos' }
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { password: true },
+  })
+  if (!user) return { error: 'Usuario no encontrado' }
+
+  const valid = await bcrypt.compare(password, user.password)
+  if (!valid) return { error: 'Contraseña incorrecta' }
+
+  const period = await prisma.period.findUnique({ where: { id: periodId } })
+  if (!period) return { error: 'Período no encontrado' }
+
+  await prisma.payrollEntry.deleteMany({ where: { periodId } })
+  await prisma.expense.deleteMany({ where: { periodId } })
+  await prisma.trip.deleteMany({ where: { periodId } })
+  await prisma.period.delete({ where: { id: periodId } })
+
+  revalidatePath('/nomina')
   return { ok: true }
 }
