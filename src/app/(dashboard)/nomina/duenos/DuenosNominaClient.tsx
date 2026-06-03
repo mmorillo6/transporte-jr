@@ -112,24 +112,27 @@ export default function DuenosNominaClient({
   const [abonoFor, setAbonoFor] = useState<string | null>(null)
   const [abonoAmt, setAbonoAmt] = useState('')
 
-  function computeTruckSaldos(truck: TruckRow, ownerType?: string) {
+  function computeTruckSaldos(truck: TruckRow, ownerType?: string, isNPROwner?: boolean) {
     const isAfiliado = ownerType === 'AFILIADO'
     const totalGross = truck.auruminGross + truck.lpGross
     const nprAurumin = totalGross > 0
       ? Math.round(truck.nprFee * (truck.auruminGross / totalGross) * 100) / 100
       : 0
     const nprLP = truck.nprFee - nprAurumin
+    // Para isNPROwner (José) el NPR se SUMA (es ingreso); para los demás se resta
+    const nprSignAurumin = isNPROwner ? nprAurumin : -nprAurumin
+    const nprSignLP      = isNPROwner ? nprLP      : -nprLP
     // Afiliados pagan sus choferes directo — driverWage es informativo, no se descuenta
     let auruminSaldo = Math.round((
       (truck.saldoInicial ?? 0)
       + truck.auruminGross - truck.commFee - (isAfiliado ? 0 : truck.driverWage)
-      - truck.mechFee - truck.adminFee - nprAurumin - truck.abono
+      - truck.mechFee - truck.adminFee + nprSignAurumin - truck.abono
     ) * 100) / 100
     // LP cubre el déficit de Aurumin cuando ya fue pagado en efectivo
     if (truck.paidAt && auruminSaldo < 0) auruminSaldo = 0
     const lpSaldo = truck.paidAt
       ? 0
-      : Math.round((truck.lpGross - nprLP - truck.deductions) * 100) / 100
+      : Math.round((truck.lpGross + nprSignLP - truck.deductions) * 100) / 100
     return { auruminSaldo, lpSaldo, nprAurumin, nprLP }
   }
 
@@ -291,7 +294,7 @@ export default function DuenosNominaClient({
                   {/* Financial summary */}
                   {(() => {
                     const ownerSaldo = row.trucks.reduce((sum, tr) => {
-                      const { auruminSaldo, lpSaldo } = computeTruckSaldos(tr, row.owner.type)
+                      const { auruminSaldo, lpSaldo } = computeTruckSaldos(tr, row.owner.type, row.owner.isNPROwner)
                       return sum + auruminSaldo + lpSaldo
                     }, 0)
                     const allLpPaid = row.trucks.filter(tr => tr.lpGross > 0).every(tr => tr.paidAt)
@@ -341,7 +344,7 @@ export default function DuenosNominaClient({
 
                     {/* Per-truck breakdown */}
                     {row.trucks.map(truck => {
-                      const { auruminSaldo, lpSaldo, nprAurumin, nprLP } = computeTruckSaldos(truck, row.owner.type)
+                      const { auruminSaldo, lpSaldo, nprAurumin, nprLP } = computeTruckSaldos(truck, row.owner.type, row.owner.isNPROwner)
                       const lpRawSaldo = Math.round((truck.lpGross - nprLP - truck.deductions) * 100) / 100
 
                       return (
@@ -385,7 +388,10 @@ export default function DuenosNominaClient({
                                 )}
                                 {truck.mechFee > 0    && <FinRow label="Nóm. mecánico" value={`-$${fmt(truck.mechFee)}`}    color="text-purple-400" />}
                                 {truck.adminFee > 0   && <FinRow label="Administrativo" value={`-$${fmt(truck.adminFee)}`}  color="text-zinc-400" />}
-                                {nprAurumin > 0       && <FinRow label={`${row.owner.nprPercent}% NPR`} value={`-$${fmt(nprAurumin)}`} color="text-red-400" />}
+                                {nprAurumin > 0 && (row.owner.isNPROwner
+                                  ? <FinRow label={`${row.owner.nprPercent}% NPR (ingreso)`} value={`+$${fmt(nprAurumin)}`} color="text-emerald-400" />
+                                  : <FinRow label={`${row.owner.nprPercent}% NPR`}           value={`-$${fmt(nprAurumin)}`} color="text-red-400" />
+                                )}
                                 {truck.abono > 0      && <FinRow label="Abono recibido" value={`-$${fmt(truck.abono)}`}    color="text-emerald-400" />}
                                 <div className="border-t border-zinc-700 pt-1.5 flex justify-between items-center">
                                   <span className="text-white text-xs font-semibold">Saldo Aurumin</span>
@@ -429,7 +435,10 @@ export default function DuenosNominaClient({
                                 <p className="text-blue-400 text-xs font-bold uppercase tracking-widest">Luis Peña</p>
                                 <FinRow label="Saldo anterior"   value="$0.00"                    color="text-zinc-600" />
                                 <FinRow label="Facturación"       value={`$${fmt(truck.lpGross)}`} color="text-white" />
-                                {nprLP > 0 && <FinRow label={`${row.owner.nprPercent}% NPR`} value={`-$${fmt(nprLP)}`} color="text-red-400" />}
+                                {nprLP > 0 && (row.owner.isNPROwner
+                                  ? <FinRow label={`${row.owner.nprPercent}% NPR (ingreso)`} value={`+$${fmt(nprLP)}`} color="text-emerald-400" />
+                                  : <FinRow label={`${row.owner.nprPercent}% NPR`}           value={`-$${fmt(nprLP)}`} color="text-red-400" />
+                                )}
                                 {truck.deductions > 0 && <FinRow label="Repuesto/Préstamo" value={`-$${fmt(truck.deductions)}`} color="text-red-400" />}
                                 <div className="border-t border-zinc-700 pt-1.5 flex justify-between items-center">
                                   <span className="text-white text-xs font-semibold">Saldo LP</span>
@@ -494,7 +503,7 @@ export default function DuenosNominaClient({
                     {/* Owner total */}
                     {(() => {
                       const ownerSaldo = row.trucks.reduce((sum, tr) => {
-                        const { auruminSaldo, lpSaldo } = computeTruckSaldos(tr, row.owner.type)
+                        const { auruminSaldo, lpSaldo } = computeTruckSaldos(tr, row.owner.type, row.owner.isNPROwner)
                         return sum + auruminSaldo + lpSaldo
                       }, 0)
                       return (
