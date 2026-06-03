@@ -9,6 +9,7 @@ const CATEGORIES = [
   { value: 'ACEITE',        label: 'Aceite' },
   { value: 'CAUCHO',        label: 'Caucho' },
   { value: 'OPERATIVO',     label: 'Operativo' },
+  { value: 'VIATICO',       label: 'Viático' },
   { value: 'ADMINISTRATIVO',label: 'Administrativo' },
   { value: 'OTRO',          label: 'Otro' },
 ]

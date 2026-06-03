@@ -103,6 +103,22 @@ export async function createExpensesBulk(items: {
     })),
   })
 
+  // Viáticos se pagan en efectivo de caja chica → egreso automático
+  const viaticos = items.filter(i => i.category === 'VIATICO')
+  if (viaticos.length > 0) {
+    await prisma.cashEntry.createMany({
+      data: viaticos.map(v => ({
+        type:     'EGRESO' as const,
+        currency: 'EFECTIVO' as const,
+        amount:   v.amount,
+        concept:  `Viático — ${v.description.trim()}`,
+        date:     new Date(v.date + 'T12:00:00'),
+        source:   'viáticos',
+      })),
+    })
+    revalidatePath('/caja')
+  }
+
   revalidatePath('/nomina')
   revalidatePath('/gastos')
   return { ok: true, created: items.length }
