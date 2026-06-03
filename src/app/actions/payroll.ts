@@ -387,8 +387,8 @@ type Disposition = 'CAJA_CHICA' | 'AURUMIN' | 'LUIS_PENA' | 'SIGUIENTE'
 // ─── Cerrar período — crea CashEntry para carros negativos ────────────────────
 export async function closePeriod(periodId: string, dispositions?: Record<string, Disposition>) {
   const session = await getSession()
-  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {
-    return { error: 'No autorizado' }
+  if (!session || session.role !== 'DUENO') {
+    return { error: 'Solo el dueño puede cerrar períodos' }
   }
 
   const [entries, period] = await Promise.all([

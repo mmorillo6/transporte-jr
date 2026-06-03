@@ -167,7 +167,7 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
           <span className="sm:hidden">PDF</span>
           <span className="hidden sm:inline">Imprimir / PDF</span>
         </button>
-        {['DUENO', 'ENCARGADO'].includes(role) && (
+        {role === 'DUENO' && (
           isOpen ? (
             <button
               onClick={openChecklist}
