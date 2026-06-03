@@ -189,7 +189,7 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
             </button>
           ) : null
         )}
-        {role === 'DUENO' && (
+        {['DUENO', 'ENCARGADO'].includes(role) && (
           <button
             onClick={() => { setDeletePassword(''); setShowDelete(true) }}
             className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900 hover:bg-red-950 border border-zinc-700 hover:border-red-800 text-zinc-500 hover:text-red-400 rounded-lg text-sm transition-colors"

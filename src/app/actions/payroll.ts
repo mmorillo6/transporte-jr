@@ -639,8 +639,8 @@ export async function updatePayrollEntry(id: string, formData: FormData) {
 // ─── Eliminar período completo (requiere contraseña) ─────────────────────────
 export async function deletePeriodWithPassword(periodId: string, password: string) {
   const session = await getSession()
-  if (!session || session.role !== 'DUENO') {
-    return { error: 'Solo el dueño puede eliminar períodos' }
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {
+    return { error: 'No autorizado' }
   }
 
   const user = await prisma.user.findUnique({
