@@ -283,16 +283,16 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     totalNprCollected += gross * (truck.owner.nprPercent / 100)
   }
 
-  const nprExpenses = await prisma.expense.findMany({
-    where: { periodId, category: 'NPR' },
-    select: { amount: true },
-  })
-  const totalNprExpenses = nprExpenses.reduce((s, e) => s + e.amount, 0)
-
   const nprTruck = await prisma.truck.findFirst({
     where: { plate: 'A15AE9Y' },
     select: { id: true },
   })
+
+  const nprExpenses = nprTruck ? await prisma.expense.findMany({
+    where: { periodId, truckId: nprTruck.id },
+    select: { amount: true },
+  }) : []
+  const totalNprExpenses = nprExpenses.reduce((s, e) => s + e.amount, 0)
 
   if (nprTruck && totalNprCollected > 0) {
     const nprSaldoInicial = currentSaldos.get(nprTruck.id) ?? 0
