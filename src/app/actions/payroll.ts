@@ -272,6 +272,54 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     created.push(entry)
   }
 
+  // ── Entry NPR (A15AE9Y) — acumula el nprFee de todos los contribuidores ──────
+  // nprContributor=true: propios (5%) + De Freita (10%)
+  // Netos y San Casimiro (10%) no contribuyen al NPR de José
+  let totalNprCollected = 0
+  for (const [truckId, trips] of byTruck) {
+    const truck = truckMap.get(truckId)
+    if (!truck || truck.owner.isNPROwner || !truck.owner.nprContributor) continue
+    const gross = trips.reduce((s, t) => s + t.amount, 0)
+    totalNprCollected += gross * (truck.owner.nprPercent / 100)
+  }
+
+  const nprExpenses = await prisma.expense.findMany({
+    where: { periodId, category: 'NPR' },
+    select: { amount: true },
+  })
+  const totalNprExpenses = nprExpenses.reduce((s, e) => s + e.amount, 0)
+
+  const nprTruck = await prisma.truck.findFirst({
+    where: { plate: 'A15AE9Y' },
+    select: { id: true },
+  })
+
+  if (nprTruck && totalNprCollected > 0) {
+    const nprSaldoInicial = currentSaldos.get(nprTruck.id) ?? 0
+    const nprAbono        = currentAbonos.get(nprTruck.id) ?? 0
+    const nprNet = Math.round((totalNprCollected - totalNprExpenses + nprSaldoInicial - nprAbono) * 100) / 100
+
+    const nprEntry = await prisma.payrollEntry.create({
+      data: {
+        periodId,
+        truckId:      nprTruck.id,
+        totalTons:    0,
+        grossAmount:  0,
+        viaticos:     0,
+        driverWage:   0,
+        commissionFee: Math.round(totalNprExpenses * 100) / 100,
+        nprFee:       Math.round(totalNprCollected * 100) / 100,
+        mechanicFee:  0,
+        adminFee:     0,
+        deductions:   0,
+        saldoInicial: Math.round(nprSaldoInicial * 100) / 100,
+        abono:        Math.round(nprAbono * 100) / 100,
+        netAmount:    nprNet,
+      },
+    })
+    created.push(nprEntry)
+  }
+
   await prisma.period.update({ where: { id: periodId }, data: { adminFeeBase, mechanicFeeBase: mechanicFeeBase || null } })
 
   revalidatePath('/nomina')

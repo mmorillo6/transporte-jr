@@ -47,6 +47,7 @@ model Owner {
   commissionRate Float     @default(0)
   nprPercent     Float     @default(5) // 5% transporte, 10% afiliados
   isNPROwner     Boolean   @default(false) // true solo para José (su 5% acumula, no se descuenta)
+  nprContributor Boolean   @default(false) // true = su nprFee va a la cuenta NPR de José (propios + De Freita)
   phone          String?
   active         Boolean   @default(true)
   createdAt      DateTime  @default(now())
