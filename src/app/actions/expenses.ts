@@ -62,6 +62,25 @@ export async function createExpense(formData: FormData) {
     },
   })
 
+  // Egreso automático de caja chica solo si:
+  // - pagado al contado (no fiado)
+  // - categoría operativa (no sueldos)
+  // - no es Starlink (se paga de lo que abona Aurumin)
+  const CAJA_EGRESO_CATS = ['REPUESTO', 'ACEITE', 'CAUCHO', 'OPERATIVO', 'VIATICO', 'OTRO']
+  if (!isCredit && CAJA_EGRESO_CATS.includes(category) && !description.toUpperCase().includes('STARLINK')) {
+    await prisma.cashEntry.create({
+      data: {
+        type:     'EGRESO',
+        currency: 'EFECTIVO',
+        amount,
+        concept:  `${category} — ${description.trim()}`,
+        date,
+        source:   'gastos operativos',
+      },
+    })
+    revalidatePath('/caja')
+  }
+
   revalidatePath('/gastos')
   return { ok: true }
 }
@@ -105,8 +124,12 @@ export async function createExpensesBulk(items: {
 
   // Gastos operativos se pagan de caja chica → egreso automático
   // MECANICA, ADMINISTRATIVO, NPR y NOMINA son sueldos, no salen de caja chica
+  // Starlink se paga a final de quincena de lo que abona Aurumin, no de caja chica
   const CAJA_EGRESO_CATS = ['REPUESTO', 'ACEITE', 'CAUCHO', 'OPERATIVO', 'VIATICO', 'OTRO']
-  const cajaItems = skipCajaEgreso ? [] : items.filter(i => CAJA_EGRESO_CATS.includes(i.category))
+  const cajaItems = skipCajaEgreso ? [] : items.filter(i =>
+    CAJA_EGRESO_CATS.includes(i.category) &&
+    !i.description.toUpperCase().includes('STARLINK')
+  )
   if (cajaItems.length > 0) {
     await prisma.cashEntry.createMany({
       data: cajaItems.map(v => ({
@@ -161,7 +184,7 @@ export async function applyGastosComunes(
     }
   }
 
-  const result = await createExpensesBulk(bulk, true)
+  const result = await createExpensesBulk(bulk)
   revalidatePath(`/nomina/${periodId}`)
   // Return target counts so UI can show correct divisor in toast
   const propioCount = propioIds.length
