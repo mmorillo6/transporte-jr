@@ -321,8 +321,35 @@ export default async function TruckRelacionPage({
             })()}
           </div>
 
+            {/* ── NPR (A15AE9Y / isNPROwner sin viajes) ── */}
+            {isNPROwner && trips.length === 0 && (e.nprFee ?? 0) > 0 && (() => {
+              const nprIncome   = e.nprFee ?? 0
+              const nprExpenses = e.commissionFee ?? 0
+              return (
+                <div className="space-y-1.5">
+                  <p className="text-violet-400 text-xs font-bold uppercase tracking-widest print:text-violet-700">NPR — Fondo de reposición</p>
+                  {(e.saldoInicial ?? 0) !== 0 && (
+                    <FinRow label="Saldo anterior" value={`${(e.saldoInicial??0)<0?'-':''}$${fmt(Math.abs(e.saldoInicial??0))}`} color={(e.saldoInicial??0)<0?'text-red-400':'text-emerald-400'} />
+                  )}
+                  <FinRow label="NPR recaudado"  value={`+$${fmt(nprIncome)}`}    color="text-emerald-400 print:text-emerald-700" />
+                  {nprExpenses > 0 && (
+                    <FinRow label="Gastos NPR"   value={`-$${fmt(nprExpenses)}`}  color="text-red-400 print:text-red-700" />
+                  )}
+                  {(e.abono ?? 0) > 0 && (
+                    <FinRow label="Abono"        value={`-$${fmt(e.abono)}`}      color="text-emerald-400 print:text-emerald-700" />
+                  )}
+                  <div className="border-t border-zinc-700 print:border-zinc-300 pt-2 mt-1 flex justify-between">
+                    <span className="text-white font-bold text-sm print:text-black">Saldo final</span>
+                    <span className={`text-base font-bold font-mono ${e.netAmount < 0 ? 'text-red-400 print:text-red-700' : 'text-violet-400 print:text-violet-700'}`}>
+                      {e.netAmount < 0 ? `-$${fmt(Math.abs(e.netAmount))}` : `$${fmt(e.netAmount)}`}
+                    </span>
+                  </div>
+                </div>
+              )
+            })()}
+
           {/* Total a cobrar */}
-          {(grossTripAurumin > 0 || grossTripLuisPena > 0) && (
+          {(grossTripAurumin > 0 || grossTripLuisPena > 0 || (isNPROwner && (e.nprFee ?? 0) > 0)) && (
             <div className="mt-4 pt-3 border-t border-zinc-700 print:border-zinc-300 flex justify-between items-center">
               <span className="text-white font-bold print:text-black">Total a cobrar</span>
               <span className={`text-xl font-bold font-mono ${e.netAmount < 0 ? 'text-red-400 print:text-red-700' : 'text-amber-400 print:text-amber-600'}`}>
