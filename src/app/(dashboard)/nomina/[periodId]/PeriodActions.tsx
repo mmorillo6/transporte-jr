@@ -26,12 +26,11 @@ type ChecklistData = {
   negativoTrucks?: NegativoTruck[]
 }
 
-export default function PeriodActions({ periodId, periodStatus, role, checklistData, hasExistingPayroll }: {
+export default function PeriodActions({ periodId, periodStatus, role, checklistData }: {
   periodId: string
   periodStatus: string
   role: string
   checklistData?: ChecklistData
-  hasExistingPayroll?: boolean
 }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
@@ -212,17 +211,6 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
               <h2 className="text-white font-semibold text-base">Revisar parámetros de nómina</h2>
               <p className="text-zinc-500 text-xs mt-0.5">Confirma o ajusta antes de calcular. Los cambios solo aplican a esta generación.</p>
             </div>
-            {hasExistingPayroll && (
-              <div className="mx-5 mt-4 flex items-start gap-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">
-                <span className="text-amber-400 text-base leading-none mt-0.5 flex-shrink-0">⚠️</span>
-                <div>
-                  <p className="text-amber-300 text-sm font-semibold">Se perderán los saldos iniciales configurados</p>
-                  <p className="text-amber-400/70 text-xs mt-0.5">
-                    Regenerar borra y recrea todos los entries. Los saldos iniciales que hayas ingresado manualmente quedarán en cero y tendrás que volver a ingresarlos.
-                  </p>
-                </div>
-              </div>
-            )}
 
             <div className="px-5 py-4 space-y-5">
 

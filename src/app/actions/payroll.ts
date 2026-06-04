@@ -158,6 +158,17 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     }
   }
 
+  // ── Guardar saldos y abonos actuales antes de borrar ──────────────────────────
+  // Así los valores configurados manualmente (saldoInicial, abono) sobreviven la regeneración.
+  // Si no hay entries previas en este período (primera generación), los mapas quedan vacíos
+  // y se usa la lógica de carry-over del período anterior.
+  const currentEntries = await prisma.payrollEntry.findMany({
+    where: { periodId },
+    select: { truckId: true, saldoInicial: true, abono: true },
+  })
+  const currentSaldos = new Map(currentEntries.map(e => [e.truckId, e.saldoInicial]))
+  const currentAbonos = new Map(currentEntries.map(e => [e.truckId, e.abono]))
+
   // ── Eliminar entradas existentes para regenerar ───────────────────────────────
   await prisma.payrollEntry.deleteMany({ where: { periodId } })
 
@@ -211,20 +222,22 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     ownerLoans.forEach(l => ownerLoanApplied.add(l.id))
     const loanDeductions = [...driverLoans, ...ownerLoans].reduce((s, l) => s + l.deductAmount, 0)
 
-    // Saldo inicial: negativo si debe, positivo si le deben y no pagaron
-    const prev = prevByTruck.get(truckId)
-    let saldoInicial = 0
-    if (prev) {
-      if (prev.netAmount < 0) {
-        saldoInicial = prev.netAmount   // deuda que arrastra (negativo)
-      } else if (!prev.paidAt) {
-        saldoInicial = prev.netAmount   // positivo pendiente de pago (le deben)
+    // Saldo inicial: si ya existía en este período (regeneración), conservarlo.
+    // Si es primera generación, usar carry-over del período anterior.
+    let saldoInicial: number
+    if (currentSaldos.has(truckId)) {
+      saldoInicial = currentSaldos.get(truckId)!
+    } else {
+      const prev = prevByTruck.get(truckId)
+      saldoInicial = 0
+      if (prev) {
+        if (prev.netAmount < 0)       saldoInicial = prev.netAmount
+        else if (!prev.paidAt)        saldoInicial = prev.netAmount
       }
     }
 
-    // Abono: se mantiene el que ya tenía si existía entrada anterior (no sobreescribir)
-    // En la generación inicial = 0; Fernando lo ajusta después
-    const abono = 0
+    // Abono: conservar el valor que ya tenía en este período (Fernando lo ajusta manualmente)
+    const abono = currentAbonos.get(truckId) ?? 0
 
     // Saldo final
     // isAfiliado: driverWage se guarda para display pero NO se descuenta (pagan sus choferes directo)
@@ -252,7 +265,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
         adminFee:     Math.round(adminFee     * 100)  / 100,
         deductions:   Math.round(loanDeductions * 100) / 100,
         saldoInicial: Math.round(saldoInicial * 100)  / 100,
-        abono:        0,
+        abono:        Math.round(abono        * 100)  / 100,
         netAmount:    Math.round(netAmount    * 100)  / 100,
       },
     })
