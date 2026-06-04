@@ -431,6 +431,14 @@ export default async function PeriodDetailPage({
             description: 'Aplica los gastos compartidos entre todos los camiones: Starlink, grasa, gasoil del depósito, etc.',
           },
           {
+            label: 'Gastos mecánicos',
+            done: mecanicoExpensesCount > 0,
+            detail: mecanicoExpensesCount > 0 ? `${mecanicoExpensesCount} registros` : 'Pendiente — omitir si no hubo',
+            href: '#gastos-comunes',
+            hrefLabel: 'Ir a Gastos Comunes ↓',
+            description: 'Ingresa la nómina de mecánicos si hubo trabajo esta quincena. Si no hubo trabajo, puedes omitir este paso y continuar.',
+          },
+          {
             label: 'Cobros Aurumin',
             done: abonosAurumin > 0,
             detail: abonosAurumin > 0 ? `$${abonosAurumin.toFixed(0)} cobrado` : 'Sin registrar',
@@ -936,6 +944,14 @@ export default async function PeriodDetailPage({
             href: '#gastos-comunes',
             hrefLabel: 'Ir a Gastos Comunes ↓',
             description: 'Aplica los gastos compartidos entre todos los camiones: Starlink, grasa, gasoil del depósito, etc.',
+          },
+          {
+            label: 'Gastos mecánicos',
+            done: mecanicoExpensesCount > 0,
+            detail: mecanicoExpensesCount > 0 ? `${mecanicoExpensesCount} registros` : 'Pendiente — omitir si no hubo',
+            href: '#gastos-comunes',
+            hrefLabel: 'Ir a Gastos Comunes ↓',
+            description: 'Ingresa la nómina de mecánicos si hubo trabajo esta quincena. Si no hubo trabajo, puedes omitir este paso y continuar.',
           },
           {
             label: 'Cobros Aurumin',
