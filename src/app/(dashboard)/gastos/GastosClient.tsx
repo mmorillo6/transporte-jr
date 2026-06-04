@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { createExpense, updateExpense, markExpensePaid, markExpensePartialPaid, deleteExpense } from '@/app/actions/expenses'
+import { createExpense, updateExpense, markExpensePaid, markExpensePartialPaid, deleteExpense, createExpensesForTrucks } from '@/app/actions/expenses'
 import { analyzeInvoice } from '@/app/actions/analyzeInvoice'
 import { toast } from 'sonner'
 
@@ -78,6 +78,12 @@ export default function GastosClient({
   // Quick-pay partial state per row
   const [partialId, setPartialId] = useState<string | null>(null)
   const [partialAmount, setPartialAmount] = useState('')
+
+  // Copy-to-trucks modal
+  type CopyItem = { truckId: string; plate: string; driver: string; checked: boolean; amount: string }
+  const [copyBase, setCopyBase] = useState<{ date: string; category: string; description: string; paymentStatus: 'pagado'|'pendiente'|'parcial'; amountPaid?: number; invoiceUrl?: string } | null>(null)
+  const [copyItems, setCopyItems] = useState<CopyItem[]>([])
+  const [copyLoading, setCopyLoading] = useState(false)
 
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -162,8 +168,21 @@ export default function GastosClient({
 
     const res = editing ? await updateExpense(editing.id, fd) : await createExpense(fd)
 
-    if (res?.error) { setFormError(res.error); setLoading(false) }
-    else { closeForm(); router.refresh(); setLoading(false) }
+    if (res?.error) { setFormError(res.error); setLoading(false); return }
+
+    closeForm()
+    router.refresh()
+    setLoading(false)
+
+    // Si se creó (no editó) un gasto asignado a un camión, ofrecer copiar a los demás
+    if (!editing && fTruckId) {
+      const otherTrucks = trucks.filter(t => t.id !== fTruckId)
+      if (otherTrucks.length > 0) {
+        const amt = parseFloat(fAmount) || 0
+        setCopyBase({ date: fDate, category: fCategory, description: fDescription, paymentStatus: fPaymentStatus, amountPaid: parseFloat(fAmountPaid) || undefined, invoiceUrl: fInvoiceUrl || undefined })
+        setCopyItems(otherTrucks.map(t => ({ truckId: t.id, plate: t.plate, driver: t.driver?.name ?? '—', checked: true, amount: amt.toFixed(2) })))
+      }
+    }
   }
 
   async function handlePaid(id: string) {
@@ -182,6 +201,20 @@ export default function GastosClient({
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar este gasto?')) return
     await deleteExpense(id)
+    router.refresh()
+  }
+
+  async function handleCopyConfirm() {
+    if (!copyBase) return
+    const selected = copyItems.filter(i => i.checked).map(i => ({ truckId: i.truckId, amount: parseFloat(i.amount) || 0 })).filter(i => i.amount > 0)
+    if (selected.length === 0) { setCopyBase(null); setCopyItems([]); return }
+    setCopyLoading(true)
+    const res = await createExpensesForTrucks(copyBase, selected)
+    setCopyLoading(false)
+    if (res.error) { toast.error(res.error); return }
+    toast.success(`Gasto copiado a ${selected.length} camión${selected.length > 1 ? 'es' : ''}`)
+    setCopyBase(null)
+    setCopyItems([])
     router.refresh()
   }
 
@@ -493,6 +526,86 @@ export default function GastosClient({
           </div>
         )}
       </div>
+
+      {/* ── Modal: copiar gasto a otros camiones ── */}
+      {copyBase && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl overflow-hidden">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-zinc-800">
+              <h3 className="text-white font-semibold">¿Copiar gasto a otros camiones?</h3>
+              <p className="text-zinc-500 text-xs mt-0.5">
+                <span className="font-mono text-zinc-400">{copyBase.category}</span>
+                {' · '}{copyBase.description}
+                {' · '}<span className={copyBase.paymentStatus === 'pagado' ? 'text-emerald-400' : 'text-amber-400'}>
+                  {copyBase.paymentStatus === 'pagado' ? 'Contado' : copyBase.paymentStatus === 'parcial' ? 'Parcial' : 'Fiado'}
+                </span>
+              </p>
+            </div>
+
+            {/* Lista de camiones */}
+            <div className="max-h-72 overflow-y-auto divide-y divide-zinc-800/60">
+              {/* Seleccionar todos */}
+              <div className="px-5 py-2.5 flex items-center justify-between bg-zinc-800/30">
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-400">
+                  <input
+                    type="checkbox"
+                    checked={copyItems.every(i => i.checked)}
+                    onChange={e => setCopyItems(prev => prev.map(i => ({ ...i, checked: e.target.checked })))}
+                    className="accent-amber-500"
+                  />
+                  Seleccionar todos
+                </label>
+                <span className="text-xs text-zinc-600">{copyItems.filter(i => i.checked).length} de {copyItems.length}</span>
+              </div>
+              {copyItems.map((item, idx) => (
+                <div key={item.truckId} className="px-5 py-2.5 flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={item.checked}
+                    onChange={e => setCopyItems(prev => prev.map((i, j) => j === idx ? { ...i, checked: e.target.checked } : i))}
+                    className="accent-amber-500 flex-shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-mono leading-none">{item.plate}</p>
+                    <p className="text-zinc-500 text-xs mt-0.5 truncate">{item.driver}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-zinc-600 text-xs">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={item.amount}
+                      onChange={e => setCopyItems(prev => prev.map((i, j) => j === idx ? { ...i, amount: e.target.value } : i))}
+                      disabled={!item.checked}
+                      className="w-20 bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:border-amber-500 disabled:opacity-40"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-4 border-t border-zinc-800 flex gap-3">
+              <button
+                onClick={handleCopyConfirm}
+                disabled={copyLoading || copyItems.every(i => !i.checked)}
+                className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm transition-colors"
+              >
+                {copyLoading ? 'Guardando...' : `Confirmar (${copyItems.filter(i => i.checked).length})`}
+              </button>
+              <button
+                onClick={() => { setCopyBase(null); setCopyItems([]) }}
+                disabled={copyLoading}
+                className="px-5 py-2.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl text-sm transition-colors"
+              >
+                Omitir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -85,6 +85,80 @@ export async function createExpense(formData: FormData) {
   return { ok: true }
 }
 
+export async function createExpensesForTrucks(
+  base: {
+    date: string
+    category: string
+    description: string
+    paymentStatus: 'pagado' | 'pendiente' | 'parcial'
+    amountPaid?: number
+    invoiceUrl?: string
+  },
+  items: { truckId: string; amount: number }[]
+) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+  if (items.length === 0) return { ok: true, created: 0 }
+
+  const date = new Date(base.date + 'T12:00:00')
+  const isCredit = base.paymentStatus !== 'pagado'
+  const amountPaidBase = base.paymentStatus === 'pagado' ? null
+    : base.paymentStatus === 'parcial' ? (base.amountPaid ?? 0)
+    : 0
+
+  // Resolver período por fecha
+  const allPeriods = await prisma.period.findMany({ select: { id: true, startDate: true, endDate: true } })
+  let period = allPeriods.find(p => p.startDate <= date && p.endDate >= date)
+  if (!period) {
+    const d = date
+    const day = d.getUTCDate(), month = d.getUTCMonth(), year = d.getUTCFullYear()
+    const isFirstHalf = day <= 16
+    const startDay = isFirstHalf ? 1 : 17
+    const endDay = isFirstHalf ? 16 : new Date(year, month + 1, 0).getDate()
+    period = await prisma.period.create({
+      data: {
+        startDate: new Date(Date.UTC(year, month, startDay, 0, 0, 0)),
+        endDate:   new Date(Date.UTC(year, month, endDay, 23, 59, 59)),
+        status: 'OPEN',
+      },
+    })
+  }
+
+  await prisma.expense.createMany({
+    data: items.map(item => ({
+      date,
+      category:    base.category as any,
+      truckId:     item.truckId,
+      periodId:    period!.id,
+      description: base.description.trim(),
+      amount:      item.amount,
+      isCredit,
+      amountPaid:  base.paymentStatus === 'pagado' ? item.amount : (amountPaidBase ?? 0),
+      paidDate:    base.paymentStatus === 'pagado' ? new Date() : null,
+      invoiceUrl:  base.invoiceUrl || null,
+    })),
+  })
+
+  const CAJA_EGRESO_CATS = ['REPUESTO', 'ACEITE', 'CAUCHO', 'OPERATIVO', 'VIATICO', 'OTRO']
+  if (!isCredit && CAJA_EGRESO_CATS.includes(base.category) && !base.description.toUpperCase().includes('STARLINK')) {
+    await prisma.cashEntry.createMany({
+      data: items.map(item => ({
+        type:     'EGRESO' as const,
+        currency: 'EFECTIVO' as const,
+        amount:   item.amount,
+        concept:  `${base.category} — ${base.description.trim()}`,
+        date,
+        source:   'gastos operativos',
+      })),
+    })
+    revalidatePath('/caja')
+  }
+
+  revalidatePath('/gastos')
+  revalidatePath('/nomina')
+  return { ok: true, created: items.length }
+}
+
 export async function createExpensesBulk(items: {
   date: string
   description: string
