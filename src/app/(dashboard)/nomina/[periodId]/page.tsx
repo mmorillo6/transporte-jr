@@ -383,7 +383,7 @@ export default async function PeriodDetailPage({
             {period.status === 'CLOSED' && (
               <NotifyButton periodId={periodId} />
             )}
-            <PeriodActions periodId={periodId} periodStatus={period.status} role={session.role} checklistData={checklistData} />
+            <PeriodActions periodId={periodId} periodStatus={period.status} role={session.role} checklistData={checklistData} hasExistingPayroll={payroll.length > 0} />
           </div>
         )}
       </div>
