@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { markPayrollEntryPaid, markAllPeriodPaid, updatePayrollAbono } from '@/app/actions/payroll'
+import { markPayrollEntryPaid, markAllPeriodPaid, updatePayrollAbono, updatePayrollNetAmount } from '@/app/actions/payroll'
 import { toast } from 'sonner'
 
 const PAYMENT_METHODS = ['Efectivo', 'Transferencia', 'USDT', 'Zelle', 'Otro']
@@ -76,6 +76,9 @@ export default function PayrollTableClient({
   // Abono editing state: { [entryId]: string (raw input) }
   const [abonoEditing, setAbonoEditing] = useState<Record<string, string>>({})
   const [abonoLoading, setAbonoLoading] = useState<string | null>(null)
+  // Net amount editing state
+  const [netEditing, setNetEditing] = useState<Record<string, string>>({})
+  const [netLoading, setNetLoading] = useState<string | null>(null)
 
   const canPay = ['DUENO', 'ENCARGADO'].includes(role)
   const isClosed = periodStatus === 'CLOSED'
@@ -109,6 +112,20 @@ export default function PayrollTableClient({
       router.refresh()
     }
     setAbonoLoading(null)
+  }
+
+  async function handleNetSave(entryId: string) {
+    const raw = netEditing[entryId]
+    const val = parseFloat(raw)
+    if (isNaN(val)) { toast.error('Monto inválido'); return }
+    setNetLoading(entryId)
+    const res = await updatePayrollNetAmount(entryId, val)
+    if (res.error) toast.error(res.error)
+    else {
+      setNetEditing(prev => { const n = { ...prev }; delete n[entryId]; return n })
+      router.refresh()
+    }
+    setNetLoading(null)
   }
 
   function shortDate(d: string) {
@@ -174,9 +191,10 @@ export default function PayrollTableClient({
       {/* ── Vista móvil: tarjetas ── */}
       <div className="md:hidden divide-y divide-zinc-800/60">
         {entries.map(entry => {
-          const isNegative = entry.netAmount < 0
-          const isPaid     = !!entry.paidAt
-          const isPaying   = paying === entry.id
+          const isNegative   = entry.netAmount < 0
+          const isPaid       = !!entry.paidAt
+          const isPaying     = paying === entry.id
+          const isEditingNetM = entry.id in netEditing
 
           return (
             <div
@@ -199,12 +217,47 @@ export default function PayrollTableClient({
                   </p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className={`text-2xl font-bold font-mono leading-none ${
-                    isNegative ? 'text-red-400' : isPaid ? 'text-emerald-400' : 'text-amber-400'
-                  }`}>
-                    {isNegative ? '-' : ''}{fmt(Math.abs(entry.netAmount))}
-                  </p>
-                  <p className="text-zinc-600 text-xs mt-1">saldo final</p>
+                  {canPay && isEditingNetM ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={netEditing[entry.id]}
+                        onChange={e => setNetEditing(prev => ({ ...prev, [entry.id]: e.target.value }))}
+                        className="w-24 bg-zinc-800 border border-zinc-600 text-white rounded px-2 py-1 text-sm focus:outline-none focus:border-amber-500 text-right"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleNetSave(entry.id)}
+                        disabled={netLoading === entry.id}
+                        className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded px-2 py-1.5 text-sm"
+                      >
+                        {netLoading === entry.id ? '...' : 'OK'}
+                      </button>
+                      <button
+                        onClick={() => setNetEditing(prev => { const n = { ...prev }; delete n[entry.id]; return n })}
+                        className="text-zinc-500 hover:text-white"
+                      >✕</button>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className={`text-2xl font-bold font-mono leading-none ${
+                        isNegative ? 'text-red-400' : isPaid ? 'text-emerald-400' : 'text-amber-400'
+                      }`}>
+                        {isNegative ? '-' : ''}{fmt(Math.abs(entry.netAmount))}
+                      </p>
+                      <div className="flex items-center justify-end gap-1 mt-1">
+                        <p className="text-zinc-600 text-xs">saldo final</p>
+                        {canPay && (
+                          <button
+                            onClick={() => setNetEditing(prev => ({ ...prev, [entry.id]: entry.netAmount.toString() }))}
+                            className="text-zinc-600 hover:text-amber-400 text-xs transition-colors"
+                            title="Editar saldo final"
+                          >✎</button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -354,6 +407,7 @@ export default function PayrollTableClient({
                 : 'hover:bg-zinc-800/20'
               const netColor = isNegative ? 'text-red-400' : 'text-amber-400'
               const isEditingAbono = entry.id in abonoEditing
+              const isEditingNet = entry.id in netEditing
 
               return (
                 <tr key={entry.id} className={`border-b border-zinc-800/50 transition-colors ${rowBg}`}>
@@ -448,8 +502,43 @@ export default function PayrollTableClient({
                       </span>
                     )}
                   </td>
-                  <td className={`px-2 py-2 text-right font-bold whitespace-nowrap ${netColor}`}>
-                    {isNegative ? `-${fmt(Math.abs(entry.netAmount))}` : fmt(entry.netAmount)}
+                  <td className="px-2 py-2 text-right font-bold whitespace-nowrap">
+                    {canPay && isEditingNet ? (
+                      <div className="flex items-center gap-1 justify-end">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={netEditing[entry.id]}
+                          onChange={e => setNetEditing(prev => ({ ...prev, [entry.id]: e.target.value }))}
+                          className="w-24 bg-zinc-800 border border-zinc-600 text-white rounded px-1.5 py-1 text-xs focus:outline-none focus:border-amber-500 text-right"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleNetSave(entry.id)}
+                          disabled={netLoading === entry.id}
+                          className="text-xs bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded px-2 py-1"
+                        >
+                          {netLoading === entry.id ? '...' : 'OK'}
+                        </button>
+                        <button
+                          onClick={() => setNetEditing(prev => { const n = { ...prev }; delete n[entry.id]; return n })}
+                          className="text-zinc-500 hover:text-white text-xs"
+                        >✕</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-end gap-1 group">
+                        <span className={netColor}>
+                          {isNegative ? `-${fmt(Math.abs(entry.netAmount))}` : fmt(entry.netAmount)}
+                        </span>
+                        {canPay && (
+                          <button
+                            onClick={() => setNetEditing(prev => ({ ...prev, [entry.id]: entry.netAmount.toString() }))}
+                            className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-amber-400 transition-opacity text-xs"
+                            title="Editar saldo final"
+                          >✎</button>
+                        )}
+                      </div>
+                    )}
                   </td>
                   {canPay && (
                     <td className="px-2 py-2">

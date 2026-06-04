@@ -382,6 +382,24 @@ export async function updatePayrollAbono(entryId: string, abono: number) {
   return { ok: true }
 }
 
+export async function updatePayrollNetAmount(entryId: string, netAmount: number) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {
+    return { error: 'No autorizado' }
+  }
+
+  const entry = await prisma.payrollEntry.findUnique({ where: { id: entryId } })
+  if (!entry) return { error: 'Entrada no encontrada' }
+
+  await prisma.payrollEntry.update({
+    where: { id: entryId },
+    data: { netAmount: Math.round(netAmount * 100) / 100 },
+  })
+
+  revalidatePath(`/nomina/${entry.periodId}`)
+  return { ok: true }
+}
+
 type Disposition = 'CAJA_CHICA' | 'AURUMIN' | 'LUIS_PENA' | 'SIGUIENTE'
 
 // ─── Cerrar período — crea CashEntry para carros negativos ────────────────────

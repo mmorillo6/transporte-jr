@@ -73,7 +73,7 @@ export async function createExpensesBulk(items: {
   amount: number
   truckId: string
   periodId: string
-}[]) {
+}[], skipCajaEgreso = false) {
   const session = await getSession()
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
   if (items.length === 0) return { error: 'Sin gastos para guardar' }
@@ -103,17 +103,19 @@ export async function createExpensesBulk(items: {
     })),
   })
 
-  // Viáticos se pagan en efectivo de caja chica → egreso automático
-  const viaticos = items.filter(i => i.category === 'VIATICO')
-  if (viaticos.length > 0) {
+  // Gastos operativos se pagan de caja chica → egreso automático
+  // MECANICA, ADMINISTRATIVO, NPR y NOMINA son sueldos, no salen de caja chica
+  const CAJA_EGRESO_CATS = ['REPUESTO', 'ACEITE', 'CAUCHO', 'OPERATIVO', 'VIATICO', 'OTRO']
+  const cajaItems = skipCajaEgreso ? [] : items.filter(i => CAJA_EGRESO_CATS.includes(i.category))
+  if (cajaItems.length > 0) {
     await prisma.cashEntry.createMany({
-      data: viaticos.map(v => ({
+      data: cajaItems.map(v => ({
         type:     'EGRESO' as const,
         currency: 'EFECTIVO' as const,
         amount:   v.amount,
-        concept:  `Viático — ${v.description.trim()}`,
+        concept:  `${v.category} — ${v.description.trim()}`,
         date:     new Date(v.date + 'T12:00:00'),
-        source:   'viáticos',
+        source:   'gastos operativos',
       })),
     })
     revalidatePath('/caja')
@@ -159,7 +161,7 @@ export async function applyGastosComunes(
     }
   }
 
-  const result = await createExpensesBulk(bulk)
+  const result = await createExpensesBulk(bulk, true)
   revalidatePath(`/nomina/${periodId}`)
   // Return target counts so UI can show correct divisor in toast
   const propioCount = propioIds.length
