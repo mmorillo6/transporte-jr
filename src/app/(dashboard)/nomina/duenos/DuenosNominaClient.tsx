@@ -429,6 +429,32 @@ export default function DuenosNominaClient({
                               </div>
                             )}
 
+                            {/* NPR column — solo A15AE9Y (isNPROwner sin viajes) */}
+                            {row.owner.isNPROwner && truck.auruminGross === 0 && truck.lpGross === 0 && truck.nprFee > 0 && (
+                              <div className="bg-zinc-800/40 rounded-xl p-3 space-y-1.5">
+                                <p className="text-violet-400 text-xs font-bold uppercase tracking-widest">NPR — Fondo de reposición</p>
+                                {(truck.saldoInicial ?? 0) !== 0 && (
+                                  <FinRow label="Saldo anterior"
+                                    value={`${truck.saldoInicial < 0 ? '-' : ''}$${fmt(Math.abs(truck.saldoInicial))}`}
+                                    color={truck.saldoInicial < 0 ? 'text-red-400' : 'text-emerald-400'}
+                                  />
+                                )}
+                                <FinRow label="NPR recaudado" value={`+$${fmt(truck.nprFee)}`}    color="text-emerald-400" />
+                                {truck.commFee > 0 && (
+                                  <FinRow label="Gastos NPR"  value={`-$${fmt(truck.commFee)}`}  color="text-red-400" />
+                                )}
+                                {truck.abono > 0 && (
+                                  <FinRow label="Abono"       value={`-$${fmt(truck.abono)}`}    color="text-emerald-400" />
+                                )}
+                                <div className="border-t border-zinc-700 pt-1.5 flex justify-between items-center">
+                                  <span className="text-white text-xs font-semibold">Saldo NPR</span>
+                                  <span className={`font-mono font-bold text-sm ${truck.netAmount < 0 ? 'text-red-400' : 'text-violet-400'}`}>
+                                    {truck.netAmount < 0 ? '-' : ''}${fmt(Math.abs(truck.netAmount))}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
                             {/* LP column */}
                             {truck.lpGross > 0 && (
                               <div className="bg-zinc-800/40 rounded-xl p-3 space-y-1.5">
