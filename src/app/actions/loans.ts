@@ -7,11 +7,12 @@ export async function createLoan(formData: FormData) {
   const session = await getSession()
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
 
-  const driverName = (formData.get('driverName') as string)?.trim()
-  const amount = parseFloat(formData.get('amount') as string)
-  const deductType = formData.get('deductType') as string
-  const deductAmount = parseFloat(formData.get('deductAmount') as string) || 0
-  const notes = formData.get('notes') as string
+  const driverName    = (formData.get('driverName') as string)?.trim()
+  const amount        = parseFloat(formData.get('amount') as string)
+  const deductType    = formData.get('deductType') as string
+  const deductAmount  = parseFloat(formData.get('deductAmount') as string) || 0
+  const notes         = formData.get('notes') as string
+  const fromCajaChica = formData.get('fromCajaChica') === 'true'
 
   if (!driverName || isNaN(amount) || amount <= 0) return { error: 'Nombre y monto son requeridos' }
 
@@ -26,6 +27,19 @@ export async function createLoan(formData: FormData) {
       date: new Date(),
     },
   })
+
+  if (fromCajaChica) {
+    await prisma.cashEntry.create({
+      data: {
+        type:     'EGRESO',
+        currency: 'EFECTIVO',
+        amount,
+        concept:  `Préstamo caja chica — ${driverName}${notes ? ` (${notes})` : ''}`,
+        source:   'PRESTAMO',
+      },
+    })
+    revalidatePath('/caja')
+  }
 
   revalidatePath('/prestamos')
   return { ok: true }

@@ -164,6 +164,21 @@ export default function PrestamosClient({
                 className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500 placeholder:text-zinc-600" />
             </div>
 
+            {!editing && (
+              <label className="flex items-start gap-3 p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl cursor-pointer hover:bg-amber-500/10 transition-colors">
+                <input
+                  type="checkbox"
+                  name="fromCajaChica"
+                  value="true"
+                  className="mt-0.5 w-4 h-4 rounded accent-amber-500 flex-shrink-0"
+                />
+                <div>
+                  <p className="text-amber-300 text-xs font-semibold">Préstamo de caja chica</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">Registra automáticamente la salida de efectivo en Caja al guardar</p>
+                </div>
+              </label>
+            )}
+
             {error && <p className="text-red-400 text-sm">{error}</p>}
             <div className="flex gap-3">
               <button type="submit" disabled={loading}

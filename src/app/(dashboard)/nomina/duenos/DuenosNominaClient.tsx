@@ -2,7 +2,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { markPayrollEntryPaid, recordAbonoAurumin } from '@/app/actions/payroll'
+import { registerPayment } from '@/app/actions/payroll'
 
 type TruckRow = {
   truckId: string
@@ -109,8 +109,8 @@ export default function DuenosNominaClient({
   const [, startTransition] = useTransition()
   const [openOwner, setOpenOwner] = useState<string | null>(null)
   const [paying, setPaying] = useState<Set<string>>(new Set())
-  const [abonoFor, setAbonoFor] = useState<string | null>(null)
-  const [abonoAmt, setAbonoAmt] = useState('')
+  const [payFor, setPayFor] = useState<{ entryId: string; currency: 'EFECTIVO' | 'USDT' } | null>(null)
+  const [payAmt, setPayAmt] = useState('')
 
   function computeTruckSaldos(truck: TruckRow, ownerType?: string, isNPROwner?: boolean) {
     const isAfiliado = ownerType === 'AFILIADO'
@@ -136,19 +136,14 @@ export default function DuenosNominaClient({
     return { auruminSaldo, lpSaldo, nprAurumin, nprLP }
   }
 
-  async function handlePayLP(payrollEntryId: string) {
-    setPaying(prev => new Set(prev).add(payrollEntryId))
-    await markPayrollEntryPaid(payrollEntryId, 'EFECTIVO')
-    setPaying(prev => { const s = new Set(prev); s.delete(payrollEntryId); return s })
-    router.refresh()
-  }
-
-  async function handleAbono(payrollEntryId: string) {
-    const amount = parseFloat(abonoAmt.replace(',', '.'))
+  async function handlePayment(entryId: string, currency: 'EFECTIVO' | 'USDT') {
+    const amount = parseFloat(payAmt.replace(',', '.'))
     if (!amount || amount <= 0) return
-    await recordAbonoAurumin(payrollEntryId, amount)
-    setAbonoFor(null)
-    setAbonoAmt('')
+    setPaying(prev => new Set(prev).add(entryId))
+    await registerPayment(entryId, amount, currency)
+    setPayFor(null)
+    setPayAmt('')
+    setPaying(prev => { const s = new Set(prev); s.delete(entryId); return s })
     router.refresh()
   }
 
@@ -399,31 +394,33 @@ export default function DuenosNominaClient({
                                     {auruminSaldo < 0 ? '-' : ''}${fmt(Math.abs(auruminSaldo))}
                                   </span>
                                 </div>
-                                {/* Botón abono Aurumin */}
-                                {abonoFor === truck.payrollEntryId ? (
+                                {/* Botón pago Aurumin (USDT) */}
+                                {payFor?.entryId === truck.payrollEntryId && payFor.currency === 'USDT' ? (
                                   <div className="flex gap-1 pt-1" onClick={e => e.stopPropagation()}>
                                     <input
                                       type="number" min="0" step="0.01"
-                                      value={abonoAmt}
-                                      onChange={e => setAbonoAmt(e.target.value)}
+                                      value={payAmt}
+                                      onChange={e => setPayAmt(e.target.value)}
                                       placeholder="Monto $"
                                       className="flex-1 bg-zinc-700 border border-zinc-600 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-amber-500 w-0"
                                       autoFocus
                                     />
-                                    <button onClick={() => handleAbono(truck.payrollEntryId)}
-                                      className="bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold rounded-lg px-2.5 py-1.5 transition-colors">
+                                    <button
+                                      disabled={paying.has(truck.payrollEntryId)}
+                                      onClick={() => handlePayment(truck.payrollEntryId, 'USDT')}
+                                      className="bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-bold rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-50">
                                       ✓
                                     </button>
-                                    <button onClick={() => { setAbonoFor(null); setAbonoAmt('') }}
+                                    <button onClick={() => { setPayFor(null); setPayAmt('') }}
                                       className="bg-zinc-700 hover:bg-zinc-600 text-zinc-400 text-xs rounded-lg px-2 py-1.5 transition-colors">
                                       ✕
                                     </button>
                                   </div>
                                 ) : (
                                   <button
-                                    onClick={e => { e.stopPropagation(); setAbonoFor(truck.payrollEntryId); setAbonoAmt('') }}
+                                    onClick={e => { e.stopPropagation(); setPayFor({ entryId: truck.payrollEntryId, currency: 'USDT' }); setPayAmt(auruminSaldo.toFixed(2)) }}
                                     className="w-full text-xs text-amber-500 hover:text-amber-400 border border-amber-500/20 hover:border-amber-500/40 rounded-lg py-1.5 transition-colors mt-1">
-                                    + Registrar abono Aurumin
+                                    + Registrar pago Aurumin (USDT)
                                   </button>
                                 )}
                               </div>
@@ -476,14 +473,36 @@ export default function DuenosNominaClient({
                                     </span>
                                   )}
                                 </div>
-                                {/* Botón pagar LP */}
+                                {/* Botón pago LP (efectivo) */}
                                 {!truck.paidAt && (
-                                  <button
-                                    disabled={paying.has(truck.payrollEntryId)}
-                                    onClick={e => { e.stopPropagation(); handlePayLP(truck.payrollEntryId) }}
-                                    className="w-full text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/20 hover:border-emerald-500/40 rounded-lg py-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                    {paying.has(truck.payrollEntryId) ? 'Registrando...' : '✓ Marcar LP pagado en efectivo'}
-                                  </button>
+                                  payFor?.entryId === truck.payrollEntryId && payFor.currency === 'EFECTIVO' ? (
+                                    <div className="flex gap-1 pt-1" onClick={e => e.stopPropagation()}>
+                                      <input
+                                        type="number" min="0" step="0.01"
+                                        value={payAmt}
+                                        onChange={e => setPayAmt(e.target.value)}
+                                        placeholder="Monto $"
+                                        className="flex-1 bg-zinc-700 border border-zinc-600 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-500 w-0"
+                                        autoFocus
+                                      />
+                                      <button
+                                        disabled={paying.has(truck.payrollEntryId)}
+                                        onClick={e => { e.stopPropagation(); handlePayment(truck.payrollEntryId, 'EFECTIVO') }}
+                                        className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-50">
+                                        ✓
+                                      </button>
+                                      <button onClick={() => { setPayFor(null); setPayAmt('') }}
+                                        className="bg-zinc-700 hover:bg-zinc-600 text-zinc-400 text-xs rounded-lg px-2 py-1.5 transition-colors">
+                                        ✕
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={e => { e.stopPropagation(); setPayFor({ entryId: truck.payrollEntryId, currency: 'EFECTIVO' }); setPayAmt(lpRawSaldo.toFixed(2)) }}
+                                      className="w-full text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/20 hover:border-emerald-500/40 rounded-lg py-1.5 transition-colors">
+                                      ✓ Pagar LP en efectivo
+                                    </button>
+                                  )
                                 )}
                               </div>
                             )}

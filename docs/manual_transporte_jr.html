@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manual de Usuario — Sistema de Gestión Transporte José Rodríguez</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 13px;
+      color: #1a1a2e;
+      background: #fff;
+      line-height: 1.6;
+    }
+
+    /* ── PORTADA ── */
+    .cover {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+      color: #fff;
+      padding: 60px 40px;
+      page-break-after: always;
+    }
+    .cover-logo {
+      width: 90px;
+      height: 90px;
+      background: #f59e0b;
+      border-radius: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 42px;
+      margin-bottom: 32px;
+    }
+    .cover h1 { font-size: 32px; font-weight: 800; margin-bottom: 8px; }
+    .cover h2 { font-size: 20px; font-weight: 400; color: #f59e0b; margin-bottom: 32px; }
+    .cover-divider { width: 60px; height: 3px; background: #f59e0b; margin: 24px auto; border-radius: 2px; }
+    .cover-meta { font-size: 13px; color: #94a3b8; }
+    .cover-meta p { margin-bottom: 4px; }
+    .cover-version {
+      margin-top: 40px;
+      background: rgba(245,158,11,0.15);
+      border: 1px solid rgba(245,158,11,0.3);
+      border-radius: 8px;
+      padding: 12px 28px;
+      font-size: 13px;
+      color: #fbbf24;
+    }
+
+    /* ── CONTENIDO ── */
+    .content { max-width: 820px; margin: 0 auto; padding: 48px 40px; }
+
+    h1.section-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: #0f3460;
+      margin-bottom: 6px;
+      padding-bottom: 10px;
+      border-bottom: 3px solid #f59e0b;
+    }
+    h2.module-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin: 32px 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h2.module-title .icon {
+      background: #0f3460;
+      color: #fff;
+      border-radius: 8px;
+      width: 32px; height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+    h3 { font-size: 14px; font-weight: 700; color: #374151; margin: 20px 0 6px; }
+    p { margin-bottom: 10px; color: #374151; }
+
+    /* ── CARDS ── */
+    .card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+    }
+    .card-amber { border-left: 4px solid #f59e0b; background: #fffbeb; }
+    .card-blue  { border-left: 4px solid #3b82f6; background: #eff6ff; }
+    .card-green { border-left: 4px solid #10b981; background: #f0fdf4; }
+    .card-red   { border-left: 4px solid #ef4444; background: #fef2f2; }
+
+    /* ── STEPS ── */
+    .steps { counter-reset: step; }
+    .step {
+      display: flex;
+      gap: 14px;
+      margin-bottom: 12px;
+      align-items: flex-start;
+    }
+    .step-num {
+      counter-increment: step;
+      background: #0f3460;
+      color: #fff;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .step-text { flex: 1; }
+
+    /* ── TABLA COMPARATIVA ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      font-size: 12px;
+    }
+    th {
+      background: #0f3460;
+      color: #fff;
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+    }
+    td {
+      padding: 9px 14px;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .check { color: #10b981; font-weight: 700; }
+    .cross { color: #ef4444; }
+
+    /* ── BADGES ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .badge-amber  { background: #fef3c7; color: #92400e; }
+    .badge-blue   { background: #dbeafe; color: #1e40af; }
+    .badge-green  { background: #d1fae5; color: #065f46; }
+    .badge-purple { background: #ede9fe; color: #5b21b6; }
+    .badge-red    { background: #fee2e2; color: #991b1b; }
+
+    /* ── GRID ── */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .stat-card .stat-num {
+      font-size: 28px;
+      font-weight: 800;
+      color: #0f3460;
+      line-height: 1;
+    }
+    .stat-card .stat-label {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    /* ── MÓDULO HEADER ── */
+    .module-header {
+      background: linear-gradient(135deg, #0f3460, #1a1a2e);
+      color: #fff;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .module-header .mh-icon {
+      font-size: 28px;
+      width: 50px; height: 50px;
+      background: rgba(245,158,11,0.2);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .module-header h2 { font-size: 17px; font-weight: 700; margin: 0 0 3px; }
+    .module-header p  { font-size: 12px; color: #94a3b8; margin: 0; }
+
+    /* ── SEPARADOR DE SECCIÓN ── */
+    .section-break {
+      page-break-before: always;
+      padding-top: 40px;
+    }
+
+    /* ── ROLES ── */
+    .role-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 12px;
+    }
+    .role-card h3 { margin: 0 0 6px; font-size: 14px; }
+    .role-card ul { padding-left: 18px; }
+    .role-card li { margin-bottom: 3px; font-size: 12px; color: #4b5563; }
+
+    /* ── FOOTER ── */
+    .page-footer {
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+      color: #94a3b8;
+      font-size: 11px;
+    }
+
+    ul { padding-left: 20px; margin-bottom: 10px; }
+    li { margin-bottom: 4px; color: #374151; }
+    strong { color: #1a1a2e; }
+
+    /* ── PRINT ── */
+    @media print {
+      @page { size: A4; margin: 1.5cm 2cm; }
+      body { font-size: 12px; }
+      .cover { page-break-after: always; }
+      .section-break { page-break-before: always; }
+      .no-break { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════ PORTADA ══════════════════════════════ -->
+<div class="cover">
+  <div class="cover-logo">🚛</div>
+  <h1>Sistema de Gestión</h1>
+  <h2>Transporte José Rodríguez</h2>
+  <div class="cover-divider"></div>
+  <p style="font-size:16px;color:#cbd5e1;max-width:480px;margin-bottom:20px;">
+    Manual de usuario, guía operativa y comparativo de mejoras respecto al flujo anterior con hojas de cálculo Excel.
+  </p>
+  <div class="cover-version">
+    Versión 1.0 &nbsp;·&nbsp; Junio 2026 &nbsp;·&nbsp; Entrega final
+  </div>
+  <div class="cover-meta" style="margin-top:40px;">
+    <p>Desarrollado por Mary Morillo</p>
+    <p>Propietario: José Rodríguez · Encargado: Fernando Pérez</p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ ÍNDICE ══════════════════════════════ -->
+<div class="content">
+  <h1 class="section-title">Tabla de Contenido</h1>
+  <br/>
+  <table>
+    <tr><td><strong>1.</strong> Resumen Ejecutivo</td><td style="text-align:right;color:#64748b;">3</td></tr>
+    <tr><td><strong>2.</strong> Panorama General del Sistema</td><td style="text-align:right;color:#64748b;">4</td></tr>
+    <tr><td><strong>3.</strong> Roles de Usuario</td><td style="text-align:right;color:#64748b;">5</td></tr>
+    <tr><td><strong>4.</strong> Módulos del Sistema</td><td style="text-align:right;color:#64748b;">6</td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;4.1 Romana (Importación de viajes)</td><td style="text-align:right;color:#64748b;"></td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;4.2 Nómina</td><td style="text-align:right;color:#64748b;"></td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;4.3 Gastos</td><td style="text-align:right;color:#64748b;"></td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;4.4 Cuentas por Cobrar (CxC)</td><td style="text-align:right;color:#64548b;"></td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;4.5 Caja Chica</td><td style="text-align:right;color:#64748b;"></td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;4.6 Préstamos</td><td style="text-align:right;color:#64748b;"></td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;4.7 Flota (Camiones, Conductores, Dueños)</td><td style="text-align:right;color:#64748b;"></td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;4.8 Mantenimiento</td><td style="text-align:right;color:#64748b;"></td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;4.9 Reportes</td><td style="text-align:right;color:#64748b;"></td></tr>
+    <tr><td>&nbsp;&nbsp;&nbsp;4.10 Demás módulos</td><td style="text-align:right;color:#64748b;"></td></tr>
+    <tr><td><strong>5.</strong> Flujo Operativo Quincenal Paso a Paso</td><td style="text-align:right;color:#64748b;">16</td></tr>
+    <tr><td><strong>6.</strong> Mejoras vs. Método Anterior (Excel)</td><td style="text-align:right;color:#64748b;">18</td></tr>
+    <tr><td><strong>7.</strong> Ventajas y Beneficios</td><td style="text-align:right;color:#64748b;">20</td></tr>
+  </table>
+</div>
+
+<!-- ══════════════════════════════ 1. RESUMEN ══════════════════════════════ -->
+<div class="content section-break">
+  <h1 class="section-title">1. Resumen Ejecutivo</h1>
+  <br/>
+  <p>
+    El <strong>Sistema de Gestión Transporte José Rodríguez</strong> es una aplicación web diseñada a medida para automatizar y centralizar todas las operaciones de la empresa de transporte. Reemplaza el flujo manual basado en múltiples hojas de cálculo Excel con una plataforma integrada, accesible desde cualquier dispositivo con conexión a internet.
+  </p>
+
+  <div class="grid-3" style="margin-top:24px;">
+    <div class="stat-card">
+      <div class="stat-num">10+</div>
+      <div class="stat-label">Módulos integrados</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">4</div>
+      <div class="stat-label">Roles de usuario</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">~10</div>
+      <div class="stat-label">Camiones gestionados</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">2</div>
+      <div class="stat-label">Minas activas</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">100%</div>
+      <div class="stat-label">Cálculo automático nómina</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">0</div>
+      <div class="stat-label">Fórmulas manuales Excel</div>
+    </div>
+  </div>
+
+  <div class="card card-amber">
+    <strong>Objetivo principal:</strong> Que el encargado (Fernando) pueda cerrar la nómina quincenal en minutos en lugar de horas, con total transparencia para el dueño (José) y los socios.
+  </div>
+
+  <h3>Lo que hace el sistema automáticamente:</h3>
+  <ul>
+    <li>Calcula la nómina de cada camión al importar la romana (Excel de viajes)</li>
+    <li>Distribuye los gastos de mecánicos, administrativos y NPR entre los camiones correspondientes</li>
+    <li>Lleva el control de caja chica y registra cada movimiento</li>
+    <li>Genera el estado de cuentas por cobrar a Aurumin</li>
+    <li>Notifica por email y/o WhatsApp al cerrar cada período</li>
+    <li>Calcula el NPR (fondo de reposición) de José sumando el 5% de los propios y 10% de De Freita</li>
+    <li>Mantiene historial de préstamos y los descuenta automáticamente en nómina</li>
+    <li>Saldos que se arrastran entre quincenas sin recalcular manualmente</li>
+  </ul>
+</div>
+
+<!-- ══════════════════════════════ 2. PANORAMA ══════════════════════════════ -->
+<div class="content section-break">
+  <h1 class="section-title">2. Panorama General del Sistema</h1>
+  <br/>
+
+  <div class="card card-blue">
+    <strong>URL de acceso:</strong> La aplicación es accesible desde cualquier navegador web (Chrome, Safari, Firefox) en computadoras, tablets y teléfonos. No requiere instalación.
+  </div>
+
+  <h3>Tecnología</h3>
+  <p>La aplicación está construida con tecnología moderna de alto rendimiento: servidor en la nube (Supabase/Vercel), base de datos PostgreSQL, y acceso 100% a través del navegador. Los datos están respaldados automáticamente.</p>
+
+  <h3>Arquitectura de períodos</h3>
+  <p>Todas las operaciones se organizan en <strong>quincenas (períodos)</strong>. Cada período tiene un ciclo de vida:</p>
+
+  <div class="steps">
+    <div class="step"><div class="step-num"></div><div class="step-text"><strong>Romana importada</strong> — Se sube el Excel de viajes de la romana</div></div>
+    <div class="step"><div class="step-num"></div><div class="step-text"><strong>Nómina generada</strong> — El sistema calcula automáticamente la nómina de cada camión</div></div>
+    <div class="step"><div class="step-num"></div><div class="step-text"><strong>Gastos comunes</strong> — Se ingresan gastos de mecánicos, Starlink, etc.</div></div>
+    <div class="step"><div class="step-num"></div><div class="step-text"><strong>Gastos mecánicos</strong> — Se registran reparaciones individuales por camión</div></div>
+    <div class="step"><div class="step-num"></div><div class="step-text"><strong>Cobros Aurumin</strong> — Se registra el pago recibido de Aurumin</div></div>
+    <div class="step"><div class="step-num"></div><div class="step-text"><strong>Período cerrado</strong> — Se congela la quincena, se notifica a las partes</div></div>
+  </div>
+
+  <h3>Dos minas, dos clientes</h3>
+  <div class="grid-2">
+    <div class="card card-amber no-break">
+      <strong>🏔️ Aurumin (La Fe / Nuevo Callao)</strong><br/>
+      Cliente principal. Paga quincenal. El sistema lleva CxC detallado con cada período, saldos y pagos.
+    </div>
+    <div class="card card-blue no-break">
+      <strong>🏗️ Luis Peña (Chino Peña)</strong><br/>
+      Cliente secundario. Los camiones que trabajan para Luis Peña tienen flujo separado. Los choferes cobran directo.
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ 3. ROLES ══════════════════════════════ -->
+<div class="content section-break">
+  <h1 class="section-title">3. Roles de Usuario</h1>
+  <br/>
+
+  <div class="role-card" style="border-left:4px solid #f59e0b;">
+    <h3>👑 Dueño (José Rodríguez)</h3>
+    <p style="font-size:12px;color:#6b7280;margin-bottom:8px;">Acceso completo a todo el sistema. Ve todas las secciones, puede recalcular nóminas y cerrar períodos.</p>
+    <ul>
+      <li>Ver nómina completa de todos los dueños</li>
+      <li>Saldos por dueño y desglose de camiones</li>
+      <li>Estado de cuentas por cobrar a Aurumin</li>
+      <li>Reportes financieros globales</li>
+      <li>Gestión de préstamos, mantenimiento, almacén</li>
+      <li>Panel NPR (fondo de reposición A15AE9Y)</li>
+    </ul>
+  </div>
+
+  <div class="role-card" style="border-left:4px solid #3b82f6;">
+    <h3>🔧 Encargado (Fernando Pérez)</h3>
+    <p style="font-size:12px;color:#6b7280;margin-bottom:8px;">Responsable de la operación diaria. Ingresa datos, genera nóminas y gestiona gastos.</p>
+    <ul>
+      <li>Importar romana (Excel de viajes)</li>
+      <li>Generar y recalcular nómina</li>
+      <li>Registrar gastos (comunes, mecánicos, viáticos)</li>
+      <li>Gestionar préstamos y abonos</li>
+      <li>Cerrar períodos y notificar</li>
+      <li>Registrar mantenimiento y cauchos</li>
+    </ul>
+  </div>
+
+  <div class="role-card" style="border-left:4px solid #10b981;">
+    <h3>🚚 Afiliado (Dueño externo)</h3>
+    <p style="font-size:12px;color:#6b7280;margin-bottom:8px;">Los dueños de camiones afiliados (Leo, Carlos, Fernando, Mauro, De Freita, los Neto, San Casimiro, Mary) ven solo sus propios datos.</p>
+    <ul>
+      <li>Ver su nómina y desglose de camiones</li>
+      <li>Ver sus gastos del período</li>
+      <li>Ver sus préstamos y saldos pendientes</li>
+      <li>Historial de pagos</li>
+    </ul>
+  </div>
+
+  <div class="role-card" style="border-left:4px solid #8b5cf6;">
+    <h3>🧑‍✈️ Chofer</h3>
+    <p style="font-size:12px;color:#6b7280;margin-bottom:8px;">Acceso básico a su información personal.</p>
+    <ul>
+      <li>Ver sus viajes del período</li>
+      <li>Ver su nómina personal</li>
+      <li>Ver sus préstamos vigentes</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ 4. MÓDULOS ══════════════════════════════ -->
+<div class="content section-break">
+  <h1 class="section-title">4. Módulos del Sistema</h1>
+
+  <!-- 4.1 ROMANA -->
+  <div class="module-header">
+    <div class="mh-icon">📋</div>
+    <div>
+      <h2>4.1 Romana — Importación de Viajes</h2>
+      <p>Carga masiva de los viajes del período desde el Excel de la romana</p>
+    </div>
+  </div>
+
+  <p>La romana es el punto de partida de cada quincena. Fernando descarga el Excel con todos los viajes (tickets, toneladas, montos) y lo sube al sistema con un clic.</p>
+
+  <h3>Cómo usarla:</h3>
+  <div class="steps">
+    <div class="step"><div class="step-num"></div><div class="step-text">Ir a <strong>Romana</strong> en el menú lateral</div></div>
+    <div class="step"><div class="step-num"></div><div class="step-text">Seleccionar el período activo (quincena actual)</div></div>
+    <div class="step"><div class="step-num"></div><div class="step-text">Hacer clic en <strong>"Importar Excel"</strong> y seleccionar el archivo</div></div>
+    <div class="step"><div class="step-num"></div><div class="step-text">El sistema muestra una vista previa: revisar que los viajes sean correctos</div></div>
+    <div class="step"><div class="step-num"></div><div class="step-text">Confirmar importación. Los viajes quedan cargados en segundos</div></div>
+  </div>
+
+  <div class="card card-green">
+    <strong>✓ Inteligencia del importador:</strong> Detecta automáticamente el camión por la placa, la ruta, la mina y el cliente. Avisa si hay placas desconocidas o datos faltantes antes de importar.
+  </div>
+
+  <h3>Validaciones automáticas:</h3>
+  <ul>
+    <li>Placas que no están registradas en la flota → aviso de error</li>
+    <li>Duplicados de tickets → se ignoran para no contar dos veces</li>
+    <li>Fechas fuera del período → se asignan al período correcto automáticamente</li>
+    <li>Viajes de Material Estéril → se procesan con tarifa especial ($100/viaje)</li>
+  </ul>
+
+  <!-- 4.2 NÓMINA -->
+  <div class="module-header" style="margin-top:32px;">
+    <div class="mh-icon">💰</div>
+    <div>
+      <h2>4.2 Nómina</h2>
+      <p>Cálculo automático del pago a cada dueño de camión por quincena</p>
+    </div>
+  </div>
+
+  <p>El módulo más importante. Una vez importada la romana, Fernando hace clic en <strong>"Generar nómina"</strong> y el sistema calcula automáticamente el saldo de cada camión.</p>
+
+  <h3>Fórmula de cálculo por camión:</h3>
+  <div class="card" style="font-family:monospace;font-size:12px;line-height:2;">
+    <span style="color:#10b981;font-weight:700;">FACTURACIÓN</span><br/>
+    <span style="color:#ef4444;">− Gastos operativos</span> (repuestos, aceites, viáticos, etc.)<br/>
+    <span style="color:#ef4444;">− Nómina chofer</span> (tarifa fija por viaje según ruta)<br/>
+    <span style="color:#ef4444;">− Nómina mecánicos</span> (solo camiones propios con viajes Aurumin)<br/>
+    <span style="color:#ef4444;">− Administrativo</span> ($75/camión propio activo)<br/>
+    <span style="color:#ef4444;">− 5% NPR</span> (camiones propios y De Freita)<br/>
+    <span style="color:#6366f1;">± Saldo anterior</span> (arrastre de la quincena anterior)<br/>
+    <span style="color:#ef4444;">− Abono recibido</span><br/>
+    <hr style="border:1px solid #e2e8f0;margin:6px 0;"/>
+    <span style="color:#f59e0b;font-weight:700;">= SALDO FINAL</span>
+  </div>
+
+  <h3>Reglas especiales:</h3>
+  <ul>
+    <li><strong>Camiones propios:</strong> Pagan mecánicos y administrativo. NPR se descuenta al 5%</li>
+    <li><strong>Afiliados:</strong> No pagan mecánicos ni administrativo. Los choferes cobran directo.</li>
+    <li><strong>San Casimiro (Luis Rivas):</strong> Chofer cobra 20% del neto (bruto − NPR)</li>
+    <li><strong>José (A02BK4F, A55BH6D):</strong> NPR se suma en vez de restar (es ingreso)</li>
+    <li><strong>NPR A15AE9Y:</strong> Entry especial que acumula el NPR recaudado de todos los contribuidores</li>
+  </ul>
+
+  <h3>Saldos dueños:</h3>
+  <p>La vista <strong>"Saldos dueños"</strong> muestra a todos los propietarios con sus camiones, desglose completo por cliente (Aurumin / Luis Peña) y el total a pagar.</p>
+
+  <div class="card card-amber">
+    <strong>Importante:</strong> Regenerar la nómina <em>no borra</em> los saldos iniciales ni abonos que haya ajustado Fernando manualmente. El sistema los preserva.
+  </div>
+
+  <!-- 4.3 GASTOS -->
+  <div class="module-header" style="margin-top:32px;">
+    <div class="mh-icon">🧾</div>
+    <div>
+      <h2>4.3 Gastos</h2>
+      <p>Registro de todos los gastos operativos del período</p>
+    </div>
+  </div>
+
+  <h3>Categorías de gastos:</h3>
+  <div class="grid-2">
+    <ul>
+      <li><strong>REPUESTO</strong> — Piezas y repuestos</li>
+      <li><strong>ACEITE</strong> — Aceites y lubricantes</li>
+      <li><strong>CAUCHO</strong> — Neumáticos</li>
+      <li><strong>MECANICA</strong> — Trabajo de mecánicos</li>
+    </ul>
+    <ul>
+      <li><strong>VIATICO</strong> — Viáticos de ruta</li>
+      <li><strong>OPERATIVO</strong> — Gastos generales de operación</li>
+      <li><strong>ADMINISTRATIVO</strong> — Gastos administrativos</li>
+      <li><strong>OTRO</strong> — Cualquier otro gasto</li>
+    </ul>
+  </div>
+
+  <h3>Funciones especiales:</h3>
+  <ul>
+    <li><strong>Gastos comunes:</strong> Un gasto se divide y se asigna a múltiples camiones automáticamente (ej. nómina de mecánicos)</li>
+    <li><strong>Copiar a otros camiones:</strong> Al registrar un gasto para un camión, aparece un modal para replicarlo a todos los demás con un clic</li>
+    <li><strong>Caja chica automática:</strong> Cada gasto registrado descuenta automáticamente de la caja chica (excepto Starlink y fiados)</li>
+    <li><strong>Gastos NPR (A15AE9Y):</strong> Cualquier gasto registrado en el camión A15AE9Y se descuenta automáticamente del fondo NPR</li>
+  </ul>
+
+  <!-- 4.4 CxC -->
+  <div class="module-header" style="margin-top:32px;">
+    <div class="mh-icon">📊</div>
+    <div>
+      <h2>4.4 Cuentas por Cobrar (CxC)</h2>
+      <p>Control de los pagos pendientes de Aurumin</p>
+    </div>
+  </div>
+
+  <p>Lleva el historial completo de lo que Aurumin debe pagar y lo que ya ha pagado. Cada quincena cerrada agrega un registro nuevo a la CxC.</p>
+
+  <h3>Cómo funciona:</h3>
+  <ul>
+    <li>Al cerrar un período, el monto de Aurumin queda en CxC como <strong>pendiente de cobro</strong></li>
+    <li>Cuando Aurumin paga (en USDT o efectivo), Fernando registra el cobro en la CxC</li>
+    <li>El sistema mueve automáticamente el monto a la <strong>Caja</strong></li>
+    <li>El saldo acumulado siempre está visible: "Aurumin nos debe: $XX,XXX"</li>
+  </ul>
+
+  <!-- 4.5 CAJA -->
+  <div class="module-header" style="margin-top:32px;">
+    <div class="mh-icon">💵</div>
+    <div>
+      <h2>4.5 Caja Chica</h2>
+      <p>Control del efectivo disponible para gastos operativos</p>
+    </div>
+  </div>
+
+  <p>Registra todos los ingresos y egresos en efectivo y USDT. Cada gasto operativo registrado descuenta automáticamente de la caja.</p>
+
+  <h3>Movimientos automáticos:</h3>
+  <ul>
+    <li>Gasto de repuesto, aceite, caucho, viático, operativo → <strong>EGRESO automático</strong> de caja</li>
+    <li>Cobro de Aurumin registrado en CxC → <strong>INGRESO automático</strong> a caja</li>
+    <li>Starlink → NO descuenta caja (se paga del cobro de Aurumin al final del período)</li>
+    <li>Gastos fiados (a crédito) → NO descuenta caja</li>
+  </ul>
+
+  <!-- 4.6 PRÉSTAMOS -->
+  <div class="module-header" style="margin-top:32px;">
+    <div class="mh-icon">🤝</div>
+    <div>
+      <h2>4.6 Préstamos</h2>
+      <p>Control de préstamos a conductores y dueños</p>
+    </div>
+  </div>
+
+  <p>Gestiona préstamos otorgados a conductores o dueños. El sistema los descuenta automáticamente en la nómina del período.</p>
+
+  <h3>Cómo funciona:</h3>
+  <div class="steps">
+    <div class="step"><div class="step-num"></div><div class="step-text">Registrar el préstamo con nombre del deudor, monto total y cuota de deducción por período</div></div>
+    <div class="step"><div class="step-num"></div><div class="step-text">Al generar la nómina, la cuota se descuenta automáticamente del saldo del camión correspondiente</div></div>
+    <div class="step"><div class="step-num"></div><div class="step-text">El saldo pendiente se actualiza en cada quincena</div></div>
+    <div class="step"><div class="step-num"></div><div class="step-text">Fernando puede pausar un préstamo si no debe descontarse en un período específico</div></div>
+  </div>
+
+  <!-- 4.7 FLOTA -->
+  <div class="module-header" style="margin-top:32px;">
+    <div class="mh-icon">🚛</div>
+    <div>
+      <h2>4.7 Flota — Camiones, Conductores y Dueños</h2>
+      <p>Gestión del inventario de la flota y sus relaciones</p>
+    </div>
+  </div>
+
+  <p>Administra la información de todos los camiones activos, sus conductores asignados y sus dueños.</p>
+
+  <h3>Camiones registrados por tipo:</h3>
+  <div class="grid-2">
+    <div class="card card-amber">
+      <strong>Propios</strong><br/>
+      <span style="font-size:12px;">Pertenecen a José Rodríguez. Pagan mecánicos y administración. Contribuyen al NPR.</span>
+    </div>
+    <div class="card card-blue">
+      <strong>Afiliados</strong><br/>
+      <span style="font-size:12px;">Camiones de terceros (Leo, Carlos, Mauro, etc.). No pagan mecánicos ni admin. Algunos pagan NPR.</span>
+    </div>
+  </div>
+
+  <h3>Toronto (A55BH6D) — Camión especial:</h3>
+  <div class="card card-amber">
+    Este camión acumula saldo histórico desde períodos anteriores. Su saldo arrastre se preserva en cada regeneración de nómina. Tiene múltiples socios (Mariana, Jheison, Mary, Nela).
+  </div>
+
+  <!-- 4.8 MANTENIMIENTO -->
+  <div class="module-header" style="margin-top:32px;">
+    <div class="mh-icon">🔧</div>
+    <div>
+      <h2>4.8 Mantenimiento</h2>
+      <p>Registro de trabajos mecánicos y deudas de cauchos</p>
+    </div>
+  </div>
+  <ul>
+    <li>Registrar trabajos de mecánica por camión con fecha, descripción y costo</li>
+    <li>Control de deudas de cauchos por dueño (pendiente, parcial, pagado)</li>
+    <li>Los costos de mecánica se descuentan automáticamente en la nómina del período</li>
+  </ul>
+
+  <!-- 4.9 REPORTES -->
+  <div class="module-header" style="margin-top:32px;">
+    <div class="mh-icon">📈</div>
+    <div>
+      <h2>4.9 Reportes</h2>
+      <p>Análisis financiero y operativo del negocio</p>
+    </div>
+  </div>
+  <ul>
+    <li><strong>Facturación vs Gastos:</strong> Comparativo de ingresos y egresos por período</li>
+    <li><strong>Deuda por dueño:</strong> Resumen de saldos pendientes de pago</li>
+    <li><strong>Afiliados:</strong> Performance específico de los camiones afiliados</li>
+    <li>Exportación a Excel y PDF disponible en cada módulo</li>
+  </ul>
+
+  <!-- 4.10 DEMÁS MÓDULOS -->
+  <div class="module-header" style="margin-top:32px;">
+    <div class="mh-icon">⚙️</div>
+    <div>
+      <h2>4.10 Demás Módulos</h2>
+      <p>Funcionalidades adicionales del sistema</p>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card no-break">
+      <strong>🛢️ Gasoil</strong><br/>
+      <span style="font-size:12px;">Registro de consumo de combustible por camión y ruta. El gasoil no se descuenta de la nómina, es informativo.</span>
+    </div>
+    <div class="card no-break">
+      <strong>🏭 Almacén</strong><br/>
+      <span style="font-size:12px;">Inventario de repuestos y materiales disponibles. Control de entradas y salidas.</span>
+    </div>
+    <div class="card no-break">
+      <strong>📅 Despacho / Asistencia</strong><br/>
+      <span style="font-size:12px;">Control de qué camiones están activos cada día. Registro de asistencia de conductores.</span>
+    </div>
+    <div class="card no-break">
+      <strong>🪨 Internos / Estéril</strong><br/>
+      <span style="font-size:12px;">Viajes internos de material estéril. Tarifa especial $100/viaje. Frank Cobi se omite automáticamente.</span>
+    </div>
+    <div class="card no-break">
+      <strong>🛣️ Rutas y Minas</strong><br/>
+      <span style="font-size:12px;">Configuración de rutas, tarifas por tonelada y sueldo de chofer. Se aplican automáticamente al importar la romana.</span>
+    </div>
+    <div class="card no-break">
+      <strong>👥 Usuarios</strong><br/>
+      <span style="font-size:12px;">Gestión de accesos. Crear, activar/desactivar usuarios. Asignar roles.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ 5. FLUJO QUINCENAL ══════════════════════════════ -->
+<div class="content section-break">
+  <h1 class="section-title">5. Flujo Operativo Quincenal</h1>
+  <p>Guía paso a paso de lo que hace Fernando cada quincena.</p>
+  <br/>
+
+  <div class="card card-blue" style="margin-bottom:24px;">
+    <strong>Períodos:</strong> Primera quincena = del <strong>1 al 16</strong> de cada mes. Segunda quincena = del <strong>17 al último día</strong> del mes.
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num"></div>
+      <div class="step-text">
+        <strong>Crear el período</strong><br/>
+        Ir a Nómina → clic en "Nuevo período". Establecer fechas de inicio y fin.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num"></div>
+      <div class="step-text">
+        <strong>Importar la romana</strong><br/>
+        Ir a Romana → seleccionar período → subir el Excel con los viajes → confirmar importación.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num"></div>
+      <div class="step-text">
+        <strong>Generar la nómina</strong><br/>
+        Ir a Nómina → seleccionar período → clic "Recalcular nómina". El sistema procesa todo en segundos.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num"></div>
+      <div class="step-text">
+        <strong>Registrar gastos comunes</strong><br/>
+        Ir a Gastos → "Gastos comunes" → ingresar nómina de mecánicos (se distribuye automáticamente), Starlink, y otros gastos que apliquen a todos los camiones.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num"></div>
+      <div class="step-text">
+        <strong>Registrar gastos individuales</strong><br/>
+        Para repuestos, aceites, viáticos u otros gastos de un camión específico: ir a Gastos, seleccionar el camión, ingresar el gasto. Si aplica a varios camiones, usar el modal "¿Copiar a otros camiones?".
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num"></div>
+      <div class="step-text">
+        <strong>Registrar mecánica individual</strong><br/>
+        Si algún camión tuvo trabajo de mecánica adicional, registrarlo en Mantenimiento con el costo. Se descuenta en la próxima regeneración de nómina.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num"></div>
+      <div class="step-text">
+        <strong>Recalcular nómina (si hubo cambios)</strong><br/>
+        Tras ingresar gastos, clic en "Recalcular nómina" para actualizar los saldos. Los saldos iniciales y abonos se preservan.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num"></div>
+      <div class="step-text">
+        <strong>Revisar Saldos dueños</strong><br/>
+        Ir a Nómina → "Saldos dueños" → revisar que cada dueño tiene el saldo correcto. Aquí se pueden registrar abonos recibidos.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num"></div>
+      <div class="step-text">
+        <strong>Registrar cobro de Aurumin</strong><br/>
+        Cuando Aurumin pague, ir a Cuentas por Cobrar → registrar el monto cobrado. El sistema lo mueve automáticamente a la Caja.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num"></div>
+      <div class="step-text">
+        <strong>Cerrar el período</strong><br/>
+        Una vez todo revisado, clic en "Cerrar período". Se envían notificaciones automáticas. El período queda congelado.
+      </div>
+    </div>
+  </div>
+
+  <div class="card card-red">
+    <strong>⚠️ Importante:</strong> Una vez cerrado el período, no se pueden modificar viajes ni nóminas. Si hay un error, el Dueño puede reabrir el período desde la vista de nómina.
+  </div>
+</div>
+
+<!-- ══════════════════════════════ 6. MEJORAS VS EXCEL ══════════════════════════════ -->
+<div class="content section-break">
+  <h1 class="section-title">6. Mejoras vs. Método Anterior (Excel)</h1>
+  <br/>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:35%;">Proceso</th>
+        <th style="width:30%;">❌ Antes (Excel manual)</th>
+        <th style="width:35%;">✅ Ahora (Sistema)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Cálculo de nómina</strong></td>
+        <td>Fórmulas manuales en Excel. Riesgo de error humano. 1–2 horas por quincena.</td>
+        <td class="check">Automático al hacer clic. Segundos. Sin riesgo de error de fórmula.</td>
+      </tr>
+      <tr>
+        <td><strong>Importar viajes (Romana)</strong></td>
+        <td>Copiar/pegar viaje por viaje desde el Excel de la romana al de nómina.</td>
+        <td class="check">Sube el Excel completo. El sistema asigna cada viaje al camión y período correcto.</td>
+      </tr>
+      <tr>
+        <td><strong>Distribución de gastos comunes</strong></td>
+        <td>Calcular manualmente la parte proporcional para cada camión y escribirla en cada celda.</td>
+        <td class="check">Fernando pone el total, el sistema divide y asigna automáticamente.</td>
+      </tr>
+      <tr>
+        <td><strong>Cálculo del NPR</strong></td>
+        <td>Calcular el 5% de cada propio y sumar manualmente para la cuenta de José.</td>
+        <td class="check">Automático. El entry de A15AE9Y agrupa todo el NPR en cada quincena.</td>
+      </tr>
+      <tr>
+        <td><strong>Arrastre de saldos</strong></td>
+        <td>Copiar el saldo final de una hoja a la siguiente manualmente. Fácil de olvidar o equivocarse.</td>
+        <td class="check">Automático. El saldo anterior se hereda al crear el nuevo período.</td>
+      </tr>
+      <tr>
+        <td><strong>Control de caja chica</strong></td>
+        <td>Cuaderno o Excel separado. Sin vinculación con los gastos operativos.</td>
+        <td class="check">Cada gasto registrado descuenta automáticamente de la caja. Historial completo.</td>
+      </tr>
+      <tr>
+        <td><strong>Préstamos y descuentos</strong></td>
+        <td>Apuntar en un listado separado. Recordar manualmente cuándo descontar y cuánto.</td>
+        <td class="check">Se registran una vez. El sistema los descuenta solos en cada nómina hasta saldar.</td>
+      </tr>
+      <tr>
+        <td><strong>Cuentas por cobrar a Aurumin</strong></td>
+        <td>Sumar manualmente los períodos pendientes. Riesgo de olvidar alguno.</td>
+        <td class="check">Vista consolidada de todo lo que debe Aurumin, período por período, con historial de pagos.</td>
+      </tr>
+      <tr>
+        <td><strong>Notificaciones al cerrar</strong></td>
+        <td>Fernando enviaba mensajes manualmente a cada dueño.</td>
+        <td class="check">Notificaciones automáticas por email y WhatsApp al cerrar el período.</td>
+      </tr>
+      <tr>
+        <td><strong>Acceso de los dueños</strong></td>
+        <td>Fernando enviaba un Excel o un screenshot por WhatsApp a cada quien.</td>
+        <td class="check">Cada dueño tiene su propio acceso y ve su nómina en tiempo real desde su teléfono.</td>
+      </tr>
+      <tr>
+        <td><strong>Cauchos y deudas</strong></td>
+        <td>Lista separada en papel o Excel. Sin historial de pagos parciales.</td>
+        <td class="check">Módulo dedicado con estado, pagos parciales y saldo pendiente por dueño.</td>
+      </tr>
+      <tr>
+        <td><strong>Gastos de un camión a varios</strong></td>
+        <td>Registrar el mismo gasto N veces, una por camión.</td>
+        <td class="check">Modal "Copiar gasto a otros camiones" — se confirma con un clic para todos.</td>
+      </tr>
+      <tr>
+        <td><strong>Historial y auditoría</strong></td>
+        <td>Los archivos Excel se perdían, sobreescribían o borraban accidentalmente.</td>
+        <td class="check">Todo en base de datos con respaldo automático en la nube. Historial permanente.</td>
+      </tr>
+      <tr>
+        <td><strong>Acceso desde el teléfono</strong></td>
+        <td>Solo desde la computadora donde estaba el Excel.</td>
+        <td class="check">Desde cualquier dispositivo con internet: teléfono, tablet, computadora.</td>
+      </tr>
+      <tr>
+        <td><strong>Material estéril</strong></td>
+        <td>Calcular manualmente a $100/viaje, omitir a Frank Cobi.</td>
+        <td class="check">Automático. Detecta el tipo de viaje y aplica la tarifa correcta.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════════════════════ 7. VENTAJAS ══════════════════════════════ -->
+<div class="content section-break">
+  <h1 class="section-title">7. Ventajas y Beneficios</h1>
+  <br/>
+
+  <div class="grid-2">
+    <div class="card card-green no-break">
+      <h3 style="color:#065f46;">⏱️ Ahorro de tiempo</h3>
+      <p style="font-size:12px;">El cierre quincenal que antes tomaba 1–2 horas ahora se completa en 15–30 minutos. El cálculo de nómina es instantáneo.</p>
+    </div>
+    <div class="card card-green no-break">
+      <h3 style="color:#065f46;">🎯 Precisión</h3>
+      <p style="font-size:12px;">Cero errores de fórmula. El sistema aplica las mismas reglas de negocio exactas en cada quincena sin posibilidad de error humano en el cálculo.</p>
+    </div>
+    <div class="card card-blue no-break">
+      <h3 style="color:#1e40af;">🔐 Seguridad de datos</h3>
+      <p style="font-size:12px;">Los datos están en la nube con respaldo automático. No se pueden perder por un disco duro dañado, un archivo sobreescrito o una computadora robada.</p>
+    </div>
+    <div class="card card-blue no-break">
+      <h3 style="color:#1e40af;">📱 Acceso multidispositivo</h3>
+      <p style="font-size:12px;">Fernando trabaja desde la oficina, la casa o el teléfono. José revisa los números desde donde esté. Los dueños ven sus saldos en su celular.</p>
+    </div>
+    <div class="card card-amber no-break">
+      <h3 style="color:#92400e;">👁️ Transparencia</h3>
+      <p style="font-size:12px;">Cada dueño tiene acceso directo a su información sin depender de Fernando para preguntar cuánto le corresponde. Genera confianza y reduce disputas.</p>
+    </div>
+    <div class="card card-amber no-break">
+      <h3 style="color:#92400e;">📊 Trazabilidad</h3>
+      <p style="font-size:12px;">Cada viaje, gasto, préstamo y pago queda registrado con fecha y usuario. Es posible rastrear cualquier movimiento hacia atrás en el tiempo.</p>
+    </div>
+    <div class="card" style="border-left:4px solid #8b5cf6;background:#faf5ff;" class="no-break">
+      <h3 style="color:#5b21b6;">🤖 Automatización inteligente</h3>
+      <p style="font-size:12px;">El sistema conoce las reglas del negocio: quién paga NPR, quién paga mecánicos, cuál es la tarifa de cada ruta, cuáles gastos van a caja. Fernando no tiene que recordar nada.</p>
+    </div>
+    <div class="card" style="border-left:4px solid #8b5cf6;background:#faf5ff;" class="no-break">
+      <h3 style="color:#5b21b6;">🔔 Notificaciones</h3>
+      <p style="font-size:12px;">Al cerrar el período, el sistema notifica automáticamente por email (y WhatsApp con CallMeBot). Los dueños saben que su nómina está lista sin que Fernando tenga que avisar.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:24px;">Comparativo de tiempo por tarea:</h3>
+  <table>
+    <thead>
+      <tr><th>Tarea</th><th>Antes</th><th>Ahora</th><th>Ahorro</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Importar viajes de la romana</td>
+        <td>30–60 min (copiar/pegar)</td>
+        <td class="check">2–3 min (subir Excel)</td>
+        <td class="check">~95% menos tiempo</td>
+      </tr>
+      <tr>
+        <td>Calcular nómina completa</td>
+        <td>45–90 min (fórmulas)</td>
+        <td class="check">&lt;1 min (clic)</td>
+        <td class="check">~99% menos tiempo</td>
+      </tr>
+      <tr>
+        <td>Distribuir gastos comunes</td>
+        <td>20–30 min</td>
+        <td class="check">3–5 min</td>
+        <td class="check">~85% menos tiempo</td>
+      </tr>
+      <tr>
+        <td>Enviar resultados a dueños</td>
+        <td>15–30 min (screenshots/WhatsApp)</td>
+        <td class="check">Automático al cerrar</td>
+        <td class="check">100% automatizado</td>
+      </tr>
+      <tr>
+        <td><strong>Total cierre quincenal</strong></td>
+        <td><strong>2–4 horas</strong></td>
+        <td class="check"><strong>15–30 minutos</strong></td>
+        <td class="check"><strong>~85% menos tiempo</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="card card-green" style="margin-top:24px;">
+    <strong>🏆 Resultado:</strong> Fernando puede cerrar la quincena de 10+ camiones, con todos los cálculos correctos, notificaciones enviadas y caja chica actualizada, en menos de 30 minutos — desde su teléfono si hace falta.
+  </div>
+
+  <div class="page-footer">
+    <p><strong>Sistema de Gestión Transporte José Rodríguez</strong> — Versión 1.0 — Junio 2026</p>
+    <p>Desarrollado por Mary Morillo · morillocmary@gmail.com</p>
+    <p style="margin-top:8px;">Este documento es confidencial y de uso interno.</p>
+  </div>
+</div>
+
+</body>
+</html>

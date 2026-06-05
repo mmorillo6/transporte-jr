@@ -639,6 +639,57 @@ export async function markPayrollEntryPaid(id: string, paymentMethod: string) {
   return { ok: true }
 }
 
+// ─── Registrar pago a dueño (parcial o total) y EGRESO en caja ───────────────
+// Partial: incrementa abono, recalcula netAmount, deja paidAt = null
+// Full:    netAmount queda ≤ 0, marca paidAt = now automáticamente
+export async function registerPayment(
+  entryId: string,
+  amount: number,
+  currency: 'EFECTIVO' | 'USDT',
+) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {
+    return { error: 'No autorizado' }
+  }
+  if (amount <= 0) return { error: 'Monto inválido' }
+
+  const entry = await prisma.payrollEntry.findUnique({
+    where: { id: entryId },
+    include: {
+      truck: { select: { plate: true, owner: { select: { name: true } } } },
+    },
+  })
+  if (!entry) return { error: 'Entrada no encontrada' }
+
+  const newNetAmount = Math.round(((entry.netAmount ?? 0) - amount) * 100) / 100
+  const fullyPaid   = newNetAmount <= 0
+
+  await prisma.cashEntry.create({
+    data: {
+      type:    'EGRESO',
+      currency,
+      amount:  Math.round(amount * 100) / 100,
+      concept: `Pago nómina — ${entry.truck.plate} (${entry.truck.owner.name})`,
+      source:  'NOMINA',
+      truckId: entry.truckId,
+    },
+  })
+
+  await prisma.payrollEntry.update({
+    where: { id: entryId },
+    data: {
+      abono:     { increment: Math.round(amount * 100) / 100 },
+      netAmount: newNetAmount,
+      ...(fullyPaid ? { paidAt: new Date(), paymentMethod: currency } : {}),
+    },
+  })
+
+  revalidatePath('/nomina/duenos')
+  revalidatePath(`/nomina/${entry.periodId}`)
+  revalidatePath('/caja')
+  return { ok: true, fullyPaid }
+}
+
 // ─── Registrar abono Aurumin (pago parcial contra saldo acumulado) ────────────
 export async function recordAbonoAurumin(id: string, amount: number) {
   const session = await getSession()
