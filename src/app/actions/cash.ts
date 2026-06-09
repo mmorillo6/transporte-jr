@@ -89,3 +89,49 @@ export async function registrarApertura(efectivo: number, usdt?: number) {
   revalidatePath('/caja')
   return { ok: true, adjusted: count }
 }
+
+// ── Préstamos de socios ────────────────────────────────────────────────────────
+
+export async function createSocioLoan(fd: FormData) {
+  const creditor = (fd.get('creditor') as string).trim()
+  const amount   = parseFloat(fd.get('amount') as string)
+  const currency = (fd.get('currency') as string) || 'EFECTIVO'
+  const concept  = (fd.get('concept') as string).trim()
+  const dateStr  = fd.get('date') as string
+  const notes    = (fd.get('notes') as string | null)?.trim() || null
+
+  if (!creditor || !concept || isNaN(amount) || amount <= 0)
+    return { error: 'Prestamista, concepto y monto son requeridos' }
+  if (!['EFECTIVO', 'USDT'].includes(currency))
+    return { error: 'Moneda inválida' }
+
+  await prisma.socioLoan.create({
+    data: {
+      creditor,
+      amount,
+      currency,
+      concept,
+      date:   dateStr ? new Date(dateStr) : new Date(),
+      status: 'PENDIENTE',
+      notes,
+    },
+  })
+
+  revalidatePath('/caja')
+  return { ok: true }
+}
+
+export async function markSocioLoanPaid(id: string) {
+  await prisma.socioLoan.update({
+    where: { id },
+    data:  { status: 'PAGADO', paidDate: new Date() },
+  })
+  revalidatePath('/caja')
+  return { ok: true }
+}
+
+export async function deleteSocioLoan(id: string) {
+  await prisma.socioLoan.delete({ where: { id } })
+  revalidatePath('/caja')
+  return { ok: true }
+}

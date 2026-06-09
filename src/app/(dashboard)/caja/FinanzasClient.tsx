@@ -24,6 +24,8 @@ export default function FinanzasClient({
   loans, drivers, totalLoaned, totalPending, totalPaidLoans,
   // por cobrar
   cuentas, totalPorCobrar,
+  // socioLoans
+  socioLoans, totalSocioDebt,
 }: {
   tab: string
   cashEntries: any[]
@@ -42,6 +44,8 @@ export default function FinanzasClient({
   totalPaidLoans: number
   cuentas: any[]
   totalPorCobrar: number
+  socioLoans: any[]
+  totalSocioDebt: number
 }) {
   const router = useRouter()
   const activeTab = (TABS.find(t => t.id === tab) ? tab : 'caja') as Tab
@@ -49,7 +53,7 @@ export default function FinanzasClient({
   return (
     <div className="space-y-4">
       {/* ── KPI strip ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
           <p className="text-zinc-500 text-xs mb-1">Efectivo en mano</p>
           <p className={`text-2xl font-bold ${balanceEfectivo >= 0 ? 'text-white' : 'text-red-400'}`}>
@@ -85,6 +89,13 @@ export default function FinanzasClient({
           </p>
           <p className="text-zinc-600 text-xs mt-1">{cuentas.filter((c: any) => c.status !== 'PAID').length} pendientes</p>
         </div>
+        <div className={`rounded-2xl p-4 border ${totalSocioDebt > 0 ? 'bg-purple-500/5 border-purple-500/20' : 'bg-zinc-900 border-zinc-800'}`}>
+          <p className="text-zinc-500 text-xs mb-1">Deudas a socios</p>
+          <p className={`text-2xl font-bold ${totalSocioDebt > 0 ? 'text-purple-400' : 'text-zinc-400'}`}>
+            ${totalSocioDebt.toFixed(2)}
+          </p>
+          <p className="text-zinc-600 text-xs mt-1">{socioLoans.filter((l: any) => l.status === 'PENDIENTE').length} pendientes</p>
+        </div>
       </div>
 
       {/* ── Tab selector ──────────────────────────────────────────────────── */}
@@ -112,6 +123,7 @@ export default function FinanzasClient({
           balanceEfectivo={balanceEfectivo}
           balanceUsdt={balanceUsdt}
           hideSaldoCards
+          socioLoans={socioLoans}
         />
       )}
 

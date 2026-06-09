@@ -74,6 +74,28 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
     orderBy: { startDate: 'desc' },
   })
 
+  // Despacho de hoy — qué camiones del dueño están en ruta hoy
+  const todayVE  = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Caracas' }))
+  const todayStr = `${todayVE.getFullYear()}-${String(todayVE.getMonth() + 1).padStart(2, '0')}-${String(todayVE.getDate()).padStart(2, '0')}`
+  // Dispatch.date se guarda como DateTime a medianoche Venezuela (T04:00Z en UTC).
+  // Usamos rango completo del día UTC para capturar cualquier despacho de hoy.
+  const dayStart = new Date(todayStr + 'T00:00:00Z')
+  const dayEnd   = new Date(todayStr + 'T23:59:59Z')
+  const todayDispatch = truckIds.length > 0
+    ? await prisma.dispatchEntry.findMany({
+        where: {
+          truckId:  { in: truckIds },
+          dispatch: { date: { gte: dayStart, lte: dayEnd } },
+        },
+        select: {
+          truckId:      true,
+          plannedTrips: true,
+          route:        { select: { name: true } },
+          truck:        { select: { plate: true, driver: { select: { name: true } } } },
+        },
+      })
+    : []
+
   // Drivers for loan lookup
   const driverNames = owner.trucks.map(t => (t as any).driver?.name).filter(Boolean)
 
@@ -296,6 +318,88 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         </div>
       </div>
 
+      {/* ── Estado hoy ─────────────────────────────────────────────────────── */}
+      {(() => {
+        const dayLabel = todayVE.toLocaleDateString('es-VE', { weekday: 'long', day: '2-digit', month: '2-digit' })
+        const dispatched    = todayDispatch.length
+        const notDispatched = owner.trucks.filter(t => !todayDispatch.some(d => d.truckId === t.id))
+
+        return (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-white font-semibold text-sm">Estado hoy</span>
+                <span className="text-zinc-500 text-xs capitalize">{dayLabel}</span>
+              </div>
+              {dispatched > 0
+                ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20">
+                    {dispatched} en ruta
+                  </span>
+                : <span className="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-500 font-semibold">
+                    Sin despacho registrado
+                  </span>
+              }
+            </div>
+
+            <div className="divide-y divide-zinc-800/60">
+              {/* Camiones con despacho registrado hoy */}
+              {todayDispatch.map(entry => (
+                <div key={entry.truckId} className="flex items-center gap-3 px-4 py-3">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                  <span className="text-white font-mono font-bold text-sm w-20 flex-shrink-0">
+                    {entry.truck?.plate}
+                  </span>
+                  <span className="text-zinc-400 text-sm flex-1 truncate">
+                    {entry.truck?.driver?.name?.split(' ')[0] ?? '—'}
+                  </span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-amber-400 text-xs font-semibold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                      {entry.route?.name}
+                    </span>
+                    {entry.plannedTrips > 0 && (
+                      <span className="text-zinc-500 text-xs">
+                        {entry.plannedTrips}v
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Camiones sin despacho hoy */}
+              {notDispatched.map(truck => {
+                const statusKey = truck.status?.status ?? 'OPERATIONAL'
+                const isShop   = statusKey === 'IN_SHOP'
+                const isOut    = statusKey === 'OUT_OF_SERVICE'
+                return (
+                  <div key={truck.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isShop ? 'bg-amber-400' : isOut ? 'bg-red-400' : 'bg-zinc-600'}`} />
+                    <span className="text-zinc-400 font-mono text-sm w-20 flex-shrink-0">
+                      {truck.plate}
+                    </span>
+                    <span className="text-zinc-600 text-sm flex-1 truncate">
+                      {truck.driver?.name?.split(' ')[0] ?? '—'}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
+                      isShop  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                      isOut   ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                'bg-zinc-800 text-zinc-500'
+                    }`}>
+                      {isShop ? 'En taller' : isOut ? 'Fuera de servicio' : 'Sin salida hoy'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+
+            {dispatched === 0 && (
+              <p className="text-zinc-600 text-xs px-4 pb-3 pt-1">
+                El encargado aún no registró el despacho de hoy.
+              </p>
+            )}
+          </div>
+        )
+      })()}
+
       {/* Relación del período actual — formato igual al Excel de Fernando */}
       {openPeriod && (() => {
         const openEntries = payrollHistory.filter(e => e.period.id === openPeriod.id)
@@ -333,51 +437,65 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
           </div>
         )
 
-        // Agregar todos los camiones del dueño en este período
-        const gastos         = openEntries.reduce((s, e) => s + (e.commissionFee ?? 0), 0)
-        const nomChofer      = openEntries.reduce((s, e) => s + e.driverWage, 0)
-        const administrativo = openEntries.reduce((s, e) => s + (e.adminFee ?? 0), 0)
-        const prestamos      = openEntries.reduce((s, e) => s + (e.deductions ?? 0), 0)
-        const abono          = openEntries.reduce((s, e) => s + (e.abono ?? 0), 0)
-        const saldoAnterior  = openEntries.reduce((s, e) => s + (e.saldoInicial ?? 0), 0)
-
-        const opExpenses = periodOpExpenses as { id: string; description: string; amount: number; truck: { plate: string } }[]
-        const mecItems = mecExpenses as { id: string; description: string; amount: number; truck: { plate: string } | null }[]
-        const expTotal = opExpenses.reduce((s, e) => s + e.amount, 0)
-        const viaticosImplicit = Math.round((gastos - expTotal) * 100) / 100
-        const multiTruck = owner.trucks.length > 1
-
-        // Mecánica: repuestos sin "nómina" van bajo Luis Peña
-        const mecRepuesto = mecItems.filter(e => !e.description?.toLowerCase().includes('nómina') && !e.description?.toLowerCase().includes('nomina')).reduce((s, e) => s + e.amount, 0)
-        const totalMechanicFee = openEntries.reduce((s, e) => s + (e.mechanicFee ?? 0), 0)
-        const mecItemsTotal = mecItems.reduce((s, e) => s + e.amount, 0)
-        const mecPoolFee = Math.max(0, Math.round((totalMechanicFee - mecItemsTotal) * 100) / 100)
-
-        // Facturación split por cliente (desde los viajes del período)
-        const auruminTrips = periodTrips.filter(t => (t as any).route?.clientName !== 'LUIS PEÑA')
-        const lpTrips      = periodTrips.filter(t => (t as any).route?.clientName === 'LUIS PEÑA')
-        const brutoAurumin = auruminTrips.reduce((s, t) => s + (t.amount ?? 0), 0)
-        const brutoLP      = lpTrips.reduce((s, t) => s + (t.amount ?? 0), 0)
-
+        // Desglose por camión — AFILIADO: driverWage es informativo, NO se descuenta
         const nprPct      = owner.nprPercent / 100
-        const nprAurumin  = Math.round(brutoAurumin * nprPct * 100) / 100
-        const nprLP       = Math.round(brutoLP * nprPct * 100) / 100
-
-        // Saldo Aurumin = bruto - gastos - chofer - mecánica - admin - NPR - préstamos + saldoAnterior - abono
-        const saldoAurumin = Math.round((
-          brutoAurumin - gastos - nomChofer - totalMechanicFee - administrativo - nprAurumin - prestamos + saldoAnterior - abono
-        ) * 100) / 100
-        // Préstamos del dueño a descontar de LP
+        const mecItems    = mecExpenses as { id: string; description: string; amount: number; truck: { plate: string } | null }[]
+        const mecRepuesto = mecItems
+          .filter(e => !e.description?.toLowerCase().includes('nómina') && !e.description?.toLowerCase().includes('nomina'))
+          .reduce((s, e) => s + e.amount, 0)
         const prestamosLP = ownerLoans.reduce((s, l) => s + l.balance, 0)
-        // Saldo Luis Peña = bruto - NPR - préstamos dueño - repuestos mecánica
-        const saldoLP = Math.round((brutoLP - nprLP - prestamosLP - mecRepuesto) * 100) / 100
+
+        const truckBreakdowns = openEntries.map(entry => {
+          const plate    = (entry as any).truck?.plate ?? ''
+          const tAurumin = periodTrips.filter(t => t.truckId === entry.truckId && (t as any).route?.clientName !== 'LUIS PEÑA')
+          const tLP      = periodTrips.filter(t => t.truckId === entry.truckId && (t as any).route?.clientName === 'LUIS PEÑA')
+          const gAurumin = tAurumin.reduce((s, t) => s + (t.amount ?? 0), 0)
+          const gLP      = tLP.reduce((s, t)      => s + (t.amount ?? 0), 0)
+          const nprA     = Math.round(gAurumin * nprPct * 100) / 100
+          const nprL     = Math.round(gLP      * nprPct * 100) / 100
+          // Sin driverWage — AFILIADO paga sus choferes directo
+          const saldoA   = Math.round((
+            (entry.saldoInicial ?? 0) + gAurumin
+            - (entry.commissionFee ?? 0) - (entry.mechanicFee ?? 0) - (entry.adminFee ?? 0)
+            - nprA - (entry.deductions ?? 0) - (entry.abono ?? 0)
+          ) * 100) / 100
+          const saldoL   = Math.round((gLP - nprL) * 100) / 100
+          const opExp    = (periodOpExpenses as any[]).filter((e: any) => e.truck?.plate === plate)
+          const opTotal  = opExp.reduce((s: number, e: any) => s + e.amount, 0)
+          const viaticos = Math.max(0, Math.round(((entry.commissionFee ?? 0) - opTotal) * 100) / 100)
+          return {
+            truckId: entry.truckId, plate,
+            driverWage:   entry.driverWage,
+            saldoInicial: entry.saldoInicial ?? 0,
+            gAurumin, gLP, nprA, nprL,
+            commFee:    entry.commissionFee ?? 0,
+            mechFee:    entry.mechanicFee   ?? 0,
+            adminFee:   entry.adminFee      ?? 0,
+            deductions: entry.deductions    ?? 0,
+            abono:      entry.abono         ?? 0,
+            saldoA, saldoL, opExp, viaticos,
+          }
+        })
+
+        const hasLP        = truckBreakdowns.some(t => t.gLP > 0)
+        const totalACobrar = Math.round((
+          truckBreakdowns.reduce((s, t) => s + t.saldoA, 0)
+          + truckBreakdowns.reduce((s, t) => s + t.saldoL, 0)
+          - (hasLP ? prestamosLP + mecRepuesto : 0)
+        ) * 100) / 100
 
         const money = (n: number) => n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-        const Row = ({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) => (
+        const Row = ({ label, value, highlight, informativo }: { label: string; value: number; highlight?: boolean; informativo?: boolean }) => (
           <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/50 last:border-0">
             <span className="text-zinc-400 text-sm">{label}</span>
-            <span className={`font-mono text-sm ${highlight ? 'text-white font-semibold' : value < 0 ? 'text-red-400' : value === 0 ? 'text-zinc-600' : 'text-zinc-300'}`}>
-              {value < 0 ? `− $${money(Math.abs(value))}` : `$${money(value)}`}
+            <span className={`font-mono text-sm ${
+              informativo ? 'text-zinc-500'
+              : highlight ? 'text-white font-semibold'
+              : value < 0 ? 'text-red-400' : value === 0 ? 'text-zinc-600' : 'text-zinc-300'
+            }`}>
+              {informativo
+                ? `$${money(Math.abs(value))}`
+                : value < 0 ? `− $${money(Math.abs(value))}` : `$${money(value)}`}
             </span>
           </div>
         )
@@ -385,96 +503,87 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         return (
           <div>
             <h2 className="text-white font-semibold text-sm mb-3">Relación del período</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-3">
+              {truckBreakdowns.map(tb => (
+                <div key={tb.truckId} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                  {/* Encabezado del camión */}
+                  <div className="px-4 py-3 bg-zinc-800/40 border-b border-zinc-800 flex items-center justify-between">
+                    <span className="text-white font-mono font-bold text-sm">{tb.plate}</span>
+                    <span className={`font-mono font-bold text-sm ${(tb.saldoA + tb.saldoL) >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
+                      {(tb.saldoA + tb.saldoL) < 0
+                        ? `− $${money(Math.abs(tb.saldoA + tb.saldoL))}`
+                        : `$${money(tb.saldoA + tb.saldoL)}`}
+                    </span>
+                  </div>
 
-              {/* Aurumin */}
-              {brutoAurumin > 0 && (
-                <div className="bg-zinc-900 border border-amber-500/20 rounded-2xl p-4">
-                  <p className="text-amber-400 text-xs font-bold uppercase tracking-widest mb-3">Aurumin</p>
-                  <div>
-                    {saldoAnterior !== 0 && <Row label="Saldo anterior" value={saldoAnterior} />}
-                    <Row label="Facturación" value={brutoAurumin} highlight />
-                    {gastos > 0 && (opExpenses.length > 0 || viaticosImplicit > 0.005 ? (
-                      <details className="border-b border-zinc-800/50 last:border-0">
-                        <summary className="flex justify-between items-center py-1.5 cursor-pointer list-none">
-                          <span className="text-zinc-400 text-sm">Gastos operativos ▾</span>
-                          <span className="font-mono text-sm text-red-400">− ${money(gastos)}</span>
-                        </summary>
-                        <div className="pl-3 pb-2 pt-0.5 space-y-1">
-                          {viaticosImplicit > 0.005 && (
-                            <div className="flex justify-between text-xs">
-                              <span className="text-zinc-500">Viáticos</span>
-                              <span className="font-mono text-zinc-500">− ${money(viaticosImplicit)}</span>
-                            </div>
-                          )}
-                          {opExpenses.map(e => (
-                            <div key={e.id} className="flex justify-between text-xs">
-                              <span className="text-zinc-500">{multiTruck ? `${e.truck.plate} · ` : ''}{e.description}</span>
-                              <span className="font-mono text-zinc-500">− ${money(e.amount)}</span>
-                            </div>
-                          ))}
+                  <div className={`p-4 ${tb.gAurumin > 0 && tb.gLP > 0 ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : ''}`}>
+                    {/* Aurumin */}
+                    {tb.gAurumin > 0 && (
+                      <div>
+                        <p className="text-amber-400 text-xs font-bold uppercase tracking-widest mb-3">Aurumin</p>
+                        {tb.saldoInicial !== 0 && <Row label="Saldo anterior" value={tb.saldoInicial} />}
+                        <Row label="Facturación" value={tb.gAurumin} highlight />
+                        {tb.commFee > 0 && (
+                          tb.opExp.length > 0 || tb.viaticos > 0.005 ? (
+                            <details className="border-b border-zinc-800/50 last:border-0">
+                              <summary className="flex justify-between items-center py-1.5 cursor-pointer list-none">
+                                <span className="text-zinc-400 text-sm">Gastos operativos ▾</span>
+                                <span className="font-mono text-sm text-red-400">− ${money(tb.commFee)}</span>
+                              </summary>
+                              <div className="pl-3 pb-2 pt-0.5 space-y-1">
+                                {tb.viaticos > 0.005 && (
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-zinc-500">Viáticos</span>
+                                    <span className="font-mono text-zinc-500">− ${money(tb.viaticos)}</span>
+                                  </div>
+                                )}
+                                {tb.opExp.map((e: any) => (
+                                  <div key={e.id} className="flex justify-between text-xs">
+                                    <span className="text-zinc-500">{e.description}</span>
+                                    <span className="font-mono text-zinc-500">− ${money(e.amount)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          ) : (
+                            <Row label="Gastos operativos" value={-tb.commFee} />
+                          )
+                        )}
+                        {tb.driverWage > 0 && <Row label="Nómina chofer (directo)" value={tb.driverWage} informativo />}
+                        {tb.mechFee > 0 && <Row label="Mecánica" value={-tb.mechFee} />}
+                        {tb.adminFee > 0 && <Row label="Administrativo" value={-tb.adminFee} />}
+                        <Row label={`${owner.nprPercent}% NPR`} value={-tb.nprA} />
+                        {tb.deductions > 0 && <Row label="Préstamos" value={-tb.deductions} />}
+                        {tb.abono > 0 && <Row label="Abono recibido" value={-tb.abono} />}
+                        <div className="flex justify-between items-center pt-2 mt-1 border-t border-zinc-700">
+                          <span className="text-white font-semibold text-sm">Saldo Aurumin</span>
+                          <span className={`font-mono font-bold text-lg ${tb.saldoA >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
+                            {tb.saldoA < 0 ? `− $${money(Math.abs(tb.saldoA))}` : `$${money(tb.saldoA)}`}
+                          </span>
                         </div>
-                      </details>
-                    ) : <Row label="Gastos operativos" value={-gastos} />)}
-                    {nomChofer > 0 && <Row label="Nómina chofer" value={-nomChofer} />}
-                    {totalMechanicFee > 0 && (mecItems.length > 0 ? (
-                      <details className="border-b border-zinc-800/50 last:border-0">
-                        <summary className="flex justify-between items-center py-1.5 cursor-pointer list-none">
-                          <span className="text-zinc-400 text-sm">Mecánica ▾</span>
-                          <span className="font-mono text-sm text-zinc-300">− ${money(totalMechanicFee)}</span>
-                        </summary>
-                        <div className="pl-3 pb-2 pt-0.5 space-y-1">
-                          {mecPoolFee > 0.005 && (
-                            <div className="flex justify-between text-xs">
-                              <span className="text-zinc-500">Nómina mecánicos (fija)</span>
-                              <span className="font-mono text-zinc-500">− ${money(mecPoolFee)}</span>
-                            </div>
-                          )}
-                          {mecItems.map(e => (
-                            <div key={e.id} className="flex justify-between text-xs">
-                              <span className="text-zinc-500">{multiTruck && e.truck ? `${e.truck.plate} · ` : ''}{e.description}</span>
-                              <span className="font-mono text-zinc-500">− ${money(e.amount)}</span>
-                            </div>
-                          ))}
+                      </div>
+                    )}
+
+                    {/* Luis Peña */}
+                    {tb.gLP > 0 && (
+                      <div>
+                        <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-3">Luis Peña (Chino Peña)</p>
+                        <Row label="Facturación" value={tb.gLP} highlight />
+                        <Row label={`${owner.nprPercent}% NPR`} value={-tb.nprL} />
+                        <div className="flex justify-between items-center pt-2 mt-1 border-t border-zinc-700">
+                          <span className="text-white font-semibold text-sm">Saldo LP</span>
+                          <span className="font-mono font-bold text-lg text-blue-400">${money(tb.saldoL)}</span>
                         </div>
-                      </details>
-                    ) : <Row label="Mecánica" value={-totalMechanicFee} />)}
-                    {administrativo > 0 && <Row label="Administrativo" value={-administrativo} />}
-                    <Row label={`${owner.nprPercent}% NPR`} value={-nprAurumin} />
-                    {prestamos > 0 && <Row label="Préstamos" value={-prestamos} />}
-                    {abono > 0 && <Row label="Abono recibido" value={-abono} />}
-                    <div className="flex justify-between items-center pt-2 mt-1 border-t border-zinc-700">
-                      <span className="text-white font-semibold text-sm">Saldo final</span>
-                      <span className={`font-mono font-bold text-lg ${saldoAurumin >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
-                        ${money(saldoAurumin)}
-                      </span>
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-
-              {/* Luis Peña */}
-              {brutoLP > 0 && (
-                <div className="bg-zinc-900 border border-blue-500/20 rounded-2xl p-4">
-                  <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-3">Luis Peña (Chino Peña)</p>
-                  <div>
-                    <Row label="Facturación" value={brutoLP} highlight />
-                    <Row label={`${owner.nprPercent}% NPR`} value={-nprLP} />
-                    {mecRepuesto > 0 && <Row label="Repuesto mecánico" value={-mecRepuesto} />}
-                    {prestamosLP > 0 && <Row label="Préstamo Fernando" value={-prestamosLP} />}
-                    <div className="flex justify-between items-center pt-2 mt-1 border-t border-zinc-700">
-                      <span className="text-white font-semibold text-sm">Saldo final</span>
-                      <span className="font-mono font-bold text-lg text-blue-400">${money(saldoLP)}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
+              ))}
             </div>
-            {/* Total a recibir */}
+            {/* Total a cobrar */}
             <div className="mt-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-3 flex justify-between items-center">
               <span className="text-emerald-300 font-semibold text-sm">Total a cobrar este período</span>
-              <span className="text-emerald-400 font-bold text-xl font-mono">${money(saldoAurumin + saldoLP)}</span>
+              <span className="text-emerald-400 font-bold text-xl font-mono">${money(totalACobrar)}</span>
             </div>
           </div>
         )

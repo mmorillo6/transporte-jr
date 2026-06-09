@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createCashEntry, deleteCashEntry, registrarApertura } from '@/app/actions/cash'
+import { createCashEntry, deleteCashEntry, registrarApertura, createSocioLoan, markSocioLoanPaid, deleteSocioLoan } from '@/app/actions/cash'
 import { toast } from 'sonner'
 
 type Entry = {
@@ -15,18 +15,33 @@ type Entry = {
   notes: string | null
 }
 
+type SocioLoan = {
+  id: string
+  creditor: string
+  amount: number
+  currency: 'EFECTIVO' | 'USDT'
+  concept: string
+  date: string
+  status: 'PENDIENTE' | 'PAGADO'
+  paidDate: string | null
+  notes: string | null
+}
+
 const SOURCES = ['Aurumin', 'Chino Peña', 'Nómina', 'Repuesto', 'Mecánica', 'Proveedor', 'Otro']
+const SOCIOS  = ['José Rodríguez', 'Chino Peña', 'Mary', 'Otro']
 
 export default function CajaClient({
   entries,
   balanceEfectivo,
   balanceUsdt,
   hideSaldoCards = false,
+  socioLoans = [],
 }: {
   entries: Entry[]
   balanceEfectivo: number
   balanceUsdt: number
   hideSaldoCards?: boolean
+  socioLoans?: SocioLoan[]
 }) {
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
@@ -38,6 +53,10 @@ export default function CajaClient({
   const [ajusteEfectivo, setAjusteEfectivo] = useState('')
   const [ajusteUsdt, setAjusteUsdt] = useState('')
   const [loadingAjuste, setLoadingAjuste] = useState(false)
+  const [showSocioForm, setShowSocioForm] = useState(false)
+  const [loadingSocio, setLoadingSocio] = useState(false)
+  const [socioMoneda, setSocioMoneda] = useState<'EFECTIVO' | 'USDT'>('EFECTIVO')
+  const [showPaid, setShowPaid] = useState(false)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -71,7 +90,35 @@ export default function CajaClient({
     router.refresh()
   }
 
+  async function handleSocioSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setLoadingSocio(true)
+    const fd = new FormData(e.currentTarget)
+    const res = await createSocioLoan(fd)
+    setLoadingSocio(false)
+    if (res.error) { toast.error(res.error); return }
+    toast.success('Préstamo de socio registrado')
+    setShowSocioForm(false)
+    router.refresh()
+  }
+
+  async function handleSocioPaid(id: string, creditor: string) {
+    if (!confirm(`¿Marcar préstamo de ${creditor} como PAGADO?`)) return
+    const res = await markSocioLoanPaid(id)
+    if (!res.ok) { toast.error('Error al actualizar'); return }
+    toast.success('Marcado como pagado')
+    router.refresh()
+  }
+
+  async function handleSocioDelete(id: string, creditor: string) {
+    if (!confirm(`¿Eliminar préstamo de ${creditor}?`)) return
+    await deleteSocioLoan(id)
+    router.refresh()
+  }
+
   const filtered = filterCurrency === 'ALL' ? entries : entries.filter(e => e.currency === filterCurrency)
+  const pendingSocioLoans = socioLoans.filter(l => l.status === 'PENDIENTE')
+  const paidSocioLoans    = socioLoans.filter(l => l.status === 'PAGADO')
 
   const fmt = (n: number) => `$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })
@@ -252,6 +299,161 @@ export default function CajaClient({
           </div>
         </div>
       )}
+
+      {/* ── Deudas a socios ─────────────────────────────────────────────── */}
+      <div className="bg-zinc-900 border border-purple-500/20 rounded-2xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+          <div>
+            <h3 className="text-white font-semibold text-sm">Deudas a socios</h3>
+            <p className="text-zinc-500 text-xs mt-0.5">
+              {pendingSocioLoans.length === 0
+                ? 'Sin préstamos pendientes de socios'
+                : `${pendingSocioLoans.length} préstamo${pendingSocioLoans.length !== 1 ? 's' : ''} pendiente${pendingSocioLoans.length !== 1 ? 's' : ''} — $${pendingSocioLoans.reduce((s, l) => s + l.amount, 0).toFixed(2)}`}
+            </p>
+          </div>
+          <button
+            onClick={() => setShowSocioForm(v => !v)}
+            className="text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-400 font-medium rounded-lg px-3 py-1.5 transition-colors"
+          >
+            + Registrar
+          </button>
+        </div>
+
+        {/* Formulario nuevo préstamo de socio */}
+        {showSocioForm && (
+          <div className="px-5 py-4 border-b border-zinc-800 bg-zinc-800/30">
+            <form onSubmit={handleSocioSubmit} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Prestamista *</label>
+                  <select name="creditor" required className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500">
+                    {SOCIOS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Moneda *</label>
+                  <div className="flex rounded-xl overflow-hidden border border-zinc-700">
+                    {(['EFECTIVO', 'USDT'] as const).map(m => (
+                      <button key={m} type="button" onClick={() => setSocioMoneda(m)}
+                        className={`flex-1 py-2 text-xs font-medium transition-colors ${socioMoneda === m ? 'bg-purple-500/20 text-purple-400' : 'bg-zinc-800 text-zinc-500 hover:text-white'}`}>
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                  <input type="hidden" name="currency" value={socioMoneda} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Monto $ *</label>
+                  <input name="amount" type="number" step="0.01" min="0.01" required placeholder="0.00"
+                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500 placeholder:text-zinc-600" />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Fecha *</label>
+                  <input name="date" type="date" required defaultValue={new Date().toISOString().split('T')[0]}
+                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Concepto *</label>
+                <input name="concept" type="text" required placeholder="Ej: Nómina P2 Mayo 2026"
+                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500 placeholder:text-zinc-600" />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Notas</label>
+                <input name="notes" type="text" placeholder="Opcional..."
+                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-500 placeholder:text-zinc-600" />
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" disabled={loadingSocio}
+                  className="bg-purple-500 hover:bg-purple-400 disabled:opacity-50 text-white font-semibold rounded-xl px-4 py-2 text-sm transition-colors">
+                  {loadingSocio ? 'Guardando...' : 'Guardar'}
+                </button>
+                <button type="button" onClick={() => setShowSocioForm(false)}
+                  className="px-4 py-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl text-sm transition-colors">
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Lista pendientes */}
+        {pendingSocioLoans.length === 0 && !showSocioForm ? (
+          <div className="px-5 py-6 text-center">
+            <p className="text-zinc-600 text-sm">Sin deudas pendientes a socios</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-800/50">
+            {pendingSocioLoans.map(l => (
+              <div key={l.id} className="px-5 py-3 flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm font-medium">{l.creditor}</p>
+                  <p className="text-zinc-500 text-xs">{l.concept} · {new Date(l.date).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })}</p>
+                  {l.notes && <p className="text-zinc-600 text-xs mt-0.5">{l.notes}</p>}
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-purple-400 font-semibold text-sm">${l.amount.toFixed(2)}</p>
+                  <p className="text-zinc-600 text-xs">{l.currency}</p>
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => handleSocioPaid(l.id, l.creditor)}
+                    className="text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-medium rounded-lg px-2 py-1 transition-colors"
+                    title="Marcar como pagado"
+                  >
+                    Pagado
+                  </button>
+                  <button onClick={() => handleSocioDelete(l.id, l.creditor)}
+                    className="text-zinc-600 hover:text-red-400 transition-colors p-1">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Pagados (colapsable) */}
+        {paidSocioLoans.length > 0 && (
+          <div className="border-t border-zinc-800">
+            <button
+              onClick={() => setShowPaid(v => !v)}
+              className="w-full px-5 py-2.5 text-left text-zinc-600 hover:text-zinc-400 text-xs flex items-center gap-2 transition-colors"
+            >
+              <span>{showPaid ? '▲' : '▼'}</span>
+              {paidSocioLoans.length} pagado{paidSocioLoans.length !== 1 ? 's' : ''}
+            </button>
+            {showPaid && (
+              <div className="divide-y divide-zinc-800/30 pb-2">
+                {paidSocioLoans.map(l => (
+                  <div key={l.id} className="px-5 py-2.5 flex items-center gap-3 opacity-50">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-zinc-400 text-sm">{l.creditor}</p>
+                      <p className="text-zinc-600 text-xs">{l.concept}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-zinc-400 font-semibold text-sm line-through">${l.amount.toFixed(2)}</p>
+                      {l.paidDate && <p className="text-zinc-600 text-xs">Pagado {new Date(l.paidDate).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' })}</p>}
+                    </div>
+                    <button onClick={() => handleSocioDelete(l.id, l.creditor)}
+                      className="text-zinc-700 hover:text-red-400 transition-colors p-1">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Movements table */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">

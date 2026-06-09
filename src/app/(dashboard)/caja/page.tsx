@@ -47,7 +47,7 @@ export default async function FinanzasPage({
     if (params.to) { const d = new Date(params.to); d.setHours(23, 59, 59, 999); gastosWhere.date.lte = d }
   }
 
-  const [expenses, trucks, loans, drivers, cuentas] = await Promise.all([
+  const [expenses, trucks, loans, drivers, cuentas, socioLoans] = await Promise.all([
     prisma.expense.findMany({
       where: gastosWhere,
       orderBy: { date: 'desc' },
@@ -71,6 +71,8 @@ export default async function FinanzasPage({
       orderBy: { date: 'desc' },
       include: { payments: { orderBy: { date: 'desc' } } },
     }),
+    // ── Préstamos de socios ────────────────────────────────────────────────
+    prisma.socioLoan.findMany({ orderBy: { date: 'desc' } }),
   ])
 
   const totalLoaned  = loans.reduce((s, l) => s + l.amount, 0)
@@ -91,6 +93,13 @@ export default async function FinanzasPage({
     })),
   }))
   const totalPorCobrar = cuentas.filter(c => c.status !== 'PAID').reduce((s, c) => s + c.balance, 0)
+  const totalSocioDebt = socioLoans.filter(l => l.status === 'PENDIENTE').reduce((s, l) => s + l.amount, 0)
+  const socioLoansData = socioLoans.map((l) => ({
+    ...l,
+    date:      l.date.toISOString(),
+    paidDate:  l.paidDate?.toISOString() ?? null,
+    createdAt: l.createdAt.toISOString(),
+  }))
 
   return (
     <div className="space-y-5">
@@ -124,6 +133,9 @@ export default async function FinanzasPage({
         // por cobrar
         cuentas={cuentasData as any}
         totalPorCobrar={totalPorCobrar}
+        // socioLoans
+        socioLoans={socioLoansData}
+        totalSocioDebt={totalSocioDebt}
       />
     </div>
   )

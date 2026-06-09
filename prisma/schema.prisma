@@ -523,6 +523,21 @@ enum CashCurrency {
   USDT
 }
 
+// ─── PRÉSTAMOS DE SOCIOS ─────────────────────────────────────────────────────
+
+model SocioLoan {
+  id        String       @id @default(cuid())
+  creditor  String
+  amount    Float
+  currency  CashCurrency @default(EFECTIVO)
+  concept   String
+  date      DateTime
+  status    String       @default("PENDIENTE")
+  paidDate  DateTime?
+  notes     String?
+  createdAt DateTime     @default(now())
+}
+
 // ─── CUENTAS POR COBRAR ───────────────────────────────────────────────────────
 
 model CuentaPorCobrar {
