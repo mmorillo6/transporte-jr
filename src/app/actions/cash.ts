@@ -95,7 +95,7 @@ export async function registrarApertura(efectivo: number, usdt?: number) {
 export async function createSocioLoan(fd: FormData) {
   const creditor = (fd.get('creditor') as string).trim()
   const amount   = parseFloat(fd.get('amount') as string)
-  const currency = (fd.get('currency') as string) || 'EFECTIVO'
+  const currency = ((fd.get('currency') as string) || 'EFECTIVO') as 'EFECTIVO' | 'USDT'
   const concept  = (fd.get('concept') as string).trim()
   const dateStr  = fd.get('date') as string
   const notes    = (fd.get('notes') as string | null)?.trim() || null
