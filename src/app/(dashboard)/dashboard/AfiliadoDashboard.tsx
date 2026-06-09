@@ -96,6 +96,38 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
       })
     : []
 
+  // Historial de despacho del período abierto (excluyendo hoy, que ya está en Estado hoy)
+  const periodDispatch = openPeriod && truckIds.length > 0
+    ? await prisma.dispatchEntry.findMany({
+        where: {
+          truckId:  { in: truckIds },
+          dispatch: {
+            date: {
+              gte: new Date(openPeriod.startDate.toISOString().split('T')[0] + 'T00:00:00Z'),
+              lt:  dayStart,
+            },
+          },
+        },
+        select: {
+          truckId:      true,
+          plannedTrips: true,
+          route:        { select: { name: true } },
+          truck:        { select: { plate: true, driver: { select: { name: true } } } },
+          dispatch:     { select: { date: true } },
+        },
+        orderBy: { dispatch: { date: 'desc' } },
+      })
+    : []
+
+  // Agrupar historial por fecha
+  const dispatchByDate = periodDispatch.reduce((acc, entry) => {
+    const dateKey = entry.dispatch.date.toISOString().split('T')[0]
+    if (!acc[dateKey]) acc[dateKey] = []
+    acc[dateKey].push(entry)
+    return acc
+  }, {} as Record<string, typeof periodDispatch>)
+  const dispatchDates = Object.keys(dispatchByDate).sort((a, b) => b.localeCompare(a))
+
   // Drivers for loan lookup
   const driverNames = owner.trucks.map(t => (t as any).driver?.name).filter(Boolean)
 
@@ -399,6 +431,50 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
           </div>
         )
       })()}
+
+      {/* ── Historial de despacho del período ──────────────────────────────── */}
+      {dispatchDates.length > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+            <span className="text-white font-semibold text-sm">Historial de despacho</span>
+            <span className="text-zinc-500 text-xs">{openPeriod ? `${fmt(openPeriod.startDate)} — hoy` : ''}</span>
+          </div>
+          <div className="divide-y divide-zinc-800/50">
+            {dispatchDates.map(dateKey => {
+              const entries = dispatchByDate[dateKey]
+              const label = new Date(dateKey + 'T12:00:00Z').toLocaleDateString('es-VE', {
+                weekday: 'short', day: '2-digit', month: '2-digit',
+              })
+              return (
+                <div key={dateKey}>
+                  <div className="px-4 py-2 bg-zinc-800/30">
+                    <span className="text-zinc-400 text-xs font-semibold capitalize">{label}</span>
+                  </div>
+                  {entries.map((entry, i) => (
+                    <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400/60 flex-shrink-0" />
+                      <span className="text-zinc-300 font-mono text-sm w-20 flex-shrink-0">
+                        {entry.truck?.plate}
+                      </span>
+                      <span className="text-zinc-500 text-sm flex-1 truncate">
+                        {entry.truck?.driver?.name?.split(' ')[0] ?? '—'}
+                      </span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-zinc-400 text-xs bg-zinc-800 px-2 py-0.5 rounded-full">
+                          {entry.route?.name}
+                        </span>
+                        <span className="text-zinc-600 text-xs w-6 text-right">
+                          {entry.plannedTrips}v
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Relación del período actual — formato igual al Excel de Fernando */}
       {openPeriod && (() => {
