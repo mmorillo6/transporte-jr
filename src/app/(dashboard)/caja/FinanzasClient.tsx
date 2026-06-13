@@ -7,11 +7,11 @@ import CuentasPorCobrarClient from '../cuentas-por-cobrar/CuentasPorCobrarClient
 
 type Tab = 'caja' | 'gastos' | 'prestamos' | 'cobrar'
 
-const TABS: { id: Tab; label: string; desc: string }[] = [
-  { id: 'caja',      label: 'Caja',        desc: 'Efectivo & USDT' },
-  { id: 'gastos',    label: 'Gastos',       desc: 'Egresos operativos' },
-  { id: 'prestamos', label: 'Préstamos',    desc: 'Adelantos a choferes' },
-  { id: 'cobrar',    label: 'Por cobrar',   desc: 'Deudas de clientes' },
+const TABS: { id: Tab; label: string; desc: string; tooltip: string }[] = [
+  { id: 'caja',      label: 'Caja',        desc: 'Efectivo & USDT',       tooltip: 'Registra entradas y salidas de dinero en efectivo y USDT. Úsalo cuando entre o salga dinero de la caja: cobros, caja chica, ajustes de saldo.' },
+  { id: 'gastos',    label: 'Gastos',       desc: 'Egresos operativos',    tooltip: 'Registra los gastos de los camiones: repuestos, cauchos, aceite, viáticos, mecánica. Estos se descuentan del saldo del dueño en la nómina.' },
+  { id: 'prestamos', label: 'Préstamos',    desc: 'Adelantos a choferes',  tooltip: 'Lleva el control de los adelantos de sueldo a los choferes. Cada préstamo se descuenta por cuotas de su quincena.' },
+  { id: 'cobrar',    label: 'Por cobrar',   desc: 'Deudas de clientes',    tooltip: 'Facturas que deben pagar los clientes (Aurumin, Chino Peña). Registra aquí el pago cuando lo recibas.' },
 ]
 
 export default function FinanzasClient({
@@ -104,6 +104,7 @@ export default function FinanzasClient({
           <button
             key={t.id}
             onClick={() => router.push(`/caja?tab=${t.id}`)}
+            title={t.tooltip}
             className={`flex-1 rounded-xl py-2.5 px-3 text-sm font-medium transition-colors text-left ${
               activeTab === t.id
                 ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'

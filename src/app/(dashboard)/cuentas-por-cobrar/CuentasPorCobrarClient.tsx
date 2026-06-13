@@ -326,6 +326,13 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
                       {payOpen && (
                         <tr className="bg-zinc-800/40 border-b border-emerald-500/20">
                           <td colSpan={8} className="px-6 py-4">
+                            {c.clientName.toUpperCase().includes('AURUMIN') && (
+                              <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs text-amber-200 leading-relaxed">
+                                <span className="font-bold text-amber-400">⚠ Recuerda:</span> Después de registrar este cobro de Aurumin, debes hacer dos pasos más ese mismo día:<br />
+                                1. Ir a <strong>Caja → Deudas a socios</strong> y marcar el préstamo de José Rodríguez como pagado.<br />
+                                2. Registrar un <strong>EGRESO en Caja</strong> por el monto que se le devuelve a José.
+                              </div>
+                            )}
                             <form onSubmit={e => handlePayment(e, c.id)} className="flex flex-wrap gap-3 items-end">
                               <div className="flex-shrink-0">
                                 <p className="text-emerald-400 text-xs font-semibold mb-0.5">Registrando pago — {c.clientName}</p>
