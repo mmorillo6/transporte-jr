@@ -271,9 +271,9 @@ export default async function NominaPage() {
 
             return (
               <div key={period.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h2 className="text-white font-semibold">
                         {formatDate(period.startDate)} — {formatDate(period.endDate)}
                       </h2>
@@ -310,7 +310,7 @@ export default async function NominaPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 sm:flex-shrink-0">
                     {['DUENO', 'ENCARGADO'].includes(session.role) && (
                       <NominaActions periodId={period.id} status={period.status} hasPayroll={hasPayroll} />
                     )}
