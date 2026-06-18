@@ -16,14 +16,14 @@ const navItems = [
   { href: '/analisis',      label: 'Desglose dueños',   icon: '◎', roles: ['DUENO', 'ENCARGADO'], sub: true },
   { href: '/mantenimiento', label: 'Mantenimiento',     icon: '⚙', roles: ['DUENO', 'ENCARGADO', 'MECANICO'] },
   { href: '/camiones',      label: 'Flota',             icon: '◧', roles: ['DUENO', 'ENCARGADO', 'AFILIADO'] },
-  { href: '/viajes',        label: 'Viajes',            icon: '⟳', roles: ['DUENO'], sub: true },
-  { href: '/usuarios',      label: 'Usuarios',          icon: '◫', roles: ['DUENO'], sub: true },
+  { href: '/viajes',        label: 'Viajes',            icon: '⟳', roles: ['DUENO', 'ENCARGADO'], sub: true },
+  { href: '/usuarios',      label: 'Usuarios',          icon: '◫', roles: ['DUENO', 'ENCARGADO'], sub: true },
   { href: '/almacen',       label: 'Almacén',           icon: '▣', roles: ['DUENO', 'ENCARGADO'] },
   { href: '/dias-internos', label: 'Internos-Estéril',  icon: '⏱', roles: ['DUENO', 'ENCARGADO'] },
   { href: '/caja',          label: 'Finanzas',          icon: '◎', roles: ['DUENO', 'ENCARGADO'] },
   { href: '/relaciones',    label: 'Relaciones',        icon: '◎', roles: ['DUENO', 'ENCARGADO'], sub: true },
-  { href: '/reportes',      label: 'Reportes',          icon: '◈', roles: ['DUENO'], divider: true },
-  { href: '/rutas',         label: 'Minas & Rutas',     icon: '◉', roles: ['DUENO'] },
+  { href: '/reportes',      label: 'Reportes',          icon: '◈', roles: ['DUENO', 'ENCARGADO'], divider: true },
+  { href: '/rutas',         label: 'Minas & Rutas',     icon: '◉', roles: ['DUENO', 'ENCARGADO'] },
   { href: '/perfil',        label: 'Mi perfil',         icon: '◯', roles: ['DUENO', 'ENCARGADO', 'AFILIADO', 'MECANICO', 'CHOFER'], divider: true },
 ] as const
 

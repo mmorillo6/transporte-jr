@@ -281,7 +281,7 @@ export default function UsuariosClient({
                                 }`}>
                                 {user.active ? 'Desactivar' : 'Activar'}
                               </button>
-                              {currentUserRole === 'DUENO' && (
+                              {['DUENO', 'ENCARGADO'].includes(currentUserRole) && (
                                 <button onClick={() => handleDelete(user.id, user.name)}
                                   className="text-xs text-zinc-600 hover:text-red-400 hover:bg-red-400/10 rounded-lg px-2 py-1.5 transition-colors"
                                   title="Eliminar usuario">
