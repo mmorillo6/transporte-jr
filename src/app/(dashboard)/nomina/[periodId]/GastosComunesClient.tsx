@@ -129,6 +129,7 @@ export default function GastosComunesClient({
     <div className={`border rounded-2xl overflow-hidden transition-colors ${autoOpen && open ? 'bg-zinc-900 border-amber-500/30' : 'bg-zinc-900 border-zinc-800'}`}>
       <button
         onClick={() => setOpen(v => !v)}
+        title="Aquí entran los mecánicos y gastos compartidos. Ingresa el monto total y la app lo divide entre los camiones automáticamente."
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-zinc-800/30 transition-colors"
       >
         <div className="flex items-center gap-3">
@@ -136,7 +137,7 @@ export default function GastosComunesClient({
           {autoOpen && open && (
             <span className="text-amber-400 text-xs bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">Pendiente</span>
           )}
-          <span className="text-zinc-500 text-xs hidden sm:inline">Starlink, mecánicos — {propioCount} propios · {truckCount} total</span>
+          <span className="text-zinc-500 text-xs">Mecánicos, Starlink, grasa — {propioCount} propios · {truckCount} total</span>
         </div>
         <span className="text-zinc-400 text-lg">{open ? '▲' : '▼'}</span>
       </button>
@@ -155,9 +156,14 @@ export default function GastosComunesClient({
               <p className="text-amber-400/60 text-xs">El sistema divide el monto entre los camiones seleccionados automáticamente.</p>
             </div>
           )}
-          <p className="text-zinc-500 text-xs">
-            Verifica los montos y modifica si es necesario. El sistema divide entre {propioCount} propios (o {truckCount} si aplica a todos).
-          </p>
+          <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl px-4 py-3 space-y-1">
+            <p className="text-zinc-300 text-xs font-semibold">¿Qué va aquí?</p>
+            <p className="text-zinc-500 text-xs">
+              <span className="text-amber-400 font-medium">Mecánicos</span> — entra el monto total de la quincena. La app divide entre los propios automáticamente.<br />
+              <span className="text-zinc-400 font-medium">Starlink, grasa, gasoil de depósito</span> — cualquier gasto compartido entre varios camiones.<br />
+              Después de aplicar, presiona <span className="text-amber-400 font-medium">Recalcular</span> para que aparezca en la nómina.
+            </p>
+          </div>
 
           {/* Mobile: cards */}
           <div className="sm:hidden space-y-3">

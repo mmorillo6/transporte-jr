@@ -42,9 +42,14 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
   const [horaInicio, setHoraInicio]   = useState('07:30')
   const [horaFin, setHoraFin]         = useState('17:00')
   const [descanso, setDescanso]       = useState(1)
-  const [descripcion, setDescripcion] = useState('INTERNO TRONCAL A PLANTA')
-  const [actividad, setActividad]     = useState('ACARREO DE ÑUMA DE TRONCAL A PLANTA')
+  const [descripcion, setDescripcion] = useState('')
+  const [actividad, setActividad]     = useState('')
   const [saving, setSaving]           = useState(false)
+
+  // Autofill: recuerda la última descripción y actividad ingresada
+  const [lastDiasEntry, setLastDiasEntry] = useState<{ descripcion: string; actividad: string } | null>(null)
+  const [showDiasS, setShowDiasS]         = useState(false)
+  const [showBulkS, setShowBulkS]         = useState(false)
 
   // Bulk state
   const [showBulk, setShowBulk]         = useState(false)
@@ -52,8 +57,8 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
   const [bulkInicio, setBulkInicio]     = useState('07:30')
   const [bulkFin, setBulkFin]           = useState('17:00')
   const [bulkDescanso, setBulkDescanso] = useState(1)
-  const [bulkDescripcion, setBulkDescripcion] = useState('INTERNO TRONCAL A PLANTA')
-  const [bulkActividad, setBulkActividad]     = useState('ACARREO DE ÑUMA DE TRONCAL A PLANTA')
+  const [bulkDescripcion, setBulkDescripcion] = useState('')
+  const [bulkActividad, setBulkActividad]     = useState('')
   const [bulkSelected, setBulkSelected] = useState<Record<string, string>>({}) // truckId → conductor
   const [bulkSaving, setBulkSaving]     = useState(false)
   const [bulkError, setBulkError]       = useState('')
@@ -77,7 +82,8 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
       trucks: truckList,
     })
     if (res?.error) { setBulkError(res.error); setBulkSaving(false); return }
-    setShowBulk(false); setBulkSelected({})
+    setLastDiasEntry({ descripcion: bulkDescripcion, actividad: bulkActividad })
+    setShowBulk(false); setBulkSelected({}); setShowBulkS(false)
     await cargar(); router.refresh()
     setBulkSaving(false)
   }
@@ -128,8 +134,8 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
     setEditing(null)
     setTruckId(''); setConductor(''); setFecha(todayStr())
     setHoraInicio('07:30'); setHoraFin('17:00'); setDescanso(1)
-    setDescripcion('INTERNO TRONCAL A PLANTA')
-    setActividad('ACARREO DE ÑUMA DE TRONCAL A PLANTA')
+    setDescripcion(''); setActividad('')
+    setShowDiasS(lastDiasEntry !== null)
     setError(''); setShowForm(true)
   }
 
@@ -137,8 +143,8 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
     setEditing(null)
     setTruckId(d.truckId); setConductor(d.conductor); setFecha(d.date)
     setHoraInicio('07:30'); setHoraFin('17:00'); setDescanso(1)
-    setDescripcion('INTERNO TRONCAL A PLANTA')
-    setActividad('ACARREO DE ÑUMA DE TRONCAL A PLANTA')
+    setDescripcion(''); setActividad('')
+    setShowDiasS(lastDiasEntry !== null)
     setError(''); setShowForm(true)
     setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50)
   }
@@ -168,7 +174,8 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
       ? await updateDiasInternosEntry(editing.id, fd)
       : await createDiasInternosEntry(fd)
     if (res?.error) { setError(res.error); setSaving(false); return }
-    setShowForm(false); setEditing(null)
+    if (!editing) setLastDiasEntry({ descripcion, actividad })
+    setShowForm(false); setEditing(null); setShowDiasS(false)
     await cargar(); router.refresh()
     setSaving(false)
   }
@@ -195,7 +202,7 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
             className="bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
         </div>
         <div className="ml-auto flex gap-2">
-          <button onClick={() => { setShowBulk(v => !v); setShowForm(false) }}
+          <button onClick={() => { setShowBulk(v => !v); setShowForm(false); if (!showBulk) setShowBulkS(lastDiasEntry !== null) }}
             className="bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl px-4 py-2 text-sm transition-colors">
             + Día masivo
           </button>
@@ -210,6 +217,29 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
       {showBulk && (
         <form onSubmit={handleBulkSubmit} className="bg-zinc-900 border border-blue-500/30 rounded-2xl p-5 space-y-4">
           <h3 className="text-white font-semibold text-sm">Día interno masivo — varios camiones a la vez</h3>
+
+          {/* Sugerencia autofill bulk */}
+          {showBulkS && lastDiasEntry && (
+            <div className="p-3 bg-zinc-800 border border-zinc-700 rounded-xl">
+              <p className="text-zinc-400 text-xs mb-2">
+                ¿Misma descripción y actividad que el anterior?
+                {lastDiasEntry.descripcion && <> <span className="text-white font-medium">"{lastDiasEntry.descripcion}"</span></>}
+                {lastDiasEntry.actividad && <> — <span className="text-zinc-300">"{lastDiasEntry.actividad}"</span></>}
+              </p>
+              <div className="flex gap-2">
+                <button type="button"
+                  onClick={() => { setBulkDescripcion(lastDiasEntry.descripcion); setBulkActividad(lastDiasEntry.actividad); setShowBulkS(false) }}
+                  className="text-xs bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/20 rounded-lg px-3 py-1.5 transition-colors font-medium">
+                  Sí, autorellenar
+                </button>
+                <button type="button"
+                  onClick={() => setShowBulkS(false)}
+                  className="text-xs bg-zinc-700 text-zinc-400 hover:text-white rounded-lg px-3 py-1.5 transition-colors">
+                  No, dejar vacío
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Horario común */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -321,6 +351,30 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
       {showForm && (
         <div className="bg-zinc-900 border border-amber-500/20 rounded-2xl p-5">
           <h3 className="text-white font-semibold mb-4">{editing ? 'Editar registro' : 'Nuevo registro de día interno'}</h3>
+
+          {/* Sugerencia autofill — solo al crear nuevo */}
+          {!editing && showDiasS && lastDiasEntry && (
+            <div className="mb-4 p-3 bg-zinc-800 border border-zinc-700 rounded-xl">
+              <p className="text-zinc-400 text-xs mb-2">
+                ¿La descripción y actividad son iguales al anterior?
+                {lastDiasEntry.descripcion && <> <span className="text-white font-medium">"{lastDiasEntry.descripcion}"</span></>}
+                {lastDiasEntry.actividad && <> — <span className="text-zinc-300">"{lastDiasEntry.actividad}"</span></>}
+              </p>
+              <div className="flex gap-2">
+                <button type="button"
+                  onClick={() => { setDescripcion(lastDiasEntry.descripcion); setActividad(lastDiasEntry.actividad); setShowDiasS(false) }}
+                  className="text-xs bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 border border-amber-500/20 rounded-lg px-3 py-1.5 transition-colors font-medium">
+                  Sí, autorellenar
+                </button>
+                <button type="button"
+                  onClick={() => setShowDiasS(false)}
+                  className="text-xs bg-zinc-700 text-zinc-400 hover:text-white rounded-lg px-3 py-1.5 transition-colors">
+                  No, dejar vacío
+                </button>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
