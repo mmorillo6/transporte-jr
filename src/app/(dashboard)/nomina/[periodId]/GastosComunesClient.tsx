@@ -229,13 +229,25 @@ export default function GastosComunesClient({
                   <span className="text-white font-bold">${totalNuevo.toFixed(2)}</span>
                 </div>
               )}
-              <button
-                onClick={handleApply}
-                disabled={saving || truckCount === 0}
-                className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-xl px-5 py-2 text-sm transition-colors"
-              >
-                {saving ? 'Aplicando...' : `Aplicar a ${truckCount} camiones`}
-              </button>
+              {(() => {
+                const valid     = items.filter(it => it.description.trim() && parseFloat(it.amount) > 0)
+                const allPropios = valid.length > 0 && valid.every(it => !it.includeAfiliados)
+                const allTodos   = valid.length > 0 && valid.every(it =>  it.includeAfiliados)
+                const label = saving          ? 'Aplicando...'
+                  : valid.length === 0        ? 'Aplicar'
+                  : allPropios                ? `Aplicar a ${propioCount} propios`
+                  : allTodos                  ? `Aplicar a ${truckCount} camiones (todos)`
+                  :                             `Aplicar (${propioCount} propios / ${truckCount} total)`
+                return (
+                  <button
+                    onClick={handleApply}
+                    disabled={saving || truckCount === 0}
+                    className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-xl px-5 py-2 text-sm transition-colors"
+                  >
+                    {label}
+                  </button>
+                )
+              })()}
             </div>
           </div>
         </div>
