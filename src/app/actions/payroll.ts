@@ -466,8 +466,8 @@ type Disposition = 'CAJA_CHICA' | 'AURUMIN' | 'LUIS_PENA' | 'SIGUIENTE'
 // ─── Cerrar período — crea CashEntry para carros negativos ────────────────────
 export async function closePeriod(periodId: string, dispositions?: Record<string, Disposition>) {
   const session = await getSession()
-  if (!session || session.role !== 'DUENO') {
-    return { error: 'Solo el dueño puede cerrar períodos' }
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {
+    return { error: 'No autorizado' }
   }
 
   const [entries, period] = await Promise.all([
@@ -606,8 +606,8 @@ export async function crearPeriodo(startDateStr: string, endDateStr: string) {
 // ─── Reabrir período ───────────────────────────────────────────────────────────
 export async function reopenPeriod(periodId: string) {
   const session = await getSession()
-  if (!session || session.role !== 'DUENO') {
-    return { error: 'Solo el dueño puede reabrir períodos' }
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {
+    return { error: 'No autorizado' }
   }
 
   await prisma.period.update({
