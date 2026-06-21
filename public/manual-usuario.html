@@ -1,0 +1,1563 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manual de Usuario — Transporte JR</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.65;
+    color: #1a1a2e;
+    background: #fff;
+  }
+
+  /* ── Print settings ── */
+  @media print {
+    body { font-size: 12px; }
+    .no-print { display: none !important; }
+    .page-break { page-break-before: always; }
+    .avoid-break { page-break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+    .toc-section { page-break-after: always; }
+  }
+
+  /* ── Colors ── */
+  :root {
+    --amber: #f59e0b;
+    --amber-dark: #d97706;
+    --amber-light: #fef3c7;
+    --dark: #1a1a2e;
+    --gray: #6b7280;
+    --gray-light: #f3f4f6;
+    --gray-mid: #e5e7eb;
+    --green: #059669;
+    --red: #dc2626;
+    --blue: #2563eb;
+    --border: #d1d5db;
+  }
+
+  /* ── Layout ── */
+  .container { max-width: 900px; margin: 0 auto; padding: 0 32px; }
+
+  /* ── Cover Page ── */
+  .cover {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 40px;
+    color: white;
+    text-align: center;
+  }
+  .cover-logo {
+    width: 280px;
+    margin-bottom: 48px;
+    filter: brightness(1.1);
+  }
+  .cover-badge {
+    background: var(--amber);
+    color: #1a1a2e;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    padding: 6px 20px;
+    border-radius: 20px;
+    margin-bottom: 24px;
+  }
+  .cover h1 {
+    font-size: 38px;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 16px;
+  }
+  .cover h1 span { color: var(--amber); }
+  .cover-subtitle {
+    font-size: 17px;
+    color: #94a3b8;
+    margin-bottom: 60px;
+    max-width: 520px;
+  }
+  .cover-meta {
+    display: flex;
+    gap: 48px;
+    margin-top: auto;
+    padding-top: 48px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    width: 100%;
+    justify-content: center;
+  }
+  .cover-meta-item { text-align: center; }
+  .cover-meta-item .label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+  .cover-meta-item .value { font-size: 15px; font-weight: 600; color: #e2e8f0; margin-top: 4px; }
+
+  /* ── Table of Contents ── */
+  .toc-section { padding: 60px 0; }
+  .toc-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--dark);
+    margin-bottom: 8px;
+    padding-bottom: 16px;
+    border-bottom: 3px solid var(--amber);
+    display: inline-block;
+  }
+  .toc-subtitle { color: var(--gray); font-size: 14px; margin-bottom: 36px; margin-top: 8px; }
+  .toc-list { list-style: none; }
+  .toc-list > li { margin-bottom: 4px; }
+  .toc-chapter {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .toc-chapter:hover { background: var(--gray-light); }
+  .toc-num {
+    width: 28px; height: 28px;
+    background: var(--amber);
+    color: #1a1a2e;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .toc-chapter-title { font-weight: 600; flex: 1; }
+  .toc-page { color: var(--gray); font-size: 12px; }
+  .toc-sub { list-style: none; padding-left: 56px; }
+  .toc-sub li { padding: 4px 0; color: var(--gray); font-size: 13px; }
+  .toc-sub li::before { content: "›  "; color: var(--amber); font-weight: 700; }
+
+  /* ── Chapter Header ── */
+  .chapter-header {
+    background: linear-gradient(135deg, var(--dark) 0%, #16213e 100%);
+    color: white;
+    padding: 48px 40px;
+    margin-bottom: 40px;
+    border-radius: 0;
+  }
+  .chapter-num-badge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 12px;
+  }
+  .chapter-header h2 {
+    font-size: 30px;
+    font-weight: 800;
+    margin-bottom: 12px;
+  }
+  .chapter-header p {
+    color: #94a3b8;
+    font-size: 15px;
+    max-width: 600px;
+  }
+
+  /* ── Content Sections ── */
+  .content-section { padding: 0 0 48px 0; }
+  .section { margin-bottom: 40px; }
+
+  h3 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--dark);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--amber-light);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h3 .icon {
+    width: 32px; height: 32px;
+    background: var(--amber);
+    border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  h4 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--dark);
+    margin: 20px 0 10px;
+  }
+  p { margin-bottom: 12px; color: #374151; }
+
+  /* ── Cards ── */
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    background: #fff;
+  }
+  .card.amber { border-left: 4px solid var(--amber); background: var(--amber-light); }
+  .card.green { border-left: 4px solid var(--green); background: #ecfdf5; }
+  .card.red { border-left: 4px solid var(--red); background: #fef2f2; }
+  .card.blue { border-left: 4px solid var(--blue); background: #eff6ff; }
+  .card-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+  .card.amber .card-title { color: var(--amber-dark); }
+  .card.green .card-title { color: var(--green); }
+  .card.red .card-title { color: var(--red); }
+  .card.blue .card-title { color: var(--blue); }
+
+  /* ── Step boxes ── */
+  .steps { list-style: none; counter-reset: step; }
+  .steps li {
+    counter-increment: step;
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    align-items: flex-start;
+  }
+  .steps li::before {
+    content: counter(step);
+    min-width: 28px; height: 28px;
+    background: var(--amber);
+    color: #1a1a2e;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .steps li p { margin: 0; }
+
+  /* ── Feature grid ── */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .feature-item {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    background: var(--gray-light);
+  }
+  .feature-item .fi-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--dark);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .feature-item .fi-title .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--amber);
+    flex-shrink: 0;
+  }
+  .feature-item p { font-size: 13px; color: var(--gray); margin: 0; }
+
+  /* ── Roles table ── */
+  .roles-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+  .roles-table th {
+    background: var(--dark);
+    color: white;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+  }
+  .roles-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .roles-table tr:nth-child(even) td { background: var(--gray-light); }
+  .roles-table tr:hover td { background: var(--amber-light); }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-dueno { background: #fef3c7; color: #92400e; }
+  .badge-encargado { background: #dbeafe; color: #1e40af; }
+  .badge-afiliado { background: #d1fae5; color: #065f46; }
+  .badge-chofer { background: #ede9fe; color: #5b21b6; }
+  .badge-mecanico { background: #fee2e2; color: #991b1b; }
+
+  /* ── Screen mockup ── */
+  .screen-mockup {
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 20px 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .screen-bar {
+    background: var(--dark);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .screen-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+  .screen-bar .screen-title { color: #94a3b8; font-size: 12px; margin-left: 8px; }
+  .screen-content { padding: 20px; background: #f8fafc; }
+
+  /* ── FAQ ── */
+  .faq-item {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .faq-q {
+    background: var(--gray-light);
+    padding: 14px 18px;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--dark);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .faq-q::before { content: "?"; color: var(--amber); font-size: 18px; font-weight: 900; flex-shrink: 0; margin-top: -2px; }
+  .faq-a {
+    padding: 14px 18px;
+    color: #374151;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  /* ── Quick ref ── */
+  .quick-ref {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .qr-item {
+    background: var(--dark);
+    color: white;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+  .qr-item .qr-icon { font-size: 24px; margin-bottom: 8px; }
+  .qr-item .qr-name { font-size: 13px; font-weight: 700; color: var(--amber); margin-bottom: 4px; }
+  .qr-item .qr-desc { font-size: 11px; color: #94a3b8; }
+
+  /* ── Compared table ── */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+  .compare-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .compare-table th:first-child { background: #fef2f2; color: var(--red); width: 45%; }
+  .compare-table th:last-child { background: #ecfdf5; color: var(--green); width: 55%; }
+  .compare-table td { padding: 10px 16px; vertical-align: top; border-bottom: 1px solid var(--border); }
+  .compare-table td:first-child { background: #fff5f5; color: #6b7280; }
+  .compare-table td:last-child { background: #f0fdf4; color: #374151; font-weight: 500; }
+
+  /* ── Button reference ── */
+  .btn-ref {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--gray-mid);
+  }
+  .btn-ref:last-child { border-bottom: none; }
+  .btn-sim {
+    flex-shrink: 0;
+    padding: 5px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    min-width: 100px;
+  }
+  .btn-sim.amber { background: var(--amber); color: #1a1a2e; }
+  .btn-sim.dark { background: var(--dark); color: white; }
+  .btn-sim.red { background: var(--red); color: white; }
+  .btn-sim.green { background: var(--green); color: white; }
+  .btn-sim.gray { background: #e5e7eb; color: #374151; }
+  .btn-ref-desc { font-size: 13px; color: #374151; }
+  .btn-ref-desc strong { color: var(--dark); }
+
+  /* ── Divider ── */
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  /* ── Tags ── */
+  .tag {
+    display: inline-block;
+    background: var(--amber-light);
+    color: var(--amber-dark);
+    border: 1px solid #fcd34d;
+    border-radius: 4px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 4px;
+  }
+
+  /* ── Print button ── */
+  .print-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    background: var(--amber);
+    color: #1a1a2e;
+    border: none;
+    border-radius: 50px;
+    padding: 14px 28px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(245,158,11,0.4);
+    z-index: 9999;
+    transition: all 0.2s;
+  }
+  .print-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(245,158,11,0.5); }
+
+  /* ── Tip box ── */
+  .tip {
+    display: flex;
+    gap: 12px;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 16px 0;
+    font-size: 13px;
+    color: #78350f;
+  }
+  .tip-icon { font-size: 18px; flex-shrink: 0; margin-top: -1px; }
+
+  /* ── Warning ── */
+  .warning {
+    display: flex;
+    gap: 12px;
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 16px 0;
+    font-size: 13px;
+    color: #991b1b;
+  }
+
+  /* ── Inline nav path ── */
+  .nav-path {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--dark);
+    color: white;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: monospace;
+  }
+  .nav-path span { color: var(--amber); }
+
+  ul.check { list-style: none; }
+  ul.check li { padding: 4px 0; }
+  ul.check li::before { content: "✓ "; color: var(--green); font-weight: 700; }
+
+  ul.dot { list-style: none; }
+  ul.dot li { padding: 3px 0; padding-left: 16px; position: relative; }
+  ul.dot li::before { content: "•"; position: absolute; left: 0; color: var(--amber); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     PORTADA
+════════════════════════════════════════════════ -->
+<div class="cover">
+  <img src="/assets/logos/logo-full.png" alt="Transporte JR" class="cover-logo">
+  <div class="cover-badge">Manual de Usuario</div>
+  <h1>Sistema de Gestión<br><span>Transporte José Rodríguez</span></h1>
+  <p class="cover-subtitle">Guía completa para el encargado: cómo usar cada sección, registrar datos, gestionar usuarios y resolver dudas frecuentes.</p>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="label">Versión</div>
+      <div class="value">2026 · v2.0</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Audiencia</div>
+      <div class="value">Encargado / Dueño</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="label">Actualizado</div>
+      <div class="value">Junio 2026</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TABLA DE CONTENIDOS
+════════════════════════════════════════════════ -->
+<div class="container toc-section">
+  <h2 class="toc-title">Tabla de Contenidos</h2>
+  <p class="toc-subtitle">Este manual cubre todas las funciones del sistema de gestión.</p>
+
+  <ol class="toc-list">
+    <li>
+      <div class="toc-chapter">
+        <div class="toc-num">1</div>
+        <div class="toc-chapter-title">¿Qué hace el sistema? — Antes vs. Ahora</div>
+      </div>
+    </li>
+    <li>
+      <div class="toc-chapter">
+        <div class="toc-num">2</div>
+        <div class="toc-chapter-title">Roles y accesos</div>
+      </div>
+      <ul class="toc-sub">
+        <li>Qué ve cada rol</li>
+        <li>Tabla de permisos</li>
+      </ul>
+    </li>
+    <li>
+      <div class="toc-chapter">
+        <div class="toc-num">3</div>
+        <div class="toc-chapter-title">Flujo quincenal — Paso a paso</div>
+      </div>
+      <ul class="toc-sub">
+        <li>Los 7 pasos del ciclo</li>
+      </ul>
+    </li>
+    <li>
+      <div class="toc-chapter">
+        <div class="toc-num">4</div>
+        <div class="toc-chapter-title">Secciones del sistema</div>
+      </div>
+      <ul class="toc-sub">
+        <li>Dashboard · Romana · Despacho · Nómina</li>
+        <li>Caja / Finanzas · Mantenimiento · Flota · Viajes</li>
+        <li>Almacén · Gasoil · Aceite · Días Internos</li>
+        <li>Relaciones · Reportes · Rutas · Usuarios</li>
+      </ul>
+    </li>
+    <li>
+      <div class="toc-chapter">
+        <div class="toc-num">5</div>
+        <div class="toc-chapter-title">Gestión de usuarios</div>
+      </div>
+      <ul class="toc-sub">
+        <li>Cómo crear un usuario</li>
+        <li>Cómo editar o desactivar</li>
+        <li>Lista de usuarios actuales</li>
+      </ul>
+    </li>
+    <li>
+      <div class="toc-chapter">
+        <div class="toc-num">6</div>
+        <div class="toc-chapter-title">Preguntas Frecuentes (FAQ)</div>
+      </div>
+    </li>
+    <li>
+      <div class="toc-chapter">
+        <div class="toc-num">7</div>
+        <div class="toc-chapter-title">Referencia rápida — Botones y acciones</div>
+      </div>
+    </li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     CAP 1 — QUÉ HACE EL SISTEMA
+════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<div class="chapter-header">
+  <div class="container">
+    <div class="chapter-num-badge">Capítulo 1</div>
+    <h2>¿Qué hace el sistema?<br>Antes vs. Ahora</h2>
+    <p>Todo lo que Fernando hacía en Excel, WhatsApp y de memoria, ahora está en un solo lugar.</p>
+  </div>
+</div>
+
+<div class="container content-section">
+
+  <div class="section avoid-break">
+    <p>El sistema <strong>Transporte JR</strong> reemplaza hojas de cálculo, libretas y cálculos manuales con una plataforma centralizada. Todo queda guardado, es consultable por los dueños y puede exportarse a Excel cuando se necesite.</p>
+
+    <table class="compare-table">
+      <tr>
+        <th>❌ Antes (manual)</th>
+        <th>✅ Ahora (sistema)</th>
+      </tr>
+      <tr>
+        <td>Copiar viajes de la romana a Excel manualmente</td>
+        <td>Importar el Excel de Aurumin con un clic — el sistema calcula todo automáticamente</td>
+      </tr>
+      <tr>
+        <td>Calcular la nómina de cada dueño a mano (bruto, descuentos, neto)</td>
+        <td>Botón "Generar nómina" — calcula en segundos para todos los camiones del período</td>
+      </tr>
+      <tr>
+        <td>Llevar el control de gastos en papelitos o WhatsApp</td>
+        <td>Registrar gastos por categoría, vinculados a cada camión y período</td>
+      </tr>
+      <tr>
+        <td>Recordar de memoria cuánto le debe Aurumin y Chino Peña</td>
+        <td>Cuentas Por Cobrar en tiempo real con estado (pendiente / parcial / pagado)</td>
+      </tr>
+      <tr>
+        <td>Calcular cuánto gasoil necesita cada camión por ruta</td>
+        <td>El despacho calcula automáticamente el gasoil estimado según la ruta asignada</td>
+      </tr>
+      <tr>
+        <td>Rastrear préstamos a choferes en Excel</td>
+        <td>Módulo de préstamos con abonos, balance y descuento automático en nómina</td>
+      </tr>
+      <tr>
+        <td>Armar la relación de acarreo a mano para enviarla a Aurumin</td>
+        <td>Exportar relación formateada a Excel con un clic desde el módulo Relaciones</td>
+      </tr>
+      <tr>
+        <td>Verificar el estado de mantenimiento por camión de memoria</td>
+        <td>Alertas automáticas de próximos mantenimientos por odómetro o fecha</td>
+      </tr>
+      <tr>
+        <td>Los dueños/afiliados llaman para preguntar cuánto les toca</td>
+        <td>Cada dueño tiene su acceso y ve su propio dashboard con saldo en tiempo real</td>
+      </tr>
+      <tr>
+        <td>Llevar asistencia de mecánicos y choferes en papel</td>
+        <td>Módulo de reloj de asistencia (clock in/out) con historial</td>
+      </tr>
+      <tr>
+        <td>Controlar inventario de repuestos en almacén de memoria</td>
+        <td>Módulo Almacén para comprar en bulk y asignar a camiones/períodos</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="card green avoid-break">
+    <div class="card-title">💡 Lo más importante que hace el sistema automáticamente</div>
+    <ul class="check">
+      <li>Calcula el <strong>NPR (5% o 10%)</strong> sobre facturación, según el tipo de dueño</li>
+      <li>Separa facturación <strong>Aurumin vs. Luis Peña (Chino)</strong> en cada período</li>
+      <li>Genera <strong>viáticos automáticos</strong> para choferes según días trabajados</li>
+      <li>Para afiliados: la nómina del chofer es <strong>informativa</strong>, no se descuenta (ellos pagan directo)</li>
+      <li>Al registrar un pago de CxC, crea automáticamente la entrada en <strong>Caja USDT</strong></li>
+      <li>Las quincenas son: 1→16 primera quincena, 17→fin del mes segunda quincena</li>
+    </ul>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     CAP 2 — ROLES
+════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<div class="chapter-header">
+  <div class="container">
+    <div class="chapter-num-badge">Capítulo 2</div>
+    <h2>Roles y Accesos</h2>
+    <p>El sistema tiene 5 roles. Cada uno ve solo lo que necesita.</p>
+  </div>
+</div>
+
+<div class="container content-section">
+
+  <div class="section">
+    <table class="roles-table">
+      <tr>
+        <th>Rol</th>
+        <th>Quién es</th>
+        <th>¿Qué puede hacer?</th>
+      </tr>
+      <tr>
+        <td><span class="badge badge-dueno">Dueño</span></td>
+        <td>José Rodríguez (admin)</td>
+        <td>Todo el sistema. Ver finanzas completas, cerrar períodos, gestionar usuarios, ver reportes.</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-encargado">Encargado</span></td>
+        <td>Fernando Pérez</td>
+        <td>Igual que Dueño excepto algunos reportes financieros internos. Puede hacer todo el trabajo operativo diario.</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-afiliado">Afiliado</span></td>
+        <td>Luis Rivas, Joaquín, Gregorio, Pablo, etc.</td>
+        <td>Solo su propio dashboard. Ve sus camiones, saldos, viajes del período. No puede ver datos de otros dueños.</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-chofer">Chofer</span></td>
+        <td>Marcos, Alexander, etc.</td>
+        <td>Solo "Mi Cuenta": su camión, despacho del día, nómina y préstamos.</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-mecanico">Mecánico</span></td>
+        <td>Mecánicos del taller</td>
+        <td>Solo "Mi Cuenta": trabajos recientes, asistencia y ganancias del mes.</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section avoid-break">
+    <h3><span class="icon">🔐</span> Inicio de sesión</h3>
+    <ol class="steps">
+      <li><p>Ir a la dirección del sistema en el navegador.</p></li>
+      <li><p>Escribir el <strong>correo electrónico</strong> o <strong>número de teléfono</strong> registrado.</p></li>
+      <li><p>Escribir la <strong>contraseña</strong> y presionar <strong>"Ingresar"</strong>.</p></li>
+      <li><p>El sistema redirige automáticamente según el rol: encargado/dueño van al Dashboard, choferes/mecánicos van a Mi Cuenta.</p></li>
+    </ol>
+
+    <div class="tip">
+      <div class="tip-icon">💡</div>
+      <div>Para cerrar sesión: hacer clic en el menú inferior izquierdo (tu nombre) y seleccionar <strong>"Cerrar sesión"</strong>.</div>
+    </div>
+  </div>
+
+  <div class="section avoid-break">
+    <h3><span class="icon">🗂</span> Menú de navegación</h3>
+    <p>El menú lateral izquierdo tiene todas las secciones disponibles. En dispositivos móviles, se puede abrir con el ícono de menú en la esquina superior izquierda.</p>
+
+    <div class="quick-ref">
+      <div class="qr-item"><div class="qr-icon">🏠</div><div class="qr-name">Dashboard</div><div class="qr-desc">Resumen general del período</div></div>
+      <div class="qr-item"><div class="qr-icon">📋</div><div class="qr-name">Romana</div><div class="qr-desc">Importar viajes desde Excel</div></div>
+      <div class="qr-item"><div class="qr-icon">🚛</div><div class="qr-name">Despacho</div><div class="qr-desc">Asignar rutas del día</div></div>
+      <div class="qr-item"><div class="qr-icon">💰</div><div class="qr-name">Nómina</div><div class="qr-desc">Períodos y pagos</div></div>
+      <div class="qr-item"><div class="qr-icon">💵</div><div class="qr-name">Caja</div><div class="qr-desc">Finanzas y gastos</div></div>
+      <div class="qr-item"><div class="qr-icon">🔧</div><div class="qr-name">Mantenimiento</div><div class="qr-desc">Alertas y servicios</div></div>
+      <div class="qr-item"><div class="qr-icon">🚚</div><div class="qr-name">Flota</div><div class="qr-desc">Camiones y propietarios</div></div>
+      <div class="qr-item"><div class="qr-icon">🗺</div><div class="qr-name">Viajes</div><div class="qr-desc">Historial completo</div></div>
+      <div class="qr-item"><div class="qr-icon">📦</div><div class="qr-name">Almacén</div><div class="qr-desc">Repuestos en inventario</div></div>
+      <div class="qr-item"><div class="qr-icon">⛽</div><div class="qr-name">Gasoil</div><div class="qr-desc">Tanque y consumo</div></div>
+      <div class="qr-item"><div class="qr-icon">📊</div><div class="qr-name">Relaciones</div><div class="qr-desc">Exportar relación quincenal</div></div>
+      <div class="qr-item"><div class="qr-icon">👥</div><div class="qr-name">Usuarios</div><div class="qr-desc">Crear y gestionar accesos</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     CAP 3 — FLUJO QUINCENAL
+════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<div class="chapter-header">
+  <div class="container">
+    <div class="chapter-num-badge">Capítulo 3</div>
+    <h2>Flujo Quincenal — Los 7 Pasos</h2>
+    <p>Este es el ciclo completo de trabajo cada quincena, en orden.</p>
+  </div>
+</div>
+
+<div class="container content-section">
+
+  <div class="card amber">
+    <div class="card-title">📅 Períodos quincenales</div>
+    La primera quincena es del <strong>1 al 16</strong> de cada mes. La segunda quincena es del <strong>17 al último día</strong> del mes. El sistema permite tener un solo período abierto a la vez.
+  </div>
+
+  <div class="section">
+    <ol class="steps">
+      <li>
+        <div>
+          <strong>Crear el período</strong> — <span class="nav-path">Nómina <span>→</span> Crear Período</span><br>
+          <p style="margin-top:6px;">Al inicio de cada quincena, crear un período nuevo con las fechas correctas. El sistema usará ese período como referencia para todos los viajes, gastos y nómina que se registren.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <strong>Cargar la romana</strong> — <span class="nav-path">Romana</span><br>
+          <p style="margin-top:6px;">Descargar el Excel de Aurumin. Importarlo en el sistema. El sistema lee placa, toneladas y ruta, y calcula el monto de cada viaje. Si hay errores (placa no registrada, ruta nueva), el sistema avisa antes de guardar.</p>
+          <div class="tip" style="margin-top:10px;">
+            <div class="tip-icon">💡</div>
+            <div>Los viajes de <strong>Luis Peña (Chino)</strong> no vienen en la romana de Aurumin — esos se registran manualmente en <strong>Viajes → Nuevo viaje</strong>.</div>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <strong>Registrar días internos y material estéril</strong> — <span class="nav-path">Registro Manual</span><br>
+          <p style="margin-top:6px;">Si algún camión trabajó en tareas internas (no en minas Aurumin) o cargó material estéril, registrarlo en esta sección. Estos no aparecen en la romana.</p>
+          <div class="tip" style="margin-top:10px;">
+            <div class="tip-icon">💡</div>
+            <div>El <strong>material estéril</strong> se paga a <strong>$100 por viaje</strong>. El chofer recibe $10. Frank Cobi está excluido de este cálculo.</div>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <strong>Cargar gastos del período</strong> — <span class="nav-path">Caja <span>→</span> Gastos</span><br>
+          <p style="margin-top:6px;">Registrar todos los gastos: mecánica, repuestos, aceite, cauchos, viáticos, etc. Cada gasto se vincula a un camión específico y categoría. Los gastos afectan el neto del dueño en la nómina.</p>
+          <div class="card blue" style="margin-top:10px;">
+            <div class="card-title">Categorías de gastos disponibles:</div>
+            <span class="tag">Mecánica</span><span class="tag">Repuesto</span><span class="tag">Aceite</span><span class="tag">Caucho</span><span class="tag">Viático</span><span class="tag">Nómina</span><span class="tag">Operativo</span><span class="tag">Administrativo</span><span class="tag">NPR</span><span class="tag">Otro</span>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <strong>Generar la nómina</strong> — <span class="nav-path">Nómina <span>→</span> [período] <span>→</span> Generar</span><br>
+          <p style="margin-top:6px;">Con todos los viajes y gastos cargados, hacer clic en "Generar nómina". El sistema calcula para cada camión: facturación bruta, NPR, gastos operativos, mecánica, administrativo, nómina del chofer (solo propios), saldo inicial, abonos y neto final.</p>
+          <div class="warning" style="margin-top:10px;">
+            <div>⚠️ <strong>Importante:</strong> La nómina se puede regenerar las veces que sea necesario antes de cerrar el período. Regenerar actualiza los cálculos con los últimos datos.</div>
+          </div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <strong>Revisar saldos y registrar cobros</strong> — <span class="nav-path">Caja <span>→</span> Por Cobrar</span><br>
+          <p style="margin-top:6px;">Crear la cuenta por cobrar con Aurumin y/o Luis Peña según la facturación del período. Cuando paguen, registrar el abono — el sistema actualiza automáticamente la caja USDT y el estado de la cuenta.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <strong>Cerrar el período</strong> — <span class="nav-path">Nómina <span>→</span> [período] <span>→</span> Cerrar</span><br>
+          <p style="margin-top:6px;">Una vez revisado todo, cerrar el período. El cierre congela los datos y envía notificación automática a los dueños (si está configurado). El saldo neto de este período pasa como saldo inicial al siguiente.</p>
+          <div class="tip" style="margin-top:10px;">
+            <div class="tip-icon">💡</div>
+            <div>Después de cerrar, ir a <strong>Nómina → Saldos dueños</strong> para verificar que todos los montos estén correctos antes de pagar.</div>
+          </div>
+        </div>
+      </li>
+    </ol>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     CAP 4 — SECCIONES DEL SISTEMA
+════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<div class="chapter-header">
+  <div class="container">
+    <div class="chapter-num-badge">Capítulo 4</div>
+    <h2>Secciones del Sistema</h2>
+    <p>Descripción detallada de cada módulo y sus funciones.</p>
+  </div>
+</div>
+
+<div class="container content-section">
+
+  <!-- DASHBOARD -->
+  <div class="section avoid-break">
+    <h3><span class="icon">🏠</span> Dashboard — Inicio</h3>
+    <p>Es la pantalla principal. Muestra el resumen del período actual en tiempo real.</p>
+    <div class="feature-grid">
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Flota activa</div>
+        <p>Cantidad de camiones operativos, en taller y fuera de servicio.</p>
+      </div>
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Viajes del período</div>
+        <p>Total de viajes y toneladas cargadas en la quincena actual.</p>
+      </div>
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Facturación</div>
+        <p>Monto total facturado a Aurumin y Luis Peña este período.</p>
+      </div>
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Caja (Efectivo y USDT)</div>
+        <p>Balance actual de ambas cajas. Clic para ir al módulo Finanzas.</p>
+      </div>
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Préstamos pendientes</div>
+        <p>Total de préstamos activos a choferes. En rojo si hay deuda.</p>
+      </div>
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Alertas de mantenimiento</div>
+        <p>Camiones con mantenimiento vencido o próximo a vencer.</p>
+      </div>
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Por cobrar (clientes)</div>
+        <p>Deuda total de Aurumin y Chino Peña en tiempo real.</p>
+      </div>
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Tendencia 6 períodos</div>
+        <p>Gráfico histórico de facturación vs neto de los últimos 3 meses.</p>
+      </div>
+    </div>
+    <div class="tip">
+      <div class="tip-icon">💡</div>
+      <div>Si el sistema detecta que <strong>falta cargar la romana</strong>, no hay período abierto, o hay <strong>CxC sin registrar</strong>, aparecerán alertas en amarillo/rojo en la parte superior del dashboard.</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ROMANA -->
+  <div class="section avoid-break">
+    <h3><span class="icon">📋</span> Romana — Importar viajes</h3>
+    <p>Aquí se carga el Excel que entrega Aurumin con todos los viajes del período.</p>
+    <ol class="steps">
+      <li><p>Descargar el Excel de Aurumin que tiene los viajes (romana de pesos).</p></li>
+      <li><p>En el sistema, ir a <strong>Romana</strong> y arrastrar el archivo Excel al área indicada, o hacer clic en "Seleccionar archivo".</p></li>
+      <li><p>El sistema muestra una vista previa con los viajes detectados. Si hay placas o rutas no reconocidas, aparece un aviso para resolver antes de importar.</p></li>
+      <li><p>Revisar los totales y hacer clic en <strong>"Importar"</strong>. Los viajes quedan asociados al período abierto actual.</p></li>
+    </ol>
+    <div class="card amber">
+      <div class="card-title">Qué calcula automáticamente</div>
+      <ul class="dot">
+        <li>Monto por viaje según la tarifa de la ruta ($/ton o $/viaje)</li>
+        <li>Total de toneladas por camión</li>
+        <li>Facturación bruta por camión y por cliente</li>
+        <li>Separación automática Aurumin vs. Luis Peña</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- DESPACHO -->
+  <div class="section avoid-break">
+    <h3><span class="icon">🚛</span> Despacho</h3>
+    <p>Registro diario de qué camiones salen y a qué ruta. Tiene dos pestañas:</p>
+
+    <h4>Pestaña "Despacho"</h4>
+    <ul class="dot">
+      <li>Seleccionar la fecha del día.</li>
+      <li>Asignar ruta a cada camión activo.</li>
+      <li>El sistema calcula automáticamente cuánto gasoil necesita cada camión según la ruta.</li>
+      <li><strong>Cola de Sosa:</strong> ordena los camiones por antigüedad de último viaje a esa ruta (para que no vaya siempre el mismo).</li>
+    </ul>
+
+    <h4>Pestaña "Asistencia"</h4>
+    <ul class="dot">
+      <li>Registrar entrada (clock in) y salida (clock out) de choferes y mecánicos.</li>
+      <li>Ver el historial de asistencia del mes: días trabajados, horas totales.</li>
+      <li>Útil para calcular los viáticos de mecánicos.</li>
+    </ul>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- NÓMINA -->
+  <div class="section avoid-break">
+    <h3><span class="icon">💰</span> Nómina</h3>
+    <p>El módulo más importante. Aquí se gestionan los períodos quincenales y los pagos a cada dueño.</p>
+
+    <h4>Vista principal de Nómina</h4>
+    <ul class="dot">
+      <li><strong>Crear Período:</strong> botón amarillo para iniciar una nueva quincena.</li>
+      <li>Lista de períodos anteriores (cerrados) con resumen: viajes, bruto, neto.</li>
+      <li>El período abierto aparece destacado arriba con barra de progreso.</li>
+    </ul>
+
+    <h4>Dentro de un período — Botones disponibles:</h4>
+    <div class="btn-ref">
+      <div class="btn-sim amber">Generar nómina</div>
+      <div class="btn-ref-desc"><strong>Calcula la nómina de todos los camiones</strong> con los viajes y gastos actuales. Se puede ejecutar varias veces; siempre recalcula con los datos más recientes.</div>
+    </div>
+    <div class="btn-ref">
+      <div class="btn-sim dark">Cerrar período</div>
+      <div class="btn-ref-desc"><strong>Congela el período.</strong> Ya no se pueden agregar viajes ni gastos a esa quincena. El saldo neto pasa al siguiente período como saldo inicial.</div>
+    </div>
+    <div class="btn-ref">
+      <div class="btn-sim gray">Exportar Excel</div>
+      <div class="btn-ref-desc"><strong>Descarga la nómina</strong> completa del período en formato Excel, con detalles de cada camión.</div>
+    </div>
+
+    <h4>Saldos Dueños <span class="nav-path">Nómina <span>→</span> Saldos dueños</span></h4>
+    <p>Muestra el desglose financiero de cada propietario en el período seleccionado. Por cada camión se ve: facturación Aurumin + LP, NPR, gastos, nómina chofer, mecánica, saldo anterior, abonos y neto final. Aquí se verifica que los números sean correctos antes de pagar.</p>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- CAJA / FINANZAS -->
+  <div class="section avoid-break">
+    <h3><span class="icon">💵</span> Caja / Finanzas</h3>
+    <p>Maneja todo el movimiento de dinero: caja, gastos, préstamos y cuentas por cobrar.</p>
+
+    <h4>Pestaña "Caja"</h4>
+    <ul class="dot">
+      <li>Balance de Efectivo y USDT con historial de movimientos.</li>
+      <li>Botón <strong>"+  Movimiento"</strong> para registrar ingresos o egresos.</li>
+      <li>Seleccionar: INGRESO o EGRESO, monto, moneda (Efectivo o USDT), descripción.</li>
+    </ul>
+
+    <h4>Pestaña "Gastos"</h4>
+    <ul class="dot">
+      <li>Listado de todos los gastos del período con filtros por camión, categoría y fecha.</li>
+      <li>Botón <strong>"+ Gasto"</strong>: registrar un gasto individual vinculado a un camión.</li>
+      <li>Botón <strong>"Gastos comunes"</strong>: aplicar el mismo gasto a todos los camiones del período (ej. una deducción general).</li>
+      <li>Los gastos de <strong>crédito</strong> (marcados con la opción correspondiente) no afectan la caja, solo la nómina.</li>
+    </ul>
+
+    <h4>Pestaña "Préstamos"</h4>
+    <ul class="dot">
+      <li>Lista de préstamos activos a choferes con balance pendiente.</li>
+      <li>Botón <strong>"+ Préstamo"</strong>: registrar un nuevo préstamo (chofer, monto).</li>
+      <li>Botón <strong>"Abonar"</strong>: registrar un pago parcial al préstamo.</li>
+      <li>Botón <strong>"Marcar pagado"</strong>: cuando el préstamo está saldado.</li>
+      <li>Los préstamos se descuentan automáticamente en la nómina del chofer.</li>
+    </ul>
+
+    <h4>Pestaña "Por Cobrar"</h4>
+    <ul class="dot">
+      <li>Cuentas pendientes con Aurumin y Luis Peña.</li>
+      <li>Cada cuenta muestra: monto total, pagado, pendiente, estado (Pendiente / Parcial / Pagado).</li>
+      <li>Botón <strong>"+ Cuenta"</strong>: crear una nueva cuenta por cobrar con el total del período.</li>
+      <li>Botón <strong>"Registrar pago"</strong>: cuando el cliente paga. El sistema actualiza la CxC y crea automáticamente la entrada en Caja USDT.</li>
+    </ul>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- MANTENIMIENTO -->
+  <div class="section avoid-break">
+    <h3><span class="icon">🔧</span> Mantenimiento</h3>
+    <p>Control de servicios, alertas y deudas de cauchos por camión.</p>
+    <div class="feature-grid">
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Alertas</div>
+        <p>Mantenimientos próximos a vencer (cambio de aceite, filtros, grasa). En rojo si ya vencieron.</p>
+      </div>
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Servicios / Historial</div>
+        <p>Log de todos los servicios realizados: fecha, tipo, mecánico, costo.</p>
+      </div>
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Trabajos de mecánica</div>
+        <p>Registro de trabajos por mecánico. Base para calcular sus ganancias.</p>
+      </div>
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Cauchos / Deudas</div>
+        <p>Historial de reparaciones de llantas y deuda acumulada por dueño.</p>
+      </div>
+    </div>
+    <div class="tip">
+      <div class="tip-icon">💡</div>
+      <div>Las <strong>deudas de cauchos</strong> se descuentan automáticamente en la nómina. Si un dueño tiene deuda de $300, aparece como deducción en su saldo del período.</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- FLOTA -->
+  <div class="section avoid-break">
+    <h3><span class="icon">🚚</span> Flota — Camiones</h3>
+    <p>Administra todos los camiones registrados y sus propietarios.</p>
+
+    <h4>Pestaña "Camiones"</h4>
+    <ul class="dot">
+      <li>Lista completa de camiones con placa, propietario, chofer asignado y estado actual.</li>
+      <li>Estado puede ser: <strong>Operacional</strong>, <strong>En taller</strong>, o <strong>Fuera de servicio</strong>.</li>
+      <li>Botón <strong>"Editar"</strong>: cambiar chofer asignado, propietario o estado.</li>
+      <li>Botón <strong>"Nuevo camión"</strong>: registrar un camión nuevo (placa, dueño, chofer).</li>
+    </ul>
+
+    <h4>Pestaña "Propietarios"</h4>
+    <ul class="dot">
+      <li>Lista de todos los dueños (propios y afiliados) con sus camiones.</li>
+      <li>Editar: nombre, teléfono, porcentaje NPR, tipo (Propio/Afiliado).</li>
+    </ul>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- VIAJES -->
+  <div class="section avoid-break">
+    <h3><span class="icon">🗺</span> Viajes</h3>
+    <p>Historial completo de todos los viajes. Aquí también se registran los viajes de Luis Peña (Chino) que no vienen en la romana de Aurumin.</p>
+    <ul class="dot">
+      <li>Filtrar por camión, ruta o rango de fechas.</li>
+      <li>Botón <strong>"+ Nuevo viaje"</strong>: registrar manualmente (camión, ruta, fecha, toneladas). El monto se calcula solo.</li>
+      <li>Botón <strong>"Editar"</strong> en cada viaje: corregir toneladas, fecha o ruta.</li>
+      <li>Botón <strong>"Eliminar"</strong>: borrar un viaje registrado por error.</li>
+    </ul>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ALMACÉN -->
+  <div class="section avoid-break">
+    <h3><span class="icon">📦</span> Almacén</h3>
+    <p>Inventario de repuestos comprados en bulk. Permite descuentos de nómina cuando se asignan a un camión.</p>
+    <ul class="dot">
+      <li>Botón <strong>"+ Agregar ítem"</strong>: registrar una compra de repuesto (descripción, costo).</li>
+      <li>Botón <strong>"Asignar a camión"</strong>: cuando el repuesto se usa en un camión específico — se descuenta de su nómina ese período.</li>
+      <li>Botón <strong>"Devolver"</strong>: si el repuesto no se usó y regresa al almacén.</li>
+      <li>Ítems sin asignar: reducen la deuda general de Aurumin.</li>
+    </ul>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- GASOIL -->
+  <div class="section avoid-break">
+    <h3><span class="icon">⛽</span> Gasoil</h3>
+    <p>Control del tanque de combustible y consumo diario por camión.</p>
+    <ul class="dot">
+      <li>Pestaña <strong>"Hoy"</strong>: muestra qué camiones salen según el despacho y cuánto gasoil necesitan. Registrar los litros entregados a cada uno.</li>
+      <li>Pestaña <strong>"Tanques"</strong>: ver el nivel actual del tanque y registrar recargas.</li>
+      <li>Pestaña <strong>"Historial"</strong>: todos los suministros pasados, filtrable por camión y fecha.</li>
+    </ul>
+    <div class="card blue">
+      <div class="card-title">Litros estimados por ruta (referencia)</div>
+      El sistema calcula automáticamente el gasoil estimado basándose en la ruta asignada en el despacho del día. Los valores exactos están configurados en cada ruta.
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- RELACIONES -->
+  <div class="section avoid-break">
+    <h3><span class="icon">📊</span> Relaciones</h3>
+    <p>Genera la relación de acarreo quincenal para enviar a Aurumin o Luis Peña.</p>
+    <ol class="steps">
+      <li><p>Seleccionar el rango de fechas (por defecto toma el período abierto).</p></li>
+      <li><p>Seleccionar el cliente: <strong>Aurumin</strong> o <strong>Luis Peña</strong>.</p></li>
+      <li><p>El sistema muestra la vista previa: listado de viajes por conductor con totales de toneladas y monto.</p></li>
+      <li><p>Hacer clic en <strong>"Exportar Excel"</strong> para descargar el archivo formateado listo para enviar.</p></li>
+    </ol>
+    <div class="tip">
+      <div class="tip-icon">💡</div>
+      <div>También se pueden <strong>editar viajes inline</strong> directamente en esta vista antes de exportar, si hay algún error puntual en la relación.</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- RUTAS -->
+  <div class="section avoid-break">
+    <h3><span class="icon">📍</span> Rutas / Minas</h3>
+    <p>Define las minas y destinos con sus tarifas. Cada viaje está asociado a una ruta.</p>
+    <ul class="dot">
+      <li>Botón <strong>"+ Nueva ruta"</strong>: agregar una mina nueva con su tarifa (por tonelada, por viaje o por hora) y cliente (Aurumin / Luis Peña).</li>
+      <li>Botón <strong>"Editar"</strong>: cambiar la tarifa si Aurumin actualiza los precios.</li>
+      <li>Botón <strong>"Desactivar"</strong>: si una ruta ya no se usa.</li>
+    </ul>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- REPORTES -->
+  <div class="section avoid-break">
+    <h3><span class="icon">📈</span> Reportes</h3>
+    <p>Exporta datos históricos para análisis externo.</p>
+    <div class="feature-grid">
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Facturación vs Gastos</div>
+        <p>Rentabilidad por camión en cada período. Compara históricamente.</p>
+      </div>
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>% Afiliados — NPR</div>
+        <p>NPR generado por vehículo afiliado, quincena a quincena.</p>
+      </div>
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div>Estado de cuenta — Deuda</div>
+        <p>Historial de facturas, abonos y saldo acumulado por cliente.</p>
+      </div>
+      <div class="feature-item">
+        <div class="fi-title"><div class="dot"></div">Exportar todo a Excel</div>
+        <p>Cada reporte se descarga como archivo Excel para compartir o analizar.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     CAP 5 — USUARIOS
+════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<div class="chapter-header">
+  <div class="container">
+    <div class="chapter-num-badge">Capítulo 5</div>
+    <h2>Gestión de Usuarios</h2>
+    <p>Cómo crear, editar y desactivar cuentas de acceso al sistema.</p>
+  </div>
+</div>
+
+<div class="container content-section">
+
+  <div class="section avoid-break">
+    <h3><span class="icon">➕</span> Cómo crear un usuario nuevo</h3>
+    <p>Ruta: <span class="nav-path">Usuarios <span>→</span> Nuevo usuario</span></p>
+    <ol class="steps">
+      <li><p>Ir al menú <strong>Usuarios</strong> en la barra lateral izquierda.</p></li>
+      <li><p>Hacer clic en el botón <strong>"+ Nuevo usuario"</strong> (botón amarillo, arriba a la derecha).</p></li>
+      <li><p>Completar el formulario:
+        <ul class="dot" style="margin-top:8px;">
+          <li><strong>Nombre completo</strong> del usuario.</li>
+          <li><strong>Correo electrónico</strong> (será su usuario de acceso).</li>
+          <li><strong>Teléfono</strong> (opcional, también puede usarse para login).</li>
+          <li><strong>Contraseña</strong> — escribir una contraseña segura para el usuario.</li>
+          <li><strong>Rol</strong> — seleccionar: Encargado, Chofer, Mecánico, Afiliado, etc.</li>
+          <li><strong>Propietario vinculado</strong> — si el rol es Afiliado o Chofer, vincular al dueño o camión correspondiente.</li>
+        </ul>
+      </p></li>
+      <li><p>Hacer clic en <strong>"Guardar"</strong>. El usuario ya puede iniciar sesión de inmediato.</p></li>
+    </ol>
+
+    <div class="tip">
+      <div class="tip-icon">💡</div>
+      <div>Entregar al nuevo usuario su correo y contraseña. Se recomienda pedirle que cambie la contraseña desde su perfil después del primer ingreso.</div>
+    </div>
+  </div>
+
+  <div class="section avoid-break">
+    <h3><span class="icon">✏️</span> Cómo editar un usuario</h3>
+    <ol class="steps">
+      <li><p>Ir a <strong>Usuarios</strong> en el menú lateral.</p></li>
+      <li><p>Buscar el usuario en la lista. Se puede buscar por nombre o correo.</p></li>
+      <li><p>Hacer clic en el botón <strong>"Editar"</strong> (ícono de lápiz) en la fila del usuario.</p></li>
+      <li><p>Modificar los campos necesarios: nombre, teléfono, contraseña, rol.</p></li>
+      <li><p>Hacer clic en <strong>"Guardar cambios"</strong>.</p></li>
+    </ol>
+    <div class="tip">
+      <div class="tip-icon">💡</div>
+      <div>Si solo quieres cambiar la contraseña, en el formulario de edición dejar vacíos todos los campos excepto el de contraseña. Solo se actualizará ese campo.</div>
+    </div>
+  </div>
+
+  <div class="section avoid-break">
+    <h3><span class="icon">🚫</span> Cómo desactivar (no eliminar) un usuario</h3>
+    <p>Cuando alguien sale de la empresa, lo correcto es <strong>desactivar</strong> su cuenta, no eliminarla, para preservar el historial.</p>
+    <ol class="steps">
+      <li><p>Ir a <strong>Usuarios</strong>.</p></li>
+      <li><p>Encontrar el usuario en la lista.</p></li>
+      <li><p>Hacer clic en el <strong>toggle de estado</strong> (interruptor verde/rojo) en la columna "Activo".</p></li>
+      <li><p>Confirmar la acción. El usuario queda desactivado y no podrá iniciar sesión.</p></li>
+    </ol>
+    <div class="card red">
+      <div class="card-title">⚠️ Sobre eliminar usuarios</div>
+      Eliminar un usuario es permanente y borra su historial de asistencia y otras referencias. Se recomienda <strong>desactivar</strong> en lugar de eliminar, a menos que el usuario fue creado por error y no tiene datos registrados.
+    </div>
+  </div>
+
+  <div class="section avoid-break">
+    <h3><span class="icon">👥</span> Usuarios actuales del sistema</h3>
+    <table class="roles-table">
+      <tr>
+        <th>Nombre</th>
+        <th>Correo</th>
+        <th>Rol</th>
+        <th>Contraseña</th>
+      </tr>
+      <tr>
+        <td>José Rodríguez</td>
+        <td>admin@transportejr.com</td>
+        <td><span class="badge badge-dueno">Dueño</span></td>
+        <td>admin123</td>
+      </tr>
+      <tr>
+        <td>Fernando Pérez</td>
+        <td>encargado@transportejr.com</td>
+        <td><span class="badge badge-encargado">Encargado</span></td>
+        <td>Transporte2024!</td>
+      </tr>
+      <tr>
+        <td>Mary Morillo</td>
+        <td>morillocmary@gmail.com</td>
+        <td><span class="badge badge-afiliado">Afiliado</span></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>Carlos Rodríguez</td>
+        <td>carlos@transportejr.com</td>
+        <td><span class="badge badge-afiliado">Afiliado</span></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>Leo Rodríguez</td>
+        <td>leo@transportejr.com</td>
+        <td><span class="badge badge-afiliado">Afiliado</span></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>Mauro Garcia</td>
+        <td>mauro@transportejr.com</td>
+        <td><span class="badge badge-afiliado">Afiliado</span></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>Luis Alejandro Rivas (San Casimiro)</td>
+        <td>luis@transportejr.com</td>
+        <td><span class="badge badge-afiliado">Afiliado</span></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>Joaquín Neto (Los Neto)</td>
+        <td>joaquin@transportejr.com</td>
+        <td><span class="badge badge-afiliado">Afiliado</span></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>Gregorio de Freitas</td>
+        <td>gregorio@transportejr.com</td>
+        <td><span class="badge badge-afiliado">Afiliado</span></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>Pablo Neto</td>
+        <td>pablo@transportejr.com</td>
+        <td><span class="badge badge-afiliado">Afiliado</span></td>
+        <td>transporte123</td>
+      </tr>
+    </table>
+    <div class="tip">
+      <div class="tip-icon">💡</div>
+      <div>Las contraseñas marcadas con "—" fueron creadas previamente. Si algún usuario olvida su contraseña, ir a <strong>Usuarios → Editar</strong> y establecer una nueva desde el campo contraseña.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     CAP 6 — FAQ
+════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<div class="chapter-header">
+  <div class="container">
+    <div class="chapter-num-badge">Capítulo 6</div>
+    <h2>Preguntas Frecuentes</h2>
+    <p>Respuestas a las dudas más comunes del encargado al usar el sistema.</p>
+  </div>
+</div>
+
+<div class="container content-section">
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Qué hago si la romana de Aurumin tiene una placa que el sistema no reconoce?</div>
+    <div class="faq-a">El sistema avisa antes de importar que hay una placa desconocida. Dos opciones: (1) Si es un camión nuevo, ir a <strong>Flota → Nuevo camión</strong>, registrarlo y volver a importar. (2) Si es un error tipográfico en la romana, corregirlo en el Excel original antes de importar.</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Puedo cargar la romana varias veces en el mismo período?</div>
+    <div class="faq-a">Sí. El sistema detecta duplicados por fecha+placa+toneladas. Si hay viajes que ya estaban, los omite y solo agrega los nuevos. También se puede importar primero Aurumin y después complementar con viajes de Luis Peña registrados manualmente.</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Qué pasa si cierro el período por error?</div>
+    <div class="faq-a">El Dueño (José) puede reabrir el período desde la vista de nómina. El Encargado no tiene esa opción. Comunicarse con el dueño para que haga la reapertura desde su cuenta.</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Cómo registro que Aurumin pagó una factura?</div>
+    <div class="faq-a">Ir a <strong>Caja → Por Cobrar</strong>. Buscar la cuenta de Aurumin del período. Hacer clic en <strong>"Registrar pago"</strong>. Ingresar el monto pagado y la fecha. El sistema actualiza automáticamente: (1) el estado de la CxC a "Pagado" o "Parcial", (2) suma el monto a la Caja USDT.</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Los dueños afiliados (Luis Rivas, Joaquín, etc.) pueden ver los datos de los demás?</div>
+    <div class="faq-a">No. Cada afiliado tiene acceso único a su propio dashboard. Solo ve sus camiones, sus viajes, sus gastos y su saldo. No pueden ver datos de otros dueños ni del consolidado de la empresa.</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Por qué el "Total a cobrar" de un afiliado no muestra descuento por nómina de chofer?</div>
+    <div class="faq-a">Correcto, así debe ser. Los dueños <strong>afiliados</strong> pagan a sus choferes directamente, no a través de la empresa. Por eso la nómina del chofer aparece como información ("Nómina chofer (directo)") en gris, pero NO se descuenta del saldo del afiliado.</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Cómo registro que un camión está en taller?</div>
+    <div class="faq-a">Ir a <strong>Flota</strong>. En la lista de camiones, hacer clic en <strong>"Editar"</strong> del camión en cuestión. Cambiar el estado de "Operacional" a "En taller" o "Fuera de servicio". El dashboard mostrará el cambio inmediatamente. Cuando el camión salga del taller, volver a cambiar el estado a "Operacional".</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Cómo corrijo un gasto que registré con el monto equivocado?</div>
+    <div class="faq-a">Ir a <strong>Caja → Gastos</strong>. Buscar el gasto (usar filtros de fecha o camión). Hacer clic en el ícono de editar (lápiz) en la fila del gasto. Corregir el monto y guardar. La nómina se recalcula automáticamente la próxima vez que se genere.</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Cómo registro un viaje de "días internos" (camión trabajando para la empresa)?</div>
+    <div class="faq-a">Ir a <strong>Registro Manual → Días Internos</strong>. Seleccionar el camión, la fecha y las horas trabajadas. Estos viajes se facturan a tarifa por hora y se suman al período actual. No pasan por la romana de Aurumin.</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Cómo veo cuánto gasoil tiene disponible el tanque?</div>
+    <div class="faq-a">Ir a <strong>Gasoil → Tanques</strong>. Muestra el nivel actual, el total de entradas y el total entregado a camiones. El balance es: entradas - salidas = disponible.</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Qué es el NPR y cómo funciona?</div>
+    <div class="faq-a">NPR es la comisión de la empresa sobre la facturación. Para camiones <strong>propios</strong> (Carlos, Fernando, Leo, Mauro, José) es el <strong>5%</strong>. Para camiones <strong>afiliados</strong> (externos) es el <strong>10%</strong>. Se calcula automáticamente sobre el bruto Aurumin al generar la nómina.</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Cómo genero la relación para enviarle a Aurumin?</div>
+    <div class="faq-a">Ir a <strong>Relaciones</strong>. Seleccionar el rango de fechas de la quincena y el cliente "Aurumin". Revisar la vista previa que muestra todos los viajes. Si todo está correcto, hacer clic en <strong>"Exportar Excel"</strong>. El archivo descargado tiene el formato estándar que Aurumin solicita.</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">Un chofer olvidó su contraseña, ¿cómo le doy acceso nuevo?</div>
+    <div class="faq-a">Ir a <strong>Usuarios</strong>. Buscar al chofer. Hacer clic en <strong>"Editar"</strong>. En el campo <strong>"Nueva contraseña"</strong>, escribir una contraseña temporal. Guardar y comunicársela al chofer. El chofer puede después cambiarla desde su perfil.</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Puedo ver el historial de períodos anteriores?</div>
+    <div class="faq-a">Sí. En <strong>Nómina</strong>, la lista completa de períodos cerrados aparece debajo del período activo. Hacer clic en cualquier período para ver su detalle completo. También desde <strong>Nómina → Saldos dueños</strong> se puede cambiar el período con el selector para ver cualquier quincena anterior.</div>
+  </div>
+
+  <div class="faq-item avoid-break">
+    <div class="faq-q">¿Qué hago si un viaje de la romana tiene las toneladas mal?</div>
+    <div class="faq-a">Ir a <strong>Viajes</strong>, buscar el viaje (filtrar por camión y fecha). Hacer clic en <strong>"Editar"</strong>, corregir las toneladas y guardar. El monto del viaje se recalcula automáticamente. Después, regenerar la nómina del período para que refleje el cambio.</div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     CAP 7 — REFERENCIA RÁPIDA BOTONES
+════════════════════════════════════════════════ -->
+<div class="page-break"></div>
+<div class="chapter-header">
+  <div class="container">
+    <div class="chapter-num-badge">Capítulo 7</div>
+    <h2>Referencia Rápida</h2>
+    <p>Guía visual de botones y su función en todo el sistema.</p>
+  </div>
+</div>
+
+<div class="container content-section">
+
+  <div class="section avoid-break">
+    <h3><span class="icon">🟡</span> Botones principales (amarillo)</h3>
+    <div class="btn-ref">
+      <div class="btn-sim amber">Generar nómina</div>
+      <div class="btn-ref-desc"><strong>Cálcula o recalcula</strong> la nómina de todos los camiones del período con los datos actuales. Se puede ejecutar las veces que sea necesario.</div>
+    </div>
+    <div class="btn-ref">
+      <div class="btn-sim amber">Importar</div>
+      <div class="btn-ref-desc"><strong>Confirma la importación</strong> de la romana una vez revisada la vista previa.</div>
+    </div>
+    <div class="btn-ref">
+      <div class="btn-sim amber">Guardar cambios</div>
+      <div class="btn-ref-desc"><strong>Guarda</strong> cualquier edición de formulario (camión, usuario, gasto, etc.).</div>
+    </div>
+    <div class="btn-ref">
+      <div class="btn-sim amber">Registrar pago</div>
+      <div class="btn-ref-desc"><strong>Registra un abono</strong> a una cuenta por cobrar. Actualiza CxC y caja.</div>
+    </div>
+    <div class="btn-ref">
+      <div class="btn-sim amber">+ Nuevo / + Agregar</div>
+      <div class="btn-ref-desc">Abre el formulario para <strong>crear un elemento nuevo</strong> (usuario, viaje, gasto, camión, etc.).</div>
+    </div>
+  </div>
+
+  <div class="section avoid-break">
+    <h3><span class="icon">⚫</span> Botones secundarios (oscuro)</h3>
+    <div class="btn-ref">
+      <div class="btn-sim dark">Cerrar período</div>
+      <div class="btn-ref-desc"><strong>Congela la quincena.</strong> Acción irreversible para el encargado. Solo el dueño puede reabrir.</div>
+    </div>
+    <div class="btn-ref">
+      <div class="btn-sim dark">Exportar Excel</div>
+      <div class="btn-ref-desc"><strong>Descarga</strong> los datos en formato .xlsx. Disponible en Relaciones, Reportes y Nómina.</div>
+    </div>
+    <div class="btn-ref">
+      <div class="btn-sim dark">Crear período</div>
+      <div class="btn-ref-desc"><strong>Abre una nueva quincena.</strong> Solo disponible cuando no hay período activo.</div>
+    </div>
+  </div>
+
+  <div class="section avoid-break">
+    <h3><span class="icon">🔴</span> Botones de alerta (rojo)</h3>
+    <div class="btn-ref">
+      <div class="btn-sim red">Eliminar</div>
+      <div class="btn-ref-desc"><strong>Borra permanentemente</strong> el elemento (viaje, gasto, usuario). Siempre pide confirmación.</div>
+    </div>
+    <div class="btn-ref">
+      <div class="btn-sim red">Desactivar</div>
+      <div class="btn-ref-desc"><strong>Desactiva</strong> un camión o usuario. No borra el historial. Se puede reactivar.</div>
+    </div>
+  </div>
+
+  <div class="section avoid-break">
+    <h3><span class="icon">🟢</span> Botones de acción (verde)</h3>
+    <div class="btn-ref">
+      <div class="btn-sim green">Marcar pagado</div>
+      <div class="btn-ref-desc"><strong>Cierra un préstamo</strong> marcándolo como saldado completamente.</div>
+    </div>
+    <div class="btn-ref">
+      <div class="btn-sim green">Resolver alerta</div>
+      <div class="btn-ref-desc"><strong>Marca una alerta de mantenimiento</strong> como resuelta después de hacer el servicio.</div>
+    </div>
+  </div>
+
+  <div class="section avoid-break">
+    <h3><span class="icon">⬜</span> Controles de toggle / switch</h3>
+    <div class="btn-ref">
+      <div class="btn-sim gray">● Activo</div>
+      <div class="btn-ref-desc">Interruptor para <strong>activar/desactivar</strong> usuarios, camiones o rutas. Verde = activo, gris = inactivo.</div>
+    </div>
+    <div class="btn-ref">
+      <div class="btn-sim gray">↓ Detalles</div>
+      <div class="btn-ref-desc">Expande un panel para ver información adicional (ej: gastos operativos de un camión en el desglose).</div>
+    </div>
+  </div>
+
+  <div class="section avoid-break">
+    <h3><span class="icon">📱</span> Íconos frecuentes</h3>
+    <table class="roles-table">
+      <tr>
+        <th>Ícono</th>
+        <th>Qué hace</th>
+      </tr>
+      <tr><td>✏️ Lápiz</td><td>Editar el elemento de esa fila</td></tr>
+      <tr><td>🗑 Papelera</td><td>Eliminar el elemento (pide confirmación)</td></tr>
+      <tr><td>👁 Ojo</td><td>Ver detalle o desglose completo</td></tr>
+      <tr><td>⬇ Flecha abajo</td><td>Expandir para ver más información</td></tr>
+      <tr><td>📤 Exportar</td><td>Descargar como Excel o PDF</td></tr>
+      <tr><td>🔔 Campana</td><td>Alertas del sistema (mantenimiento, período, etc.)</td></tr>
+      <tr><td>➕ Plus</td><td>Crear nuevo elemento</td></tr>
+      <tr><td>✓ Check verde</td><td>Elemento activo, pagado o completado</td></tr>
+      <tr><td>⏸ Punto rojo</td><td>Elemento pendiente, vencido o con problema</td></tr>
+    </table>
+  </div>
+
+  <!-- CIERRE -->
+  <div class="card green" style="margin-top: 40px;">
+    <div class="card-title">✅ Resumen del ciclo semanal del encargado</div>
+    <ul class="check">
+      <li><strong>Diariamente:</strong> Despacho (asignar rutas), Gasoil (registrar suministros), Asistencia (clock in/out)</li>
+      <li><strong>Durante el período:</strong> Cargar gastos a medida que ocurren (mecánica, repuestos, etc.)</li>
+      <li><strong>Al recibir la romana de Aurumin:</strong> Importar en Romana, verificar viajes</li>
+      <li><strong>Al cierre de quincena:</strong> Generar nómina → Revisar saldos dueños → Cerrar período → Crear CxC → Exportar relación para Aurumin</li>
+      <li><strong>Al recibir pagos:</strong> Registrar en CxC → El sistema actualiza la caja automáticamente</li>
+    </ul>
+  </div>
+
+  <div style="text-align: center; margin-top: 60px; padding: 40px; border-top: 2px solid #e5e7eb; color: #9ca3af; font-size: 13px;">
+    <div style="font-size: 24px; margin-bottom: 12px;">🚛</div>
+    <strong style="color: #374151;">Transporte José Rodríguez</strong><br>
+    Sistema de Gestión Operativa — Manual v2.0 · Junio 2026<br>
+    <span style="font-size: 11px; margin-top: 8px; display: block;">Para soporte técnico contactar al administrador del sistema.</span>
+  </div>
+
+</div>
+
+<!-- Print button -->
+<button class="print-btn no-print" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+
+<script>
+// Smooth TOC links
+document.querySelectorAll('.toc-chapter').forEach((el, i) => {
+  el.style.cursor = 'pointer';
+});
+</script>
+</body>
+</html>
