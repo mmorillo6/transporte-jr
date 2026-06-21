@@ -53,6 +53,24 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
 
   const truckIds = Array.from(byTruck.keys())
 
+  // También incluir camiones PROPIO/NPR-owner con gastos pero sin viajes
+  // (ej. un camión en reparación que no trabajó pero sí tiene expenses)
+  const extraExpTrucks = await prisma.expense.findMany({
+    where: {
+      truckId: { not: null },
+      date: { gte: period.startDate, lte: period.endDate },
+      truck: { owner: { OR: [{ type: 'PROPIO' }, { isNPROwner: true }] } },
+    },
+    select: { truckId: true },
+    distinct: ['truckId'],
+  })
+  for (const { truckId } of extraExpTrucks) {
+    if (truckId && !byTruck.has(truckId)) {
+      byTruck.set(truckId, [])
+      truckIds.push(truckId)
+    }
+  }
+
   // Info completa de los camiones activos en el período
   const trucks = await prisma.truck.findMany({
     where: { id: { in: truckIds } },

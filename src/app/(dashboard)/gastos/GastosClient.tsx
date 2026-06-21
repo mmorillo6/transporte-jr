@@ -67,7 +67,8 @@ export default function GastosClient({
   // Controlled form fields
   const [fDate, setFDate] = useState('')
   const [fCategory, setFCategory] = useState('')
-  const [fTruckId, setFTruckId] = useState('')
+  const [fTruckIds, setFTruckIds] = useState<string[]>([])
+  const [truckPickerOpen, setTruckPickerOpen] = useState(false)
   const [fAmount, setFAmount] = useState('')
   const [fDescription, setFDescription] = useState('')
   const [fPaymentStatus, setFPaymentStatus] = useState<'pagado' | 'pendiente' | 'parcial'>('pagado')
@@ -79,19 +80,14 @@ export default function GastosClient({
   const [partialId, setPartialId] = useState<string | null>(null)
   const [partialAmount, setPartialAmount] = useState('')
 
-  // Copy-to-trucks modal
-  type CopyItem = { truckId: string; plate: string; driver: string; checked: boolean; amount: string }
-  const [copyBase, setCopyBase] = useState<{ date: string; category: string; description: string; paymentStatus: 'pagado'|'pendiente'|'parcial'; amountPaid?: number; invoiceUrl?: string } | null>(null)
-  const [copyItems, setCopyItems] = useState<CopyItem[]>([])
-  const [copyLoading, setCopyLoading] = useState(false)
-
   const fileRef = useRef<HTMLInputElement>(null)
 
   function openCreate() {
     const today = new Date().toISOString().split('T')[0]
     setFDate(today)
     setFCategory('')
-    setFTruckId('')
+    setFTruckIds([])
+    setTruckPickerOpen(false)
     setFAmount('')
     setFDescription('')
     setFPaymentStatus('pagado')
@@ -105,7 +101,8 @@ export default function GastosClient({
   function openEdit(exp: Expense) {
     setFDate(new Date(exp.date).toISOString().split('T')[0])
     setFCategory(exp.category)
-    setFTruckId(exp.truckId ?? '')
+    setFTruckIds(exp.truckId ? [exp.truckId] : [])
+    setTruckPickerOpen(false)
     setFAmount(String(exp.amount))
     setFDescription(exp.description)
     const status = !exp.isCredit ? 'pagado' : exp.amountPaid > 0 ? 'parcial' : 'pendiente'
@@ -122,6 +119,7 @@ export default function GastosClient({
     setEditing(null)
     setFormError('')
     setFInvoiceUrl('')
+    setTruckPickerOpen(false)
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -155,11 +153,32 @@ export default function GastosClient({
     e.preventDefault()
     setLoading(true)
     setFormError('')
+    setTruckPickerOpen(false)
 
+    // Multi-truck: crear un gasto por cada camión seleccionado
+    if (!editing && fTruckIds.length > 1) {
+      const amt = parseFloat(fAmount) || 0
+      if (amt <= 0) { setFormError('Ingresa un monto válido'); setLoading(false); return }
+      const res = await createExpensesForTrucks(
+        { date: fDate, category: fCategory, description: fDescription,
+          paymentStatus: fPaymentStatus,
+          amountPaid: fPaymentStatus === 'parcial' ? parseFloat(fAmountPaid) || undefined : undefined,
+          invoiceUrl: fInvoiceUrl || undefined },
+        fTruckIds.map(id => ({ truckId: id, amount: amt }))
+      )
+      setLoading(false)
+      if (res.error) { setFormError(res.error); return }
+      toast.success(`Gasto creado para ${fTruckIds.length} camiones`)
+      closeForm()
+      router.refresh()
+      return
+    }
+
+    // Un camión o sin camión
     const fd = new FormData()
     fd.set('date', fDate)
     fd.set('category', fCategory)
-    fd.set('truckId', fTruckId)
+    fd.set('truckId', fTruckIds[0] ?? '')
     fd.set('amount', fAmount)
     fd.set('description', fDescription)
     fd.set('paymentStatus', fPaymentStatus)
@@ -167,22 +186,14 @@ export default function GastosClient({
     fd.set('invoiceUrl', fInvoiceUrl)
 
     const res = editing ? await updateExpense(editing.id, fd) : await createExpense(fd)
-
-    if (res?.error) { setFormError(res.error); setLoading(false); return }
-
+    setLoading(false)
+    if (res?.error) { setFormError(res.error); return }
     closeForm()
     router.refresh()
-    setLoading(false)
+  }
 
-    // Si se creó (no editó) un gasto asignado a un camión, ofrecer copiar a los demás
-    if (!editing && fTruckId) {
-      const otherTrucks = trucks.filter(t => t.id !== fTruckId)
-      if (otherTrucks.length > 0) {
-        const amt = parseFloat(fAmount) || 0
-        setCopyBase({ date: fDate, category: fCategory, description: fDescription, paymentStatus: fPaymentStatus, amountPaid: parseFloat(fAmountPaid) || undefined, invoiceUrl: fInvoiceUrl || undefined })
-        setCopyItems(otherTrucks.map(t => ({ truckId: t.id, plate: t.plate, driver: t.driver?.name ?? '—', checked: true, amount: amt.toFixed(2) })))
-      }
-    }
+  function toggleTruck(id: string) {
+    setFTruckIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
   async function handlePaid(id: string) {
@@ -201,20 +212,6 @@ export default function GastosClient({
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar este gasto?')) return
     await deleteExpense(id)
-    router.refresh()
-  }
-
-  async function handleCopyConfirm() {
-    if (!copyBase) return
-    const selected = copyItems.filter(i => i.checked).map(i => ({ truckId: i.truckId, amount: parseFloat(i.amount) || 0 })).filter(i => i.amount > 0)
-    if (selected.length === 0) { setCopyBase(null); setCopyItems([]); return }
-    setCopyLoading(true)
-    const res = await createExpensesForTrucks(copyBase, selected)
-    setCopyLoading(false)
-    if (res.error) { toast.error(res.error); return }
-    toast.success(`Gasto copiado a ${selected.length} camión${selected.length > 1 ? 'es' : ''}`)
-    setCopyBase(null)
-    setCopyItems([])
     router.refresh()
   }
 
@@ -333,12 +330,54 @@ export default function GastosClient({
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1.5">Camión (opcional)</label>
-                <select name="truckId" value={fTruckId} onChange={e => setFTruckId(e.target.value)}
-                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500">
-                  <option value="">Sin asignar</option>
-                  {trucks.map(t => <option key={t.id} value={t.id}>{t.plate} — {t.driver?.name ?? ''}</option>)}
-                </select>
+                <label className="block text-xs text-zinc-400 mb-1.5">
+                  {editing ? 'Camión (opcional)' : (
+                    <>Camión(es) (opcional){fTruckIds.length > 1 && <span className="ml-1.5 text-amber-400">→ {fTruckIds.length} gastos</span>}</>
+                  )}
+                </label>
+                {editing ? (
+                  <select value={fTruckIds[0] ?? ''} onChange={e => setFTruckIds(e.target.value ? [e.target.value] : [])}
+                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500">
+                    <option value="">Sin asignar</option>
+                    {trucks.map(t => <option key={t.id} value={t.id}>{t.plate} — {t.driver?.name ?? ''}</option>)}
+                  </select>
+                ) : (
+                  <div className="relative">
+                    <button type="button" onClick={() => setTruckPickerOpen(v => !v)}
+                      className="w-full bg-zinc-800 border border-zinc-700 text-left rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500 flex items-center justify-between">
+                      <span className={fTruckIds.length === 0 ? 'text-zinc-500' : 'text-white'}>
+                        {fTruckIds.length === 0 ? 'Sin asignar'
+                          : fTruckIds.length === 1 ? (trucks.find(t => t.id === fTruckIds[0])?.plate ?? 'Seleccionado')
+                          : `${fTruckIds.length} camiones seleccionados`}
+                      </span>
+                      <span className="text-zinc-500 text-xs">{truckPickerOpen ? '▲' : '▼'}</span>
+                    </button>
+                    {truckPickerOpen && (
+                      <>
+                        <div className="fixed inset-0 z-20" onClick={() => setTruckPickerOpen(false)} />
+                        <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden">
+                          <div className="px-3 py-2 border-b border-zinc-700 flex items-center gap-3">
+                            <button type="button" onClick={() => setFTruckIds(trucks.map(t => t.id))}
+                              className="text-xs text-amber-400 hover:underline">Todos</button>
+                            <button type="button" onClick={() => setFTruckIds([])}
+                              className="text-xs text-zinc-500 hover:underline">Ninguno</button>
+                            <span className="ml-auto text-xs text-zinc-600">{fTruckIds.length}/{trucks.length}</span>
+                          </div>
+                          <div className="max-h-48 overflow-y-auto divide-y divide-zinc-700/40">
+                            {trucks.map(t => (
+                              <label key={t.id} className="flex items-center gap-3 px-3 py-2 hover:bg-zinc-700/50 cursor-pointer">
+                                <input type="checkbox" checked={fTruckIds.includes(t.id)} onChange={() => toggleTruck(t.id)}
+                                  className="accent-amber-500 flex-shrink-0" />
+                                <span className="font-mono text-sm text-white">{t.plate}</span>
+                                <span className="text-zinc-400 text-xs truncate">{t.driver?.name ?? ''}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs text-zinc-400 mb-1.5">Monto $ *</label>
@@ -527,85 +566,6 @@ export default function GastosClient({
         )}
       </div>
 
-      {/* ── Modal: copiar gasto a otros camiones ── */}
-      {copyBase && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl overflow-hidden">
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-zinc-800">
-              <h3 className="text-white font-semibold">¿Copiar gasto a otros camiones?</h3>
-              <p className="text-zinc-500 text-xs mt-0.5">
-                <span className="font-mono text-zinc-400">{copyBase.category}</span>
-                {' · '}{copyBase.description}
-                {' · '}<span className={copyBase.paymentStatus === 'pagado' ? 'text-emerald-400' : 'text-amber-400'}>
-                  {copyBase.paymentStatus === 'pagado' ? 'Contado' : copyBase.paymentStatus === 'parcial' ? 'Parcial' : 'Fiado'}
-                </span>
-              </p>
-            </div>
-
-            {/* Lista de camiones */}
-            <div className="max-h-72 overflow-y-auto divide-y divide-zinc-800/60">
-              {/* Seleccionar todos */}
-              <div className="px-5 py-2.5 flex items-center justify-between bg-zinc-800/30">
-                <label className="flex items-center gap-2 cursor-pointer text-xs text-zinc-400">
-                  <input
-                    type="checkbox"
-                    checked={copyItems.every(i => i.checked)}
-                    onChange={e => setCopyItems(prev => prev.map(i => ({ ...i, checked: e.target.checked })))}
-                    className="accent-amber-500"
-                  />
-                  Seleccionar todos
-                </label>
-                <span className="text-xs text-zinc-600">{copyItems.filter(i => i.checked).length} de {copyItems.length}</span>
-              </div>
-              {copyItems.map((item, idx) => (
-                <div key={item.truckId} className="px-5 py-2.5 flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={item.checked}
-                    onChange={e => setCopyItems(prev => prev.map((i, j) => j === idx ? { ...i, checked: e.target.checked } : i))}
-                    className="accent-amber-500 flex-shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-mono leading-none">{item.plate}</p>
-                    <p className="text-zinc-500 text-xs mt-0.5 truncate">{item.driver}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-zinc-600 text-xs">$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={item.amount}
-                      onChange={e => setCopyItems(prev => prev.map((i, j) => j === idx ? { ...i, amount: e.target.value } : i))}
-                      disabled={!item.checked}
-                      className="w-20 bg-zinc-800 border border-zinc-700 text-white rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:border-amber-500 disabled:opacity-40"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Footer */}
-            <div className="px-5 py-4 border-t border-zinc-800 flex gap-3">
-              <button
-                onClick={handleCopyConfirm}
-                disabled={copyLoading || copyItems.every(i => !i.checked)}
-                className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm transition-colors"
-              >
-                {copyLoading ? 'Guardando...' : `Confirmar (${copyItems.filter(i => i.checked).length})`}
-              </button>
-              <button
-                onClick={() => { setCopyBase(null); setCopyItems([]) }}
-                disabled={copyLoading}
-                className="px-5 py-2.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl text-sm transition-colors"
-              >
-                Omitir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
