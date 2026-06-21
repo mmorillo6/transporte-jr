@@ -37,13 +37,34 @@ export default function AsistenciaClient({
   const [clockOutId, setClockOutId] = useState<string | null>(null)
   const [clockOutTime, setClockOutTime] = useState(toLocalDatetimeValue(new Date()))
   const [filterOpen, setFilterOpen] = useState<'all' | 'open' | 'closed' | 'resumen'>('all')
+  const [lastActivity, setLastActivity] = useState<{ truckId: string; notes: string; plate: string } | null>(null)
+  const [formTruckId, setFormTruckId] = useState('')
+  const [formNotes, setFormNotes] = useState('')
+  const [showSuggestion, setShowSuggestion] = useState(false)
+
+  function openForm() {
+    if (showForm) { setShowForm(false); return }
+    setFormTruckId('')
+    setFormNotes('')
+    setShowSuggestion(lastActivity !== null)
+    setShowForm(true)
+  }
 
   async function handleClockIn(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true)
     const res = await clockIn(new FormData(e.currentTarget))
     if (res.error) toast.error(res.error)
-    else { setShowForm(false); toast.success('Entrada registrada'); router.refresh() }
+    else {
+      const plate = trucks.find(t => t.id === formTruckId)?.plate ?? 'Sin asignar'
+      setLastActivity({ truckId: formTruckId, notes: formNotes, plate })
+      setShowForm(false)
+      setShowSuggestion(false)
+      setFormTruckId('')
+      setFormNotes('')
+      toast.success('Entrada registrada')
+      router.refresh()
+    }
     setLoading(false)
   }
 
@@ -131,7 +152,7 @@ export default function AsistenciaClient({
             </button>
           ))}
         </div>
-        <button onClick={() => setShowForm(!showForm)}
+        <button onClick={openForm}
           className="bg-amber-500 hover:bg-amber-400 text-zinc-950 font-semibold rounded-xl px-4 py-2 text-sm transition-colors">
           + Registrar entrada
         </button>
@@ -141,6 +162,30 @@ export default function AsistenciaClient({
       {showForm && (
         <div className="bg-zinc-900 border border-amber-500/20 rounded-2xl p-5">
           <h3 className="text-white font-semibold mb-4">Registrar entrada</h3>
+
+          {/* Sugerencia de la última actividad */}
+          {showSuggestion && lastActivity && (
+            <div className="mb-4 p-3 bg-zinc-800 border border-zinc-700 rounded-xl">
+              <p className="text-zinc-400 text-xs mb-2">
+                ¿El siguiente también es para{' '}
+                <span className="text-white font-semibold">{lastActivity.plate}</span>
+                {lastActivity.notes ? <> — <span className="text-zinc-300">"{lastActivity.notes}"</span></> : ''}?
+              </p>
+              <div className="flex gap-2">
+                <button type="button"
+                  onClick={() => { setFormTruckId(lastActivity.truckId); setFormNotes(lastActivity.notes); setShowSuggestion(false) }}
+                  className="text-xs bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 border border-amber-500/20 rounded-lg px-3 py-1.5 transition-colors font-medium">
+                  Sí, autorellenar
+                </button>
+                <button type="button"
+                  onClick={() => setShowSuggestion(false)}
+                  className="text-xs bg-zinc-700 text-zinc-400 hover:text-white rounded-lg px-3 py-1.5 transition-colors">
+                  No, dejar vacío
+                </button>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleClockIn} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -163,7 +208,7 @@ export default function AsistenciaClient({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-zinc-400 mb-1.5">Camión (opcional)</label>
-                <select name="truckId"
+                <select name="truckId" value={formTruckId} onChange={e => setFormTruckId(e.target.value)}
                   className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500">
                   <option value="">Sin asignar</option>
                   {trucks.map(t => <option key={t.id} value={t.id}>{t.plate}</option>)}
@@ -171,7 +216,8 @@ export default function AsistenciaClient({
               </div>
               <div>
                 <label className="block text-xs text-zinc-400 mb-1.5">Notas</label>
-                <input name="notes" placeholder="Observaciones..."
+                <input name="notes" value={formNotes} onChange={e => setFormNotes(e.target.value)}
+                  placeholder="Observaciones..."
                   className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500 placeholder:text-zinc-600" />
               </div>
             </div>
