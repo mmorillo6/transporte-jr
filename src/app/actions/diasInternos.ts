@@ -55,6 +55,7 @@ export async function createDiasInternosEntry(data: FormData) {
 }
 
 export async function updateDiasInternosEntry(id: string, data: FormData) {
+  const truckId       = (data.get('truckId')      as string) || null
   const conductor     = (data.get('conductor')    as string)?.trim()
   const fecha         = data.get('fecha')          as string
   const horaInicio    = data.get('horaInicio')    as string
@@ -72,6 +73,7 @@ export async function updateDiasInternosEntry(id: string, data: FormData) {
   await prisma.diasInternosEntry.update({
     where: { id },
     data: {
+      ...(truckId ? { truckId } : {}),
       conductor, descripcion, actividad, horaInicio, horaFin, totalHoras,
       driverTruckId: driverTruckId ?? null,
       ...(fecha ? { fecha: new Date(fecha + 'T12:00:00') } : {}),
