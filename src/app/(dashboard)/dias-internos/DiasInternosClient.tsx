@@ -8,6 +8,7 @@ type Entry = {
   id: string; fecha: Date; truckId: string; conductor: string
   descripcion: string; actividad: string; horaInicio: string; horaFin: string
   totalHoras: number; truck: { plate: string }
+  driverTruckId?: string | null; driverTruck?: { plate: string } | null
 }
 type Detection = { truckId: string; plate: string; conductor: string; date: string; tripCount: number }
 
@@ -36,15 +37,16 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
   const [error, setError]         = useState('')
 
   // Formulario
-  const [truckId, setTruckId]         = useState('')
-  const [conductor, setConductor]     = useState('')
-  const [fecha, setFecha]             = useState(todayStr())
-  const [horaInicio, setHoraInicio]   = useState('07:30')
-  const [horaFin, setHoraFin]         = useState('17:00')
-  const [descanso, setDescanso]       = useState(1)
-  const [descripcion, setDescripcion] = useState('')
-  const [actividad, setActividad]     = useState('')
-  const [saving, setSaving]           = useState(false)
+  const [truckId, setTruckId]             = useState('')
+  const [conductor, setConductor]         = useState('')
+  const [driverTruckId, setDriverTruckId] = useState('')
+  const [fecha, setFecha]                 = useState(todayStr())
+  const [horaInicio, setHoraInicio]       = useState('07:30')
+  const [horaFin, setHoraFin]             = useState('17:00')
+  const [descanso, setDescanso]           = useState(1)
+  const [descripcion, setDescripcion]     = useState('')
+  const [actividad, setActividad]         = useState('')
+  const [saving, setSaving]               = useState(false)
 
   // Autofill: recuerda la última descripción y actividad ingresada
   const [lastDiasEntry, setLastDiasEntry] = useState<{ descripcion: string; actividad: string } | null>(null)
@@ -59,7 +61,7 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
   const [bulkDescanso, setBulkDescanso] = useState(1)
   const [bulkDescripcion, setBulkDescripcion] = useState('')
   const [bulkActividad, setBulkActividad]     = useState('')
-  const [bulkSelected, setBulkSelected] = useState<Record<string, string>>({}) // truckId → conductor
+  const [bulkSelected, setBulkSelected] = useState<Record<string, { conductor: string; driverTruckId?: string }>>({}) // truckId → {conductor, driverTruckId}
   const [bulkSaving, setBulkSaving]     = useState(false)
   const [bulkError, setBulkError]       = useState('')
 
@@ -73,7 +75,11 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
 
   async function handleBulkSubmit(ev: React.FormEvent) {
     ev.preventDefault()
-    const truckList = Object.entries(bulkSelected).map(([truckId, conductor]) => ({ truckId, conductor }))
+    const truckList = Object.entries(bulkSelected).map(([truckId, v]) => ({
+      truckId,
+      conductor: v.conductor,
+      driverTruckId: v.driverTruckId || null,
+    }))
     if (truckList.length === 0) { setBulkError('Selecciona al menos un camión'); return }
     setBulkSaving(true); setBulkError('')
     const res = await createDiasInternosBulk({
@@ -92,7 +98,7 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
     setBulkSelected(prev => {
       const next = { ...prev }
       if (next[truck.id]) { delete next[truck.id] }
-      else { next[truck.id] = truck.driver?.name ?? '' }
+      else { next[truck.id] = { conductor: truck.driver?.name ?? '' } }
       return next
     })
   }
@@ -132,7 +138,7 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
 
   function openNew() {
     setEditing(null)
-    setTruckId(''); setConductor(''); setFecha(todayStr())
+    setTruckId(''); setConductor(''); setDriverTruckId(''); setFecha(todayStr())
     setHoraInicio('07:30'); setHoraFin('17:00'); setDescanso(1)
     setDescripcion(''); setActividad('')
     setShowDiasS(lastDiasEntry !== null)
@@ -151,7 +157,8 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
 
   function openEdit(e: Entry) {
     setEditing(e)
-    setTruckId(e.truckId); setConductor(e.conductor); setFecha(new Date(e.fecha).toISOString().slice(0, 10))
+    setTruckId(e.truckId); setConductor(e.conductor); setDriverTruckId(e.driverTruckId ?? '')
+    setFecha(new Date(e.fecha).toISOString().slice(0, 10))
     setHoraInicio(e.horaInicio); setHoraFin(e.horaFin)
     // Calcular descanso como diferencia entre span y totalHoras almacenado
     const [hi, mi] = e.horaInicio.split(':').map(Number)
@@ -167,6 +174,7 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
     setSaving(true); setError('')
     const fd = new FormData()
     fd.append('truckId', truckId); fd.append('conductor', conductor)
+    fd.append('driverTruckId', driverTruckId)
     fd.append('fecha', fecha); fd.append('horaInicio', horaInicio)
     fd.append('horaFin', horaFin); fd.append('descanso', String(descanso))
     fd.append('descripcion', descripcion); fd.append('actividad', actividad)
@@ -294,14 +302,30 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-mono font-medium text-sm">{truck.plate}</p>
                       {selected ? (
-                        <input
-                          type="text"
-                          value={bulkSelected[truck.id]}
-                          onChange={e => setBulkSelected(prev => ({ ...prev, [truck.id]: e.target.value }))}
-                          onClick={e => e.stopPropagation()}
-                          placeholder="Conductor"
-                          className="w-full bg-zinc-700 border border-zinc-600 text-white rounded px-1.5 py-0.5 text-xs mt-1 focus:outline-none focus:border-blue-500"
-                        />
+                        <div className="mt-1 space-y-1">
+                          <input
+                            type="text"
+                            value={bulkSelected[truck.id].conductor}
+                            onChange={e => setBulkSelected(prev => ({ ...prev, [truck.id]: { ...prev[truck.id], conductor: e.target.value } }))}
+                            onClick={e => e.stopPropagation()}
+                            placeholder="Conductor"
+                            className="w-full bg-zinc-700 border border-zinc-600 text-white rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-blue-500"
+                          />
+                          <select
+                            value={bulkSelected[truck.id].driverTruckId ?? ''}
+                            onChange={e => setBulkSelected(prev => ({ ...prev, [truck.id]: { ...prev[truck.id], driverTruckId: e.target.value || undefined } }))}
+                            onClick={e => e.stopPropagation()}
+                            className="w-full bg-zinc-700 border border-zinc-600 text-white rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-violet-500"
+                          >
+                            <option value="">— Chofer propio —</option>
+                            {trucks.filter(t => t.id !== truck.id).map(t => (
+                              <option key={t.id} value={t.id}>{t.plate}{t.driver ? ` — ${t.driver.name}` : ''}</option>
+                            ))}
+                          </select>
+                          {bulkSelected[truck.id].driverTruckId && (
+                            <p className="text-violet-400 text-xs">→ sueldo a {trucks.find(t => t.id === bulkSelected[truck.id].driverTruckId)?.plate}</p>
+                          )}
+                        </div>
                       ) : (
                         <p className="text-zinc-500 text-xs truncate">{truck.driver?.name ?? '—'}</p>
                       )}
@@ -314,7 +338,7 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
 
           {/* Seleccionar todos */}
           <div className="flex gap-3 text-xs">
-            <button type="button" onClick={() => setBulkSelected(Object.fromEntries(trucks.map(t => [t.id, t.driver?.name ?? ''])))}
+            <button type="button" onClick={() => setBulkSelected(Object.fromEntries(trucks.map(t => [t.id, { conductor: t.driver?.name ?? '' }])))}
               className="text-blue-400 hover:text-blue-300 transition-colors">Seleccionar todos</button>
             <button type="button" onClick={() => setBulkSelected({})}
               className="text-zinc-500 hover:text-zinc-300 transition-colors">Limpiar</button>
@@ -379,7 +403,7 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-zinc-400 mb-1.5">Camión *</label>
-                <select value={truckId} required onChange={e => { setTruckId(e.target.value); autoFillConductor(e.target.value) }}
+                <select value={truckId} required onChange={e => { setTruckId(e.target.value); autoFillConductor(e.target.value); setDriverTruckId('') }}
                   className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500">
                   <option value="">Seleccionar...</option>
                   {trucks.map(t => (
@@ -393,6 +417,29 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
                   placeholder="Nombre del conductor"
                   className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500 placeholder:text-zinc-600" />
               </div>
+            </div>
+
+            {/* Conductor sustituto — camión habitual del chofer */}
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1.5">
+                ¿El conductor es sustituto?
+                <span className="text-zinc-600 ml-1">— Selecciona su camión habitual para cargar el sueldo correctamente</span>
+              </label>
+              <select
+                value={driverTruckId}
+                onChange={e => setDriverTruckId(e.target.value)}
+                className="w-full sm:w-64 bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-violet-500"
+              >
+                <option value="">— No, es el chofer asignado —</option>
+                {trucks.filter(t => t.id !== truckId).map(t => (
+                  <option key={t.id} value={t.id}>{t.plate}{t.driver ? ` — ${t.driver.name}` : ''}</option>
+                ))}
+              </select>
+              {driverTruckId && (
+                <p className="text-violet-400 text-xs mt-1">
+                  El sueldo ($2.50/h) se cargará al camión {trucks.find(t => t.id === driverTruckId)?.plate}
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-4">
@@ -518,7 +565,12 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
                   <tr key={e.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/20 transition-colors">
                     <td className="px-4 py-3 text-zinc-400 text-xs">{fmt(e.fecha)}</td>
                     <td className="px-4 py-3 font-mono text-xs text-zinc-300">{e.truck.plate}</td>
-                    <td className="px-4 py-3 text-white text-sm">{e.conductor}</td>
+                    <td className="px-4 py-3 text-white text-sm">
+                      {e.conductor}
+                      {e.driverTruck && (
+                        <span className="ml-1.5 text-xs text-violet-400 font-mono">→ {e.driverTruck.plate}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-zinc-500 text-xs max-w-xs truncate">{e.descripcion}</td>
                     <td className="px-4 py-3 text-center text-xs text-zinc-400">{e.horaInicio}</td>
                     <td className="px-4 py-3 text-center text-xs text-zinc-400">{e.horaFin}</td>

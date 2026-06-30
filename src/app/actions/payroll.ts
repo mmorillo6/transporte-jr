@@ -53,6 +53,20 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
 
   const truckIds = Array.from(byTruck.keys())
 
+  // Días internos del período — bruto ($20/h) va al camión trabajado (truckId),
+  // chofer ($2.50/h) va al camión habitual del sustituto (driverTruckId) si está definido
+  const diasInternosAll = await prisma.diasInternosEntry.findMany({
+    where: { fecha: { gte: period.startDate, lte: period.endDate } },
+    select: { truckId: true, totalHoras: true, driverTruckId: true },
+  })
+  const diasByTruck      = new Map<string, number>()  // bruto por camión trabajado
+  const diasChoferByTruck = new Map<string, number>() // chofer por camión habitual
+  for (const d of diasInternosAll) {
+    diasByTruck.set(d.truckId, (diasByTruck.get(d.truckId) ?? 0) + d.totalHoras)
+    const choferTruck = d.driverTruckId ?? d.truckId
+    diasChoferByTruck.set(choferTruck, (diasChoferByTruck.get(choferTruck) ?? 0) + d.totalHoras)
+  }
+
   // También incluir camiones PROPIO/NPR-owner con gastos pero sin viajes
   // (ej. un camión en reparación que no trabajó pero sí tiene expenses)
   const extraExpTrucks = await prisma.expense.findMany({
@@ -71,6 +85,14 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     }
   }
 
+  // Incluir camiones con días internos (trabajados o como chofer habitual) sin viajes ni gastos
+  for (const truckId of new Set([...diasByTruck.keys(), ...diasChoferByTruck.keys()])) {
+    if (!byTruck.has(truckId)) {
+      byTruck.set(truckId, [])
+      truckIds.push(truckId)
+    }
+  }
+
   // Info completa de los camiones activos en el período
   const trucks = await prisma.truck.findMany({
     where: { id: { in: truckIds } },
@@ -84,12 +106,15 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   // ── Camiones PROPIO con viajes Aurumin este período ─────────────────────────
   // Solo se consideran activos para el pool los propios con viajes Aurumin
   // (excluye camiones que solo trabajaron rutas Luis Peña este período)
-  const propiosConAurumin = new Set(
-    period.trips
+  // Los días internos también cuentan como trabajo Aurumin para mecánica y admin
+  const propiosConAurumin = new Set([
+    ...period.trips
       .filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
       .filter(t => truckMap.get(t.truckId)?.owner.type === 'PROPIO')
-      .map(t => t.truckId)
-  )
+      .map(t => t.truckId),
+    ...Array.from(diasByTruck.keys())
+      .filter(tid => truckMap.get(tid)?.owner.type === 'PROPIO'),
+  ])
   const activePropioThisPeriod = propiosConAurumin.size
 
   // ── Admin fee ────────────────────────────────────────────────────────────────
@@ -182,10 +207,13 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   // y se usa la lógica de carry-over del período anterior.
   const currentEntries = await prisma.payrollEntry.findMany({
     where: { periodId },
-    select: { truckId: true, saldoInicial: true, abono: true },
+    select: { truckId: true, saldoInicial: true, abono: true, driverWageOverride: true, cashEntryId: true, paidAt: true },
   })
-  const currentSaldos = new Map(currentEntries.map(e => [e.truckId, e.saldoInicial]))
-  const currentAbonos = new Map(currentEntries.map(e => [e.truckId, e.abono]))
+  const currentSaldos        = new Map(currentEntries.map(e => [e.truckId, e.saldoInicial]))
+  const currentAbonos        = new Map(currentEntries.map(e => [e.truckId, e.abono]))
+  const currentWageOverrides = new Map(currentEntries.filter(e => e.driverWageOverride !== null).map(e => [e.truckId, e.driverWageOverride!]))
+  const currentCashEntryIds  = new Map(currentEntries.filter(e => e.cashEntryId  !== null).map(e => [e.truckId, e.cashEntryId!]))
+  const currentPaidAts       = new Map(currentEntries.filter(e => e.paidAt       !== null).map(e => [e.truckId, e.paidAt!]))
 
   // ── Eliminar entradas existentes para regenerar ───────────────────────────────
   await prisma.payrollEntry.deleteMany({ where: { periodId } })
@@ -202,20 +230,21 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     const isLuisRivas = truck.owner.id === 'owner-sancasimiro'
     const nprPct      = truck.owner.nprPercent / 100
 
-    // Facturación
+    // Facturación — incluye días internos ($20/h)
+    const diasHoras   = diasByTruck.get(truckId) ?? 0
     const totalTons   = trips.reduce((s, t) => s + (t.netWeightKg ?? 0) / 1000, 0)
-    const grossAmount = trips.reduce((s, t) => s + t.amount, 0)
+    const grossAmount = trips.reduce((s, t) => s + t.amount, 0) + diasHoras * 20
     const viaticos    = 0  // Fernando entra viáticos como gasto VIATICO manual
 
     // NPR — siempre se calcula; para isNPROwner (José) se SUMA al neto (ingreso NPR)
     const nprFee = grossAmount * nprPct
 
-    // Nómina chofer
-    // Luis Rivas: informativo = 20% × (bruto − NPR); no se descuenta (isAfiliado)
-    // Resto: suma del wage fijo por viaje según ruta
-    const driverWage = isLuisRivas
+    // Nómina chofer — si hay override manual, prevalece sobre el calculado
+    const diasChoferHoras = diasChoferByTruck.get(truckId) ?? 0
+    const driverWageCalc = isLuisRivas
       ? (grossAmount - nprFee) * 0.20
-      : trips.reduce((s, t) => s + (t.route?.driverWage ?? 0), 0)
+      : trips.reduce((s, t) => s + (t.route?.driverWage ?? 0), 0) + diasChoferHoras * 2.50
+    const driverWage = currentWageOverrides.get(truckId) ?? driverWageCalc
 
     // Mecánica y admin — solo PROPIO con viajes Aurumin (incluye José)
     const tieneAurumin = propiosConAurumin.has(truckId)
@@ -284,7 +313,12 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
         deductions:   Math.round(loanDeductions * 100) / 100,
         saldoInicial: Math.round(saldoInicial * 100)  / 100,
         abono:        Math.round(abono        * 100)  / 100,
-        netAmount:    Math.round(netAmount    * 100)  / 100,
+        netAmount:          Math.round(netAmount    * 100)  / 100,
+        driverWageOverride: currentWageOverrides.has(truckId)
+          ? Math.round(currentWageOverrides.get(truckId)! * 100) / 100
+          : null,
+        cashEntryId: currentCashEntryIds.get(truckId) ?? null,
+        paidAt:      currentPaidAts.get(truckId) ?? null,
       },
     })
     created.push(entry)
@@ -297,7 +331,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   for (const [truckId, trips] of byTruck) {
     const truck = truckMap.get(truckId)
     if (!truck || truck.owner.isNPROwner || !truck.owner.nprContributor) continue
-    const gross = trips.reduce((s, t) => s + t.amount, 0)
+    const gross = trips.reduce((s, t) => s + t.amount, 0) + (diasByTruck.get(truckId) ?? 0) * 20
     totalNprCollected += gross * (truck.owner.nprPercent / 100)
   }
 
@@ -357,6 +391,14 @@ export type LoanForPayroll = {
   ownerName: string
 }
 
+export type WageOverrideInfo = {
+  truckId: string
+  plate: string
+  ownerName: string
+  calcWage: number
+  overrideWage: number
+}
+
 export type PayrollParams = {
   loans: LoanForPayroll[]
   adminFeeBase: number
@@ -364,6 +406,7 @@ export type PayrollParams = {
   fleetCount: number
   activeCount: number
   systemConfig: { key: string; value: string; label: string }[]
+  wageOverrides: WageOverrideInfo[]
 }
 
 export async function getPayrollParams(periodId: string): Promise<PayrollParams | { error: string }> {
@@ -419,7 +462,23 @@ export async function getPayrollParams(periodId: string): Promise<PayrollParams 
 
   const systemConfig = await prisma.systemConfig.findMany({ orderBy: { key: 'asc' } })
 
-  return { loans, adminFeeBase, adminFeePerTruck, fleetCount, activeCount, systemConfig }
+  // Overrides de driverWage activos en este período
+  const overrideEntries = await prisma.payrollEntry.findMany({
+    where: { periodId, driverWageOverride: { not: null } },
+    select: {
+      truckId: true, driverWage: true, driverWageOverride: true,
+      truck: { select: { plate: true, owner: { select: { name: true } } } },
+    },
+  })
+  const wageOverrides: WageOverrideInfo[] = overrideEntries.map(e => ({
+    truckId:      e.truckId,
+    plate:        e.truck.plate,
+    ownerName:    e.truck.owner.name,
+    calcWage:     e.driverWage,      // valor actual en DB (= override, ya que fue preservado)
+    overrideWage: e.driverWageOverride!,
+  }))
+
+  return { loans, adminFeeBase, adminFeePerTruck, fleetCount, activeCount, systemConfig, wageOverrides }
 }
 
 // ─── Actualizar abono de un camión (Fernando lo entra antes de cerrar) ────────
@@ -479,6 +538,44 @@ export async function updatePayrollNetAmount(entryId: string, netAmount: number)
   return { ok: true }
 }
 
+export async function updateDriverWageOverride(entryId: string, override: number | null) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
+  const entry = await prisma.payrollEntry.findUnique({ where: { id: entryId } })
+  if (!entry) return { error: 'Entrada no encontrada' }
+
+  const truck = await prisma.truck.findUnique({
+    where: { id: entry.truckId },
+    include: { owner: { select: { isNPROwner: true, type: true } } },
+  })
+  const isAfiliado = truck?.owner?.type === 'AFILIADO'
+  const isNPROwner = truck?.owner?.isNPROwner ?? false
+
+  const wage = override ?? entry.driverWage  // si borra el override, el wage ya en DB se mantiene
+  const netAmount = entry.grossAmount
+    - entry.commissionFee
+    - (isAfiliado ? 0 : wage)
+    + (isNPROwner ? (entry.nprFee ?? 0) : -(entry.nprFee ?? 0))
+    - (entry.mechanicFee ?? 0)
+    - (entry.adminFee ?? 0)
+    - entry.deductions
+    + (entry.saldoInicial ?? 0)
+    - (entry.abono ?? 0)
+
+  await prisma.payrollEntry.update({
+    where: { id: entryId },
+    data: {
+      driverWageOverride: override !== null ? Math.round(override * 100) / 100 : null,
+      driverWage:         override !== null ? Math.round(override * 100) / 100 : entry.driverWage,
+      netAmount:          Math.round(netAmount * 100) / 100,
+    },
+  })
+
+  revalidatePath(`/nomina/${entry.periodId}`)
+  return { ok: true }
+}
+
 type Disposition = 'CAJA_CHICA' | 'AURUMIN' | 'LUIS_PENA' | 'SIGUIENTE'
 
 // ─── Cerrar período — crea CashEntry para carros negativos ────────────────────
@@ -505,6 +602,12 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
 
   if (entries.length === 0) return { error: 'Genera la nómina antes de cerrar el período' }
   if (!period) return { error: 'Período no encontrado' }
+
+  const diasInternosAgg = await prisma.diasInternosEntry.aggregate({
+    where: { fecha: { gte: period.startDate, lte: period.endDate } },
+    _sum: { totalHoras: true },
+  })
+  const diasInternosBilling = (diasInternosAgg._sum.totalHoras ?? 0) * 20
 
   // Carros con saldo negativo — procesar según disposición elegida
   const negativos = entries.filter(e => e.netAmount < 0 && !e.cashEntryId)
@@ -552,7 +655,9 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
   const grossAurumin  = Math.max(0,
     period.trips
       .filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
-      .reduce((s, t) => s + t.amount, 0) - auruminDeficit
+      .reduce((s, t) => s + t.amount, 0)
+    + diasInternosBilling
+    - auruminDeficit
   )
   const grossLuisPena = Math.max(0,
     period.trips

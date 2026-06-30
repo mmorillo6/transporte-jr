@@ -93,7 +93,8 @@ model Truck {
   tireRepairs             TireRepair[]
   cashEntries             CashEntry[]
   almacenItems            AlmacenItem[]
-  diasInternosEntries     DiasInternosEntry[]
+  diasInternosEntries     DiasInternosEntry[]    @relation("DiasInternosTruck")
+  diasInternosAsDriver    DiasInternosEntry[]    @relation("DiasInternosDriverTruck")
   pendingMechanicCharges  PendingMechanicCharge[]
 }
 
@@ -205,9 +206,10 @@ model PayrollEntry {
   nprFee        Float     @default(0) // 5% o 10% NPR según owner
   mechanicFee   Float     @default(0) // nómina mecánicos
   adminFee      Float     @default(0) // $50 × total_carros ÷ carros_activos
-  saldoInicial  Float     @default(0) // deuda pendiente de quincena anterior
-  abono         Float     @default(0) // pago recibido esta quincena
-  netAmount     Float     @default(0) // saldo final (puede ser negativo)
+  saldoInicial       Float     @default(0) // deuda pendiente de quincena anterior
+  abono              Float     @default(0) // pago recibido esta quincena
+  netAmount          Float     @default(0) // saldo final (puede ser negativo)
+  driverWageOverride Float?               // sueldo chofer manual (si ≠ null, prevalece sobre el calculado)
   cashEntryId   String? // CashEntry auto-creado si netAmount < 0
   notes         String?
   paidAt        DateTime?
@@ -627,16 +629,20 @@ model SystemConfig {
 
 // ─── DÍAS INTERNOS ────────────────────────────────────────────────────────────
 model DiasInternosEntry {
-  id          String   @id @default(cuid())
-  fecha       DateTime
-  truckId     String
-  truck       Truck    @relation(fields: [truckId], references: [id])
-  conductor   String
-  descripcion String   @default("INTERNO TRONCAL A PLANTA")
-  actividad   String   @default("ACARREO DE ÑUMA DE TRONCAL A PLANTA")
-  horaInicio  String
-  horaFin     String
-  totalHoras  Float
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  fecha         DateTime
+  truckId       String
+  truck         Truck    @relation("DiasInternosTruck", fields: [truckId], references: [id])
+  conductor     String
+  // Si el chofer que manejó NO es el asignado de este camión, apunta a su camión habitual.
+  // El sueldo ($2.50/h) se carga al driverTruck en nómina; el bruto ($20/h) siempre al truckId.
+  driverTruckId String?
+  driverTruck   Truck?   @relation("DiasInternosDriverTruck", fields: [driverTruckId], references: [id])
+  descripcion   String   @default("INTERNO TRONCAL A PLANTA")
+  actividad     String   @default("ACARREO DE ÑUMA DE TRONCAL A PLANTA")
+  horaInicio    String
+  horaFin       String
+  totalHoras    Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

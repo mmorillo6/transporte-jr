@@ -109,8 +109,13 @@ export default function DuenosNominaClient({
   const [, startTransition] = useTransition()
   const [openOwner, setOpenOwner] = useState<string | null>(null)
   const [paying, setPaying] = useState<Set<string>>(new Set())
-  const [payFor, setPayFor] = useState<{ entryId: string; currency: 'EFECTIVO' | 'USDT' } | null>(null)
+  const [payFor, setPayFor] = useState<{
+    entryId: string; currency: 'EFECTIVO' | 'USDT'; plate: string; ownerName: string
+  } | null>(null)
   const [payAmt, setPayAmt] = useState('')
+  const [confirmPay, setConfirmPay] = useState(false)
+
+  const LARGE_PAYMENT_THRESHOLD = 500
 
   function computeTruckSaldos(truck: TruckRow, ownerType?: string, isNPROwner?: boolean) {
     const isAfiliado = ownerType === 'AFILIADO'
@@ -136,13 +141,18 @@ export default function DuenosNominaClient({
     return { auruminSaldo, lpSaldo, nprAurumin, nprLP }
   }
 
-  async function handlePayment(entryId: string, currency: 'EFECTIVO' | 'USDT') {
+  async function handlePayment(entryId: string, currency: 'EFECTIVO' | 'USDT', confirmed = false) {
     const amount = parseFloat(payAmt.replace(',', '.'))
     if (!amount || amount <= 0) return
+    if (!confirmed && amount >= LARGE_PAYMENT_THRESHOLD) {
+      setConfirmPay(true)
+      return
+    }
     setPaying(prev => new Set(prev).add(entryId))
     await registerPayment(entryId, amount, currency)
     setPayFor(null)
     setPayAmt('')
+    setConfirmPay(false)
     setPaying(prev => { const s = new Set(prev); s.delete(entryId); return s })
     router.refresh()
   }
@@ -176,6 +186,7 @@ export default function DuenosNominaClient({
   }
 
   return (
+    <>
     <div className="space-y-5">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -418,7 +429,7 @@ export default function DuenosNominaClient({
                                   </div>
                                 ) : (
                                   <button
-                                    onClick={e => { e.stopPropagation(); setPayFor({ entryId: truck.payrollEntryId, currency: 'USDT' }); setPayAmt(auruminSaldo.toFixed(2)) }}
+                                    onClick={e => { e.stopPropagation(); setPayFor({ entryId: truck.payrollEntryId, currency: 'USDT', plate: truck.plate, ownerName: row.owner.name }); setPayAmt(auruminSaldo.toFixed(2)); setConfirmPay(false) }}
                                     className="w-full text-xs text-amber-500 hover:text-amber-400 border border-amber-500/20 hover:border-amber-500/40 rounded-lg py-1.5 transition-colors mt-1">
                                     + Registrar pago Aurumin (USDT)
                                   </button>
@@ -498,7 +509,7 @@ export default function DuenosNominaClient({
                                     </div>
                                   ) : (
                                     <button
-                                      onClick={e => { e.stopPropagation(); setPayFor({ entryId: truck.payrollEntryId, currency: 'EFECTIVO' }); setPayAmt(lpRawSaldo.toFixed(2)) }}
+                                      onClick={e => { e.stopPropagation(); setPayFor({ entryId: truck.payrollEntryId, currency: 'EFECTIVO', plate: truck.plate, ownerName: row.owner.name }); setPayAmt(lpRawSaldo.toFixed(2)); setConfirmPay(false) }}
                                       className="w-full text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/20 hover:border-emerald-500/40 rounded-lg py-1.5 transition-colors">
                                       ✓ Pagar LP en efectivo
                                     </button>
@@ -647,6 +658,51 @@ export default function DuenosNominaClient({
         </div>
       )}
     </div>
+
+    {/* Modal confirmación de pago grande */}
+
+    {confirmPay && payFor && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        onClick={() => setConfirmPay(false)}
+      >
+        <div
+          className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-2xl"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="text-center space-y-1">
+            <p className="text-zinc-500 text-xs uppercase tracking-wide">Confirmar pago</p>
+            <p className="text-white font-bold text-base">{payFor.ownerName}</p>
+            <p className="text-zinc-400 text-xs font-mono">{payFor.plate}</p>
+          </div>
+          <div className="bg-zinc-800 rounded-xl p-4 text-center">
+            <p className="text-zinc-500 text-xs mb-1.5">
+              {payFor.currency === 'USDT' ? 'Aurumin · USDT' : 'Luis Peña · Efectivo'}
+            </p>
+            <p className="text-4xl font-bold text-amber-400">${fmt(parseFloat(payAmt) || 0)}</p>
+          </div>
+          <p className="text-zinc-600 text-xs text-center">
+            Se registrará un egreso en Caja y se descontará del saldo pendiente.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setConfirmPay(false)}
+              className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 font-semibold rounded-xl py-2.5 text-sm transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              disabled={paying.has(payFor.entryId)}
+              onClick={() => handlePayment(payFor!.entryId, payFor!.currency, true)}
+              className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-zinc-950 font-bold rounded-xl py-2.5 text-sm transition-colors"
+            >
+              {paying.has(payFor.entryId) ? 'Procesando...' : 'Confirmar pago'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 

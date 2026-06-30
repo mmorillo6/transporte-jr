@@ -151,6 +151,12 @@ export default async function PeriodDetailPage({
   ])
   if (!period) notFound()
 
+  const diasInternosAgg = await prisma.diasInternosEntry.aggregate({
+    where: { fecha: { gte: period.startDate, lte: period.endDate } },
+    _sum: { totalHoras: true },
+  })
+  const diasInternosHoras = diasInternosAgg._sum.totalHoras ?? 0
+
   // Todos los gastos por camión del período (para desglose completo)
   const truckExpenses = ['DUENO', 'ENCARGADO'].includes(session.role)
     ? await prisma.expense.findMany({
@@ -324,6 +330,7 @@ export default async function PeriodDetailPage({
     }
   })()
 
+  const tripsBruto = (trips as any[]).reduce((s: number, t: any) => s + t.amount, 0)
   const checklistData = {
     payrollCount:         payroll.length,
     tripsWithoutTicket:   trips.filter((t: any) => !t.ticketNo).length,
@@ -340,6 +347,11 @@ export default async function PeriodDetailPage({
         ownerName: e.truck?.owner?.name ?? '',
         netAmount: e.netAmount,
       })),
+    wageOverridesCount: payroll.filter((e: any) => e.driverWageOverride !== null).length,
+    totalBruto:         totalGross,
+    tripsBruto,
+    diasInternosHoras,
+    diasInternosBilling: diasInternosHoras * 20,
   }
 
   return (

@@ -31,7 +31,7 @@ export default async function DuenosNominaPage({
   const selectedPeriod = periods.find(p => p.id === selectedId)
   if (!selectedPeriod) notFound()
 
-  const [payrollEntries, trips, expenses, tireDebts] = await Promise.all([
+  const [payrollEntries, trips, expenses, tireDebts, diasInternosEntries] = await Promise.all([
     prisma.payrollEntry.findMany({
       where: { periodId: selectedId },
       include: {
@@ -59,7 +59,17 @@ export default async function DuenosNominaPage({
         payments: { select: { amount: true, date: true }, orderBy: { date: 'asc' } },
       },
     }),
+    prisma.diasInternosEntry.findMany({
+      where: { fecha: { gte: selectedPeriod.startDate, lte: selectedPeriod.endDate } },
+      select: { truckId: true, totalHoras: true },
+    }),
   ])
+
+  // Días internos por camión ($20/h, siempre Aurumin)
+  const diasByTruck = new Map<string, number>()
+  for (const d of diasInternosEntries) {
+    diasByTruck.set(d.truckId, (diasByTruck.get(d.truckId) ?? 0) + d.totalHoras)
+  }
 
   // Index trips by truckId
   const tripsByTruck = new Map<string, typeof trips>()
@@ -148,9 +158,11 @@ export default async function DuenosNominaPage({
     if (!owner) continue
 
     const truckTrips = tripsByTruck.get(entry.truckId) ?? []
+    const diasHoras = diasByTruck.get(entry.truckId) ?? 0
     const auruminGross = truckTrips
       .filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
       .reduce((s, t) => s + t.amount, 0)
+      + diasHoras * 20
     const lpGross = truckTrips
       .filter(t => (t.route as any)?.clientName === 'LUIS PEÑA')
       .reduce((s, t) => s + t.amount, 0)

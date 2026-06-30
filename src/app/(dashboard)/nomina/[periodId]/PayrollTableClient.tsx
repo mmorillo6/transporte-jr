@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { markPayrollEntryPaid, markAllPeriodPaid, updatePayrollAbono, updatePayrollNetAmount } from '@/app/actions/payroll'
+import { markPayrollEntryPaid, markAllPeriodPaid, updatePayrollAbono, updatePayrollNetAmount, updateDriverWageOverride } from '@/app/actions/payroll'
 import { toast } from 'sonner'
 
 const PAYMENT_METHODS = ['Efectivo', 'Transferencia', 'USDT', 'Zelle', 'Otro']
@@ -13,6 +13,7 @@ type Entry = {
   grossAmount: number
   viaticos: number
   driverWage: number
+  driverWageOverride: number | null
   commissionFee: number   // gastosOp (Expense records + viáticos de ruta)
   nprFee: number
   mechanicFee: number
@@ -79,6 +80,9 @@ export default function PayrollTableClient({
   // Net amount editing state
   const [netEditing, setNetEditing] = useState<Record<string, string>>({})
   const [netLoading, setNetLoading] = useState<string | null>(null)
+  // Driver wage override editing state
+  const [wageEditing, setWageEditing] = useState<Record<string, string>>({})
+  const [wageLoading, setWageLoading] = useState<string | null>(null)
 
   const canPay = ['DUENO', 'ENCARGADO'].includes(role)
   const isClosed = periodStatus === 'CLOSED'
@@ -136,6 +140,25 @@ export default function PayrollTableClient({
     if (!m) return ''
     if (m === 'Transferencia') return 'Transf.'
     return m
+  }
+
+  async function handleWageSave(entryId: string, clear = false) {
+    if (clear) {
+      setWageLoading(entryId)
+      const res = await updateDriverWageOverride(entryId, null)
+      if (res.error) toast.error(res.error)
+      else { setWageEditing(prev => { const n = { ...prev }; delete n[entryId]; return n }); router.refresh() }
+      setWageLoading(null)
+      return
+    }
+    const raw = wageEditing[entryId]
+    const val = parseFloat(raw)
+    if (isNaN(val) || val < 0) { toast.error('Sueldo inválido'); return }
+    setWageLoading(entryId)
+    const res = await updateDriverWageOverride(entryId, val)
+    if (res.error) toast.error(res.error)
+    else { setWageEditing(prev => { const n = { ...prev }; delete n[entryId]; return n }); router.refresh() }
+    setWageLoading(null)
   }
 
   function fmt(n: number) { return `$${n.toFixed(2)}` }
@@ -430,8 +453,56 @@ export default function PayrollTableClient({
                   <td className="px-2 py-2 text-right text-blue-400 whitespace-nowrap">
                     {entry.viaticos > 0 ? fmt(entry.viaticos) : '—'}
                   </td>
-                  <td className="px-2 py-2 text-right text-orange-400 whitespace-nowrap">
-                    {fmtNeg(entry.driverWage)}
+                  <td className="px-2 py-2 text-right whitespace-nowrap">
+                    {canPay && wageEditing[entry.id] !== undefined ? (
+                      <div className="flex items-center gap-1 justify-end">
+                        <input
+                          type="number" min="0" step="0.01"
+                          value={wageEditing[entry.id]}
+                          onChange={e => setWageEditing(prev => ({ ...prev, [entry.id]: e.target.value }))}
+                          className="w-20 bg-zinc-800 border border-zinc-600 text-white rounded px-1.5 py-1 text-xs focus:outline-none focus:border-orange-500 text-right"
+                          autoFocus
+                        />
+                        <button onClick={() => handleWageSave(entry.id)} disabled={wageLoading === entry.id}
+                          className="text-xs bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-zinc-950 font-semibold rounded px-2 py-1">
+                          {wageLoading === entry.id ? '...' : '✓'}
+                        </button>
+                        <button onClick={() => setWageEditing(prev => { const n={...prev}; delete n[entry.id]; return n })}
+                          className="text-xs text-zinc-500 hover:text-white rounded px-1 py-1">✕</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-end gap-1 group">
+                        <span className={entry.driverWageOverride !== null ? 'text-amber-400' : 'text-orange-400'}>
+                          {fmtNeg(entry.driverWage)}
+                        </span>
+                        {entry.driverWageOverride !== null && (
+                          <span className="text-[10px] text-amber-500 bg-amber-500/10 px-1 rounded">M</span>
+                        )}
+                        {canPay && !isClosed && (
+                          <button
+                            onClick={() => setWageEditing(prev => ({ ...prev, [entry.id]: entry.driverWage.toFixed(2) }))}
+                            className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-orange-400 transition-opacity ml-0.5"
+                            title="Ajustar sueldo chofer manualmente"
+                          >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        )}
+                        {canPay && !isClosed && entry.driverWageOverride !== null && (
+                          <button
+                            onClick={() => handleWageSave(entry.id, true)}
+                            disabled={wageLoading === entry.id}
+                            className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-opacity"
+                            title="Borrar ajuste manual"
+                          >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className={`px-2 py-2 text-right whitespace-nowrap ${entry.truck?.owner?.isNPROwner ? 'text-emerald-400' : 'text-red-400'}`}>
                     {entry.truck?.owner?.isNPROwner

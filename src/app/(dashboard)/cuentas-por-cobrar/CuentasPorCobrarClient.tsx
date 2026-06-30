@@ -1,7 +1,7 @@
 'use client'
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createCuenta, updateCuenta, addPayment, deleteCuenta } from '@/app/actions/cuentasPorCobrar'
+import { createCuenta, updateCuenta, addPayment, deleteCuenta, addGlobalPayment } from '@/app/actions/cuentasPorCobrar'
 
 const STATUS_LABEL: Record<string, string> = { PENDING: 'Pendiente', PARTIAL: 'Parcial', PAID: 'Cobrado' }
 const STATUS_COLOR: Record<string, string> = {
@@ -25,6 +25,8 @@ type CxC = {
   payments: Payment[]
 }
 
+type DistRow = { cxcId: string; label: string; balance: number; allocated: number }
+
 export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) {
   const router = useRouter()
   const [filter, setFilter]    = useState<'all' | 'PENDING' | 'PARTIAL' | 'PAID'>('all')
@@ -35,6 +37,16 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
   const [expanded, setExpanded] = useState<string | null>(null)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
+
+  // Global payment modal state
+  const [globalPayModal, setGlobalPayModal]   = useState<string | null>(null) // clientName
+  const [globalPayAmount, setGlobalPayAmount] = useState('')
+  const [globalPayDate, setGlobalPayDate]     = useState('')
+  const [globalPayMethod, setGlobalPayMethod] = useState('USDT')
+  const [globalPayNotes, setGlobalPayNotes]   = useState('')
+  const [globalDist, setGlobalDist]           = useState<DistRow[]>([])
+  const [globalPayError, setGlobalPayError]   = useState('')
+  const [globalPayLoading, setGlobalPayLoading] = useState(false)
 
   const today = new Date().toISOString().slice(0, 10)
 
@@ -62,6 +74,14 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
           newestUnpaidByClient.set(c.clientName, c.id)
         }
       }
+    }
+  }
+
+  // Count unpaid invoices per client (to decide whether to show "Abono global")
+  const unpaidCountByClient = new Map<string, number>()
+  for (const c of cuentas) {
+    if (c.status !== 'PAID') {
+      unpaidCountByClient.set(c.clientName, (unpaidCountByClient.get(c.clientName) ?? 0) + 1)
     }
   }
 
@@ -102,7 +122,80 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
     else { setPayingId(id); setPaymentAmount(''); setError('') }
   }
 
+  // ── Global payment helpers ──────────────────────────────────────────────────
+
+  function fifoDistribute(amount: number, rows: DistRow[]): DistRow[] {
+    let remaining = amount
+    return rows.map(row => {
+      const allocated = Math.round(Math.min(row.balance, Math.max(0, remaining)) * 100) / 100
+      remaining = Math.round((remaining - allocated) * 100) / 100
+      return { ...row, allocated }
+    })
+  }
+
+  function openGlobalPay(clientName: string) {
+    const pending = cuentas
+      .filter(c => c.clientName === clientName && c.status !== 'PAID')
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) // oldest first for FIFO
+    const rows: DistRow[] = pending.map(c => ({
+      cxcId: c.id,
+      label: `${c.concept}${c.periodLabel ? ` — ${c.periodLabel}` : ''}`,
+      balance: c.balance,
+      allocated: 0,
+    }))
+    setGlobalDist(rows)
+    setGlobalPayAmount('')
+    setGlobalPayDate(today)
+    setGlobalPayMethod('USDT')
+    setGlobalPayNotes('')
+    setGlobalPayError('')
+    setGlobalPayModal(clientName)
+  }
+
+  function handleGlobalAmountChange(val: string) {
+    setGlobalPayAmount(val)
+    const amount = parseFloat(val)
+    if (!isNaN(amount) && amount > 0) {
+      setGlobalDist(prev => fifoDistribute(amount, prev))
+    } else {
+      setGlobalDist(prev => prev.map(r => ({ ...r, allocated: 0 })))
+    }
+  }
+
+  function handleDistChange(idx: number, val: string) {
+    const num = parseFloat(val)
+    setGlobalDist(prev => prev.map((r, i) => i === idx ? { ...r, allocated: isNaN(num) ? 0 : Math.round(num * 100) / 100 } : r))
+  }
+
+  async function handleGlobalSubmit() {
+    const amount = parseFloat(globalPayAmount)
+    if (isNaN(amount) || amount <= 0) { setGlobalPayError('Monto inválido'); return }
+    const distSum = Math.round(globalDist.reduce((s, r) => s + r.allocated, 0) * 100) / 100
+    if (Math.abs(distSum - amount) > 0.05) {
+      setGlobalPayError(`La distribución suma $${distSum.toFixed(2)} pero el total es $${amount.toFixed(2)}`)
+      return
+    }
+    setGlobalPayLoading(true)
+    setGlobalPayError('')
+    const res = await addGlobalPayment(
+      globalPayModal!,
+      amount,
+      globalPayDate,
+      globalPayMethod,
+      globalPayNotes,
+      globalDist.map(r => ({ cxcId: r.cxcId, amount: r.allocated })),
+    )
+    setGlobalPayLoading(false)
+    if (res?.error) { setGlobalPayError(res.error); return }
+    setGlobalPayModal(null)
+    router.refresh()
+  }
+
   const formOpen = showForm || !!editing
+
+  const globalDistSum = Math.round(globalDist.reduce((s, r) => s + r.allocated, 0) * 100) / 100
+  const globalAmountNum = parseFloat(globalPayAmount)
+  const globalSumOk = !isNaN(globalAmountNum) && Math.abs(globalDistSum - globalAmountNum) <= 0.05
 
   return (
     <div className="space-y-4">
@@ -259,6 +352,7 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
               <tbody>
                 {filtered.map(c => {
                   const isActiveForPayment = c.status !== 'PAID' && newestUnpaidByClient.get(c.clientName) === c.id
+                  const hasMultiplePending = (unpaidCountByClient.get(c.clientName) ?? 0) > 1
                   const payOpen = payingId === c.id
                   const cxcBalance = c.balance
 
@@ -301,6 +395,12 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
                                     : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                                 }`}>
                                 {payOpen ? '✕ Cancelar' : 'Registrar pago'}
+                              </button>
+                            )}
+                            {isActiveForPayment && hasMultiplePending && (
+                              <button onClick={() => { setPayingId(null); openGlobalPay(c.clientName) }}
+                                className="text-xs font-semibold rounded-lg px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white transition-colors whitespace-nowrap">
+                                Abono global
                               </button>
                             )}
                             {c.status !== 'PAID' && !isActiveForPayment && (
@@ -410,6 +510,137 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
           </div>
         )}
       </div>
+
+      {/* ── Global payment modal ────────────────────────────────────────────── */}
+      {globalPayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-lg shadow-2xl">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
+              <div>
+                <h3 className="text-white font-semibold">Abono global</h3>
+                <p className="text-zinc-500 text-xs mt-0.5">{globalPayModal} — distribuye un pago entre varias facturas</p>
+              </div>
+              <button onClick={() => setGlobalPayModal(null)} className="text-zinc-600 hover:text-zinc-300 transition-colors">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-4 space-y-4">
+              {/* Total amount + date + method */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5">Total recibido $ *</label>
+                  <input
+                    type="number" step="0.01" min="0.01" autoFocus
+                    placeholder="0.00"
+                    value={globalPayAmount}
+                    onChange={e => handleGlobalAmountChange(e.target.value)}
+                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 placeholder:text-zinc-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5">Fecha *</label>
+                  <input
+                    type="date"
+                    value={globalPayDate}
+                    onChange={e => setGlobalPayDate(e.target.value)}
+                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5">Método</label>
+                  <select
+                    value={globalPayMethod}
+                    onChange={e => setGlobalPayMethod(e.target.value)}
+                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
+                    <option value="USDT">USDT</option>
+                    <option value="Transferencia">Transferencia</option>
+                    <option value="Efectivo">Efectivo</option>
+                    <option value="Zelle">Zelle</option>
+                    <option value="Otro">Otro</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5">Notas / Referencia</label>
+                  <input
+                    placeholder="Referencia..."
+                    value={globalPayNotes}
+                    onChange={e => setGlobalPayNotes(e.target.value)}
+                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 placeholder:text-zinc-600"
+                  />
+                </div>
+              </div>
+
+              {/* Distribution table */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-zinc-400 font-medium">Distribución por factura</p>
+                  <p className="text-xs text-zinc-600">Edita cada fila si lo necesitas</p>
+                </div>
+                <div className="bg-zinc-800/50 rounded-xl overflow-hidden border border-zinc-700/50">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-zinc-700/50">
+                        <th className="text-left text-zinc-500 font-medium px-3 py-2">Factura</th>
+                        <th className="text-right text-zinc-500 font-medium px-3 py-2">Saldo</th>
+                        <th className="text-right text-zinc-500 font-medium px-3 py-2">Abonar $</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {globalDist.map((row, idx) => (
+                        <tr key={row.cxcId} className="border-b border-zinc-700/30 last:border-0">
+                          <td className="px-3 py-2 text-zinc-300 max-w-[200px] truncate">{row.label}</td>
+                          <td className="px-3 py-2 text-right text-amber-400 font-semibold whitespace-nowrap">${row.balance.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right">
+                            <input
+                              type="number" step="0.01" min="0"
+                              value={row.allocated === 0 ? '' : row.allocated}
+                              placeholder="0.00"
+                              onChange={e => handleDistChange(idx, e.target.value)}
+                              className="w-24 bg-zinc-700 border border-zinc-600 text-white rounded-lg px-2 py-1 text-xs text-right focus:outline-none focus:border-blue-500 placeholder:text-zinc-600"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Sum validation */}
+                <div className={`mt-2 flex items-center justify-between px-1 text-xs ${globalSumOk ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  <span>{globalSumOk ? '✓ Distribución correcta' : 'Distribución no cierra'}</span>
+                  <span>
+                    Suma: <strong>${globalDistSum.toFixed(2)}</strong>
+                    {!isNaN(globalAmountNum) && ` / Total: $${globalAmountNum.toFixed(2)}`}
+                  </span>
+                </div>
+              </div>
+
+              {globalPayError && <p className="text-red-400 text-xs">{globalPayError}</p>}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-zinc-800 flex gap-3 justify-end">
+              <button onClick={() => setGlobalPayModal(null)}
+                className="px-4 py-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl text-sm transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={handleGlobalSubmit}
+                disabled={globalPayLoading || !globalSumOk || !globalPayDate}
+                className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold rounded-xl px-5 py-2 text-sm transition-colors">
+                {globalPayLoading ? 'Guardando...' : 'Confirmar abono global'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

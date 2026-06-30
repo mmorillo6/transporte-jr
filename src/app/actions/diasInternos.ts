@@ -13,7 +13,10 @@ export async function getDiasInternosEntries(startDate: string, endDate: string)
   const end   = new Date(endDate   + 'T23:59:59')
   return prisma.diasInternosEntry.findMany({
     where: { fecha: { gte: start, lte: end } },
-    include: { truck: { select: { plate: true } } },
+    include: {
+      truck:       { select: { plate: true } },
+      driverTruck: { select: { plate: true } },
+    },
     orderBy: [{ fecha: 'asc' }, { horaInicio: 'asc' }],
   })
 }
@@ -24,13 +27,14 @@ export async function getDiasInternosTotalHoras(startDate: string, endDate: stri
 }
 
 export async function createDiasInternosEntry(data: FormData) {
-  const truckId     = data.get('truckId')    as string
-  const conductor   = (data.get('conductor') as string)?.trim()
-  const fecha       = data.get('fecha')       as string
-  const horaInicio  = data.get('horaInicio') as string
-  const horaFin     = data.get('horaFin')    as string
-  const descripcion = (data.get('descripcion') as string)?.trim() || 'INTERNO TRONCAL A PLANTA'
-  const actividad   = (data.get('actividad')  as string)?.trim() || 'ACARREO DE ÑUMA DE TRONCAL A PLANTA'
+  const truckId       = data.get('truckId')       as string
+  const conductor     = (data.get('conductor')    as string)?.trim()
+  const fecha         = data.get('fecha')          as string
+  const horaInicio    = data.get('horaInicio')    as string
+  const horaFin       = data.get('horaFin')       as string
+  const descripcion   = (data.get('descripcion')  as string)?.trim() || 'INTERNO TRONCAL A PLANTA'
+  const actividad     = (data.get('actividad')    as string)?.trim() || 'ACARREO DE ÑUMA DE TRONCAL A PLANTA'
+  const driverTruckId = (data.get('driverTruckId') as string) || null
 
   if (!truckId || !conductor || !fecha || !horaInicio || !horaFin)
     return { error: 'Todos los campos son requeridos' }
@@ -43,6 +47,7 @@ export async function createDiasInternosEntry(data: FormData) {
     data: {
       truckId, conductor, descripcion, actividad, horaInicio, horaFin, totalHoras,
       fecha: new Date(fecha + 'T12:00:00'),
+      ...(driverTruckId ? { driverTruckId } : {}),
     },
   })
   revalidatePath('/dias-internos')
@@ -50,13 +55,14 @@ export async function createDiasInternosEntry(data: FormData) {
 }
 
 export async function updateDiasInternosEntry(id: string, data: FormData) {
-  const conductor   = (data.get('conductor') as string)?.trim()
-  const fecha       = data.get('fecha')       as string
-  const horaInicio  = data.get('horaInicio') as string
-  const horaFin     = data.get('horaFin')    as string
-  const descanso    = parseFloat(data.get('descanso') as string) || 0
-  const descripcion = (data.get('descripcion') as string)?.trim() || 'INTERNO TRONCAL A PLANTA'
-  const actividad   = (data.get('actividad')  as string)?.trim() || 'ACARREO DE ÑUMA DE TRONCAL A PLANTA'
+  const conductor     = (data.get('conductor')    as string)?.trim()
+  const fecha         = data.get('fecha')          as string
+  const horaInicio    = data.get('horaInicio')    as string
+  const horaFin       = data.get('horaFin')       as string
+  const descanso      = parseFloat(data.get('descanso') as string) || 0
+  const descripcion   = (data.get('descripcion')  as string)?.trim() || 'INTERNO TRONCAL A PLANTA'
+  const actividad     = (data.get('actividad')    as string)?.trim() || 'ACARREO DE ÑUMA DE TRONCAL A PLANTA'
+  const driverTruckId = (data.get('driverTruckId') as string) || null
 
   if (!conductor || !horaInicio || !horaFin) return { error: 'Campos requeridos' }
 
@@ -67,6 +73,7 @@ export async function updateDiasInternosEntry(id: string, data: FormData) {
     where: { id },
     data: {
       conductor, descripcion, actividad, horaInicio, horaFin, totalHoras,
+      driverTruckId: driverTruckId ?? null,
       ...(fecha ? { fecha: new Date(fecha + 'T12:00:00') } : {}),
     },
   })
@@ -86,7 +93,7 @@ export async function createDiasInternosBulk(data: {
   descanso: number
   descripcion: string
   actividad: string
-  trucks: { truckId: string; conductor: string }[]
+  trucks: { truckId: string; conductor: string; driverTruckId?: string | null }[]
 }) {
   const { fecha, horaInicio, horaFin, descanso, descripcion, actividad, trucks } = data
   if (!fecha || !horaInicio || !horaFin || trucks.length === 0)
@@ -97,9 +104,10 @@ export async function createDiasInternosBulk(data: {
 
   await prisma.diasInternosEntry.createMany({
     data: trucks.map(t => ({
-      truckId:    t.truckId,
-      conductor:  t.conductor,
-      fecha:      new Date(fecha + 'T12:00:00'),
+      truckId:      t.truckId,
+      conductor:    t.conductor,
+      driverTruckId: t.driverTruckId || null,
+      fecha:        new Date(fecha + 'T12:00:00'),
       horaInicio,
       horaFin,
       totalHoras,

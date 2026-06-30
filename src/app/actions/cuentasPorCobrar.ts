@@ -89,3 +89,56 @@ export async function deleteCuenta(id: string) {
   await prisma.cuentaPorCobrar.delete({ where: { id } })
   revalidatePath('/cuentas-por-cobrar')
 }
+
+export async function addGlobalPayment(
+  clientName: string,
+  totalAmount: number,
+  date: string,
+  method: string,
+  notes: string,
+  distribution: { cxcId: string; amount: number }[],
+) {
+  const activeItems = distribution.filter(d => d.amount > 0)
+  const sum = activeItems.reduce((s, d) => s + d.amount, 0)
+  if (Math.abs(sum - totalAmount) > 0.05) return { error: `La distribución suma $${sum.toFixed(2)} pero el total es $${totalAmount.toFixed(2)}` }
+
+  const paymentDate = new Date(date)
+  const currency    = method.toUpperCase().includes('USDT') ? 'USDT' : 'EFECTIVO'
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ops: any[] = []
+
+  for (const { cxcId, amount } of activeItems) {
+    const cxc = await prisma.cuentaPorCobrar.findUnique({ where: { id: cxcId } })
+    if (!cxc) continue
+    const newPaid    = Math.round((cxc.amountPaid + amount) * 100) / 100
+    const newBalance = Math.max(0, Math.round((cxc.totalAmount - newPaid) * 100) / 100)
+    const status     = newBalance <= 0 ? 'PAID' : 'PARTIAL'
+    ops.push(
+      prisma.cxCPayment.create({ data: { cxcId, amount, date: paymentDate, method, notes: notes || null } }),
+      prisma.cuentaPorCobrar.update({
+        where: { id: cxcId },
+        data:  { amountPaid: newPaid, balance: newBalance, status: status as 'PAID' | 'PARTIAL' },
+      }),
+    )
+  }
+
+  ops.push(
+    prisma.cashEntry.create({
+      data: {
+        type:     'INGRESO',
+        currency: currency as 'EFECTIVO' | 'USDT',
+        amount:   totalAmount,
+        concept:  `Cobro ${clientName} — abono global`,
+        source:   clientName,
+        notes:    notes || null,
+        date:     paymentDate,
+      },
+    }),
+  )
+
+  await prisma.$transaction(ops)
+  revalidatePath('/cuentas-por-cobrar')
+  revalidatePath('/caja')
+  return {}
+}

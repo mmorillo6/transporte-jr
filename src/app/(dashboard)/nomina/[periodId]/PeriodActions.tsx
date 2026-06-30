@@ -2,7 +2,7 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { generatePayroll, closePeriod, reopenPeriod, getPayrollParams, deletePeriodWithPassword } from '@/app/actions/payroll'
-import type { PayrollParams, LoanForPayroll } from '@/app/actions/payroll'
+import type { PayrollParams, LoanForPayroll, WageOverrideInfo } from '@/app/actions/payroll'
 import { exportPeriodExcel } from '@/app/actions/exportPayroll'
 import { toast } from 'sonner'
 
@@ -24,6 +24,11 @@ type ChecklistData = {
   totalLoansPendientes: number
   mecanicoExpensesCount: number
   negativoTrucks?: NegativoTruck[]
+  wageOverridesCount?: number
+  totalBruto?: number
+  tripsBruto?: number
+  diasInternosHoras?: number
+  diasInternosBilling?: number
 }
 
 export default function PeriodActions({ periodId, periodStatus, role, checklistData }: {
@@ -214,6 +219,34 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
 
             <div className="px-5 py-4 space-y-5">
 
+              {/* ⚠ Sueldos manuales — banner prominente al tope */}
+              {params.wageOverrides.length > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/40 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-400 font-bold text-sm">⚠</span>
+                    <p className="text-amber-400 text-sm font-semibold">
+                      {params.wageOverrides.length} sueldo{params.wageOverrides.length !== 1 ? 's' : ''} chofer manual{params.wageOverrides.length !== 1 ? 'es' : ''} activo{params.wageOverrides.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <p className="text-amber-300/70 text-xs">
+                    Estos valores se <span className="font-semibold text-amber-300">preservarán</span> al recalcular — no se sobreescriben con el valor calculado automáticamente.
+                  </p>
+                  {params.wageOverrides.map(w => (
+                    <div key={w.truckId} className="flex items-center justify-between text-xs bg-zinc-800/60 rounded-lg px-3 py-2">
+                      <div>
+                        <span className="font-mono text-white font-medium">{w.plate}</span>
+                        <span className="text-zinc-400 ml-2">{w.ownerName}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-amber-400 font-semibold">${w.overrideWage.toFixed(2)}</span>
+                        <span className="text-zinc-600 ml-1">manual</span>
+                        <span className="text-zinc-600 ml-1">(calc: ${w.calcWage.toFixed(2)})</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Admin fee */}
               <div>
                 <p className="text-zinc-400 text-xs font-semibold uppercase tracking-wide mb-2">Admin fee</p>
@@ -276,6 +309,8 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
                   </div>
                 )}
               </div>
+
+              {/* Nota: los overrides ya se muestran en el banner superior */}
 
               {/* Referencia viáticos y otros params */}
               {params.systemConfig.length > 0 && (
@@ -389,6 +424,40 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
                 <CheckItem type="ok" text="Gastos de mecánicos ingresados" />
               ) : (
                 <CheckItem type="warn" text="No se ingresaron gastos de mecánicos — verifica si aplica" />
+              )}
+
+              {/* Bruto calculado vs trips + días internos */}
+              {cl.totalBruto !== undefined && cl.totalBruto > 0 && (() => {
+                const dias = cl.diasInternosBilling ?? 0
+                const trips = cl.tripsBruto ?? 0
+                const expected = trips + dias
+                const diff = Math.abs(cl.totalBruto - expected)
+                const ok = diff < 0.5
+                return (
+                  <div className={`rounded-xl p-3 space-y-1 ${ok ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/30'}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold ${ok ? 'text-emerald-400' : 'text-red-400'}`}>{ok ? '✓' : '✕'}</span>
+                      <span className={`text-sm font-medium ${ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                        Bruto total: ${cl.totalBruto.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="ml-5 space-y-0.5 text-xs text-zinc-500">
+                      <p>Viajes: <span className="text-zinc-300">${trips.toFixed(2)}</span></p>
+                      <p>Días internos: <span className="text-zinc-300">{cl.diasInternosHoras ?? 0}h × $20 = ${dias.toFixed(2)}</span></p>
+                      {!ok && (
+                        <p className="text-red-400 mt-1">⚠ Diff ${diff.toFixed(2)} — verifica que días internos estén incluidos en el bruto</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Sueldos manuales activos */}
+              {(cl.wageOverridesCount ?? 0) > 0 && (
+                <CheckItem
+                  type="info"
+                  text={`${cl.wageOverridesCount} sueldo${cl.wageOverridesCount !== 1 ? 's' : ''} chofer manual${cl.wageOverridesCount !== 1 ? 'es' : ''} activo${cl.wageOverridesCount !== 1 ? 's' : ''} (se preservan en la DB)`}
+                />
               )}
 
               {/* Pagos pendientes */}
