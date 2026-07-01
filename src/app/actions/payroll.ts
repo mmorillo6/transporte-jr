@@ -505,6 +505,7 @@ export async function updatePayrollAbono(entryId: string, abono: number) {
     - (entry.mechanicFee ?? 0)
     - (entry.adminFee ?? 0)
     - entry.deductions
+    + (entry.viaticos ?? 0)
     + (entry.saldoInicial ?? 0)
     - abono
 
@@ -560,6 +561,7 @@ export async function updateDriverWageOverride(entryId: string, override: number
     - (entry.mechanicFee ?? 0)
     - (entry.adminFee ?? 0)
     - entry.deductions
+    + (entry.viaticos ?? 0)
     + (entry.saldoInicial ?? 0)
     - (entry.abono ?? 0)
 
@@ -692,6 +694,7 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
 
   revalidatePath('/nomina')
   revalidatePath(`/nomina/${periodId}`)
+  revalidatePath('/nomina/duenos')
   revalidatePath('/caja')
   revalidatePath('/cuentas-por-cobrar')
   revalidatePath('/reportes/deuda')

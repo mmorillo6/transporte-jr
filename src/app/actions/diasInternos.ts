@@ -51,6 +51,8 @@ export async function createDiasInternosEntry(data: FormData) {
     },
   })
   revalidatePath('/dias-internos')
+  revalidatePath('/nomina')
+  revalidatePath('/nomina/duenos')
   return {}
 }
 
@@ -80,12 +82,16 @@ export async function updateDiasInternosEntry(id: string, data: FormData) {
     },
   })
   revalidatePath('/dias-internos')
+  revalidatePath('/nomina')
+  revalidatePath('/nomina/duenos')
   return {}
 }
 
 export async function deleteDiasInternosEntry(id: string) {
   await prisma.diasInternosEntry.delete({ where: { id } })
   revalidatePath('/dias-internos')
+  revalidatePath('/nomina')
+  revalidatePath('/nomina/duenos')
 }
 
 export async function createDiasInternosBulk(data: {
@@ -119,6 +125,8 @@ export async function createDiasInternosBulk(data: {
   })
 
   revalidatePath('/dias-internos')
+  revalidatePath('/nomina')
+  revalidatePath('/nomina/duenos')
   return { created: trucks.length }
 }
 
