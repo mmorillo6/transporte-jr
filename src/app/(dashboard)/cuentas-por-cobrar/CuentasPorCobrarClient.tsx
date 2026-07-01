@@ -17,6 +17,7 @@ type CxC = {
   concept: string
   periodLabel: string | null
   date: string
+  dueDate: string | null
   totalAmount: number
   amountPaid: number
   balance: number
@@ -279,6 +280,16 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
+                <label className="block text-xs text-zinc-400 mb-1.5">Fecha límite de cobro</label>
+                <input name="dueDate" type="date" defaultValue={editing?.dueDate?.slice(0, 10) ?? ''}
+                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500" />
+              </div>
+              <div className="flex items-end pb-2.5">
+                <p className="text-zinc-600 text-xs">Si se supera esta fecha sin cobrar, aparece la alerta <span className="text-red-400 font-medium">Vencida</span> en la tabla.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
                 <label className="block text-xs text-zinc-400 mb-1.5">Concepto *</label>
                 <input name="concept" required defaultValue={editing?.concept ?? ''}
                   placeholder="Ej: Relación nº3 — transporte minero"
@@ -355,10 +366,11 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
                   const hasMultiplePending = (unpaidCountByClient.get(c.clientName) ?? 0) > 1
                   const payOpen = payingId === c.id
                   const cxcBalance = c.balance
+                  const isOverdue = c.status !== 'PAID' && !!c.dueDate && new Date(c.dueDate) < new Date(today)
 
                   return (
                     <React.Fragment key={c.id}>
-                      <tr className={`border-b border-zinc-800/50 transition-colors ${payOpen ? 'bg-zinc-800/40' : 'hover:bg-zinc-800/20'}`}>
+                      <tr className={`border-b border-zinc-800/50 transition-colors ${payOpen ? 'bg-zinc-800/40' : isOverdue ? 'bg-red-500/5 hover:bg-red-500/10' : 'hover:bg-zinc-800/20'}`}>
                         <td className="px-4 py-3 text-white font-semibold">{c.clientName}</td>
                         <td className="px-4 py-3">
                           <p className="text-zinc-300 text-xs">{c.concept}</p>
@@ -375,9 +387,21 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLOR[c.status]}`}>
-                            {STATUS_LABEL[c.status]}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full w-fit ${STATUS_COLOR[c.status]}`}>
+                              {STATUS_LABEL[c.status]}
+                            </span>
+                            {isOverdue && (
+                              <span className="text-xs font-semibold text-red-400 flex items-center gap-1">
+                                ⚠ Vencida
+                              </span>
+                            )}
+                            {c.dueDate && c.status !== 'PAID' && !isOverdue && (
+                              <span className="text-xs text-zinc-600">
+                                vence {new Date(c.dueDate).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' })}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2 justify-end">

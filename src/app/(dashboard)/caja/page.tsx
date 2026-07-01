@@ -84,6 +84,7 @@ export default async function FinanzasPage({
   const cuentasData = cuentas.map(c => ({
     ...c,
     date: c.date.toISOString(),
+    dueDate: c.dueDate ? c.dueDate.toISOString() : null,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
     payments: c.payments.map(p => ({

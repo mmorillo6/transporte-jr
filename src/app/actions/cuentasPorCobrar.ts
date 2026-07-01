@@ -3,13 +3,15 @@ import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
 export async function createCuenta(data: FormData) {
-  const clientName = (data.get('clientName') as string)?.trim()
-  const concept    = (data.get('concept') as string)?.trim()
+  const clientName  = (data.get('clientName') as string)?.trim()
+  const concept     = (data.get('concept') as string)?.trim()
   const periodLabel = (data.get('periodLabel') as string)?.trim() || null
-  const date       = new Date(data.get('date') as string)
+  const date        = new Date(data.get('date') as string)
+  const dueDateRaw  = (data.get('dueDate') as string)?.trim()
+  const dueDate     = dueDateRaw ? new Date(dueDateRaw) : null
   const totalAmount = parseFloat(data.get('totalAmount') as string)
   const amountPaid  = parseFloat((data.get('amountPaid') as string) || '0')
-  const notes      = (data.get('notes') as string)?.trim() || null
+  const notes       = (data.get('notes') as string)?.trim() || null
 
   if (!clientName || !concept || isNaN(totalAmount)) return { error: 'Completa los campos requeridos' }
 
@@ -17,7 +19,7 @@ export async function createCuenta(data: FormData) {
   const status  = balance <= 0 ? 'PAID' : amountPaid > 0 ? 'PARTIAL' : 'PENDING'
 
   await prisma.cuentaPorCobrar.create({
-    data: { clientName, concept, periodLabel, date, totalAmount, amountPaid, balance, status: status as 'PAID' | 'PARTIAL' | 'PENDING', notes },
+    data: { clientName, concept, periodLabel, date, dueDate, totalAmount, amountPaid, balance, status: status as 'PAID' | 'PARTIAL' | 'PENDING', notes },
   })
   revalidatePath('/cuentas-por-cobrar')
   return {}
@@ -28,6 +30,8 @@ export async function updateCuenta(id: string, data: FormData) {
   const concept     = (data.get('concept') as string)?.trim()
   const periodLabel = (data.get('periodLabel') as string)?.trim() || null
   const date        = new Date(data.get('date') as string)
+  const dueDateRaw  = (data.get('dueDate') as string)?.trim()
+  const dueDate     = dueDateRaw ? new Date(dueDateRaw) : null
   const totalAmount = parseFloat(data.get('totalAmount') as string)
   const amountPaid  = parseFloat((data.get('amountPaid') as string) || '0')
   const notes       = (data.get('notes') as string)?.trim() || null
@@ -39,7 +43,7 @@ export async function updateCuenta(id: string, data: FormData) {
 
   await prisma.cuentaPorCobrar.update({
     where: { id },
-    data: { clientName, concept, periodLabel, date, totalAmount, amountPaid, balance, status: status as 'PAID' | 'PARTIAL' | 'PENDING', notes },
+    data: { clientName, concept, periodLabel, date, dueDate, totalAmount, amountPaid, balance, status: status as 'PAID' | 'PARTIAL' | 'PENDING', notes },
   })
   revalidatePath('/cuentas-por-cobrar')
   return {}
