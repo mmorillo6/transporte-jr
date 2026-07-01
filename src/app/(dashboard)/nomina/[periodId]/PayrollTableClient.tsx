@@ -154,6 +154,15 @@ export default function PayrollTableClient({
     const raw = wageEditing[entryId]
     const val = parseFloat(raw)
     if (isNaN(val) || val < 0) { toast.error('Sueldo inválido'); return }
+
+    const ref = entries.find(e => e.id === entryId)
+    if (ref && val !== ref.driverWage) {
+      const diff = ref.driverWage - val
+      if (Math.abs(diff) < 5) {
+        toast.info(`Ajuste pequeño: $${Math.abs(diff).toFixed(2)} ${diff > 0 ? 'menos' : 'más'} que el calculado ($${ref.driverWage.toFixed(2)})`)
+      }
+    }
+
     setWageLoading(entryId)
     const res = await updateDriverWageOverride(entryId, val)
     if (res.error) toast.error(res.error)
@@ -454,23 +463,34 @@ export default function PayrollTableClient({
                     {entry.viaticos > 0 ? fmt(entry.viaticos) : '—'}
                   </td>
                   <td className="px-2 py-2 text-right whitespace-nowrap">
-                    {canPay && wageEditing[entry.id] !== undefined ? (
-                      <div className="flex items-center gap-1 justify-end">
-                        <input
-                          type="number" min="0" step="0.01"
-                          value={wageEditing[entry.id]}
-                          onChange={e => setWageEditing(prev => ({ ...prev, [entry.id]: e.target.value }))}
-                          className="w-20 bg-zinc-800 border border-zinc-600 text-white rounded px-1.5 py-1 text-xs focus:outline-none focus:border-orange-500 text-right"
-                          autoFocus
-                        />
-                        <button onClick={() => handleWageSave(entry.id)} disabled={wageLoading === entry.id}
-                          className="text-xs bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-zinc-950 font-semibold rounded px-2 py-1">
-                          {wageLoading === entry.id ? '...' : '✓'}
-                        </button>
-                        <button onClick={() => setWageEditing(prev => { const n={...prev}; delete n[entry.id]; return n })}
-                          className="text-xs text-zinc-500 hover:text-white rounded px-1 py-1">✕</button>
-                      </div>
-                    ) : (
+                    {canPay && wageEditing[entry.id] !== undefined ? (() => {
+                      const typed = parseFloat(wageEditing[entry.id])
+                      const diff  = !isNaN(typed) && typed !== entry.driverWage ? entry.driverWage - typed : null
+                      return (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number" min="0" step="0.01"
+                              value={wageEditing[entry.id]}
+                              onChange={e => setWageEditing(prev => ({ ...prev, [entry.id]: e.target.value }))}
+                              className="w-20 bg-zinc-800 border border-zinc-600 text-white rounded px-1.5 py-1 text-xs focus:outline-none focus:border-orange-500 text-right"
+                              autoFocus
+                            />
+                            <button onClick={() => handleWageSave(entry.id)} disabled={wageLoading === entry.id}
+                              className="text-xs bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-zinc-950 font-semibold rounded px-2 py-1">
+                              {wageLoading === entry.id ? '...' : '✓'}
+                            </button>
+                            <button onClick={() => setWageEditing(prev => { const n={...prev}; delete n[entry.id]; return n })}
+                              className="text-xs text-zinc-500 hover:text-white rounded px-1 py-1">✕</button>
+                          </div>
+                          {diff !== null && (
+                            <span className={`text-[10px] ${Math.abs(diff) < 5 ? 'text-amber-400' : 'text-zinc-500'}`}>
+                              {diff > 0 ? '-' : '+'} ${Math.abs(diff).toFixed(2)} vs ${entry.driverWage.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })() : (
                       <div className="flex items-center justify-end gap-1 group">
                         <span className={entry.driverWageOverride !== null ? 'text-amber-400' : 'text-orange-400'}>
                           {fmtNeg(entry.driverWage)}
