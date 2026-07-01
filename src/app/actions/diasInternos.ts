@@ -43,6 +43,11 @@ export async function createDiasInternosEntry(data: FormData) {
   const totalHoras = Math.max(0, calcHoras(horaInicio, horaFin) - descanso)
   if (totalHoras <= 0) return { error: 'Las horas resultantes deben ser mayores a 0' }
 
+  const duplicate = await prisma.diasInternosEntry.findFirst({
+    where: { truckId, fecha: { gte: new Date(fecha + 'T00:00:00'), lte: new Date(fecha + 'T23:59:59') } },
+  })
+  if (duplicate) return { error: 'Ya existe un registro de días internos para este camión en esa fecha' }
+
   await prisma.diasInternosEntry.create({
     data: {
       truckId, conductor, descripcion, actividad, horaInicio, horaFin, totalHoras,
@@ -110,8 +115,21 @@ export async function createDiasInternosBulk(data: {
   const totalHoras = Math.max(0, calcHoras(horaInicio, horaFin) - descanso)
   if (totalHoras <= 0) return { error: 'Las horas resultantes deben ser mayores a 0' }
 
+  const existing = await prisma.diasInternosEntry.findMany({
+    where: {
+      truckId: { in: trucks.map(t => t.truckId) },
+      fecha:   { gte: new Date(fecha + 'T00:00:00'), lte: new Date(fecha + 'T23:59:59') },
+    },
+    select: { truckId: true },
+  })
+  const existingIds = new Set(existing.map(e => e.truckId))
+  const newTrucks   = trucks.filter(t => !existingIds.has(t.truckId))
+  const skipped     = trucks.length - newTrucks.length
+
+  if (newTrucks.length === 0) return { error: 'Todos los camiones seleccionados ya tienen registro para esa fecha', skipped }
+
   await prisma.diasInternosEntry.createMany({
-    data: trucks.map(t => ({
+    data: newTrucks.map(t => ({
       truckId:      t.truckId,
       conductor:    t.conductor,
       driverTruckId: t.driverTruckId || null,
@@ -127,7 +145,7 @@ export async function createDiasInternosBulk(data: {
   revalidatePath('/dias-internos')
   revalidatePath('/nomina')
   revalidatePath('/nomina/duenos')
-  return { created: trucks.length }
+  return { created: newTrucks.length, skipped }
 }
 
 /** Detecta camiones con DIAS INTERNOS en la romana para el período dado */

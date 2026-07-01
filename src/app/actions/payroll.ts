@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
 import { getConfigValue } from './systemConfig'
+import { notifyPeriodReady } from './notify'
 import bcrypt from 'bcryptjs'
 
 // ─── Generar / recalcular nómina de un período ────────────────────────────────
@@ -698,6 +699,10 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
   revalidatePath('/caja')
   revalidatePath('/cuentas-por-cobrar')
   revalidatePath('/reportes/deuda')
+
+  // Notificar automáticamente al cerrar — errores de envío no bloquean el cierre
+  notifyPeriodReady(periodId).catch(e => console.error('Auto-notify failed:', e))
+
   return { ok: true, prestamos, cxcCreadas }
 }
 
