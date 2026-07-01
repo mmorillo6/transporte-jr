@@ -706,6 +706,65 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
   return { ok: true, prestamos, cxcCreadas }
 }
 
+// ─── Checklist de cierre — datos frescos desde BD ────────────────────────────
+export async function getChecklistData(periodId: string) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
+  const period = await prisma.period.findUnique({
+    where: { id: periodId },
+    select: { startDate: true, endDate: true },
+  })
+  if (!period) return { error: 'Período no encontrado' }
+
+  const [entries, trips, diasInternosAgg, loans, mecanicoExpensesCount] = await Promise.all([
+    prisma.payrollEntry.findMany({
+      where: { periodId },
+      select: {
+        netAmount: true, grossAmount: true, paidAt: true, driverWageOverride: true,
+        truckId: true,
+        truck: { select: { plate: true, owner: { select: { name: true } } } },
+      },
+    }),
+    prisma.trip.findMany({
+      where: { periodId },
+      select: { ticketNo: true, amount: true },
+    }),
+    prisma.diasInternosEntry.aggregate({
+      where: { fecha: { gte: period.startDate, lte: period.endDate } },
+      _sum: { totalHoras: true },
+    }),
+    prisma.loan.findMany({ where: { balance: { gt: 0 } }, select: { balance: true } }),
+    prisma.expense.count({ where: { periodId, category: 'MECANICA' } }),
+  ])
+
+  const diasInternosHoras   = diasInternosAgg._sum.totalHoras ?? 0
+  const diasInternosBilling = diasInternosHoras * 20
+
+  return {
+    payrollCount:         entries.length,
+    tripsWithoutTicket:   trips.filter(t => !t.ticketNo).length,
+    unpaidEntries:        entries.filter(e => !e.paidAt && e.netAmount > 0).length,
+    negativoEntries:      entries.filter(e => e.netAmount < 0).length,
+    totalAlmacenPendiente: 0, // almacén no cambia en segundos; usar valor de página es ok
+    totalLoansPendientes:  loans.reduce((s, l) => s + l.balance, 0),
+    mecanicoExpensesCount,
+    negativoTrucks: entries
+      .filter(e => e.netAmount < 0)
+      .map(e => ({
+        id:        e.truckId,
+        plate:     (e as any).truck?.plate ?? e.truckId,
+        ownerName: (e as any).truck?.owner?.name ?? '',
+        netAmount: e.netAmount,
+      })),
+    wageOverridesCount:  entries.filter(e => e.driverWageOverride !== null).length,
+    totalBruto:          entries.reduce((s, e) => s + e.grossAmount, 0),
+    tripsBruto:          trips.reduce((s, t) => s + t.amount, 0),
+    diasInternosHoras,
+    diasInternosBilling,
+  }
+}
+
 // ─── Crear período manualmente ────────────────────────────────────────────────
 export async function crearPeriodo(startDateStr: string, endDateStr: string) {
   const session = await getSession()

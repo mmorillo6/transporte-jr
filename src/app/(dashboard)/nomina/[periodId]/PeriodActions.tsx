@@ -1,7 +1,7 @@
 'use client'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { generatePayroll, closePeriod, reopenPeriod, getPayrollParams, deletePeriodWithPassword } from '@/app/actions/payroll'
+import { generatePayroll, closePeriod, reopenPeriod, getPayrollParams, deletePeriodWithPassword, getChecklistData } from '@/app/actions/payroll'
 import type { PayrollParams, LoanForPayroll, WageOverrideInfo } from '@/app/actions/payroll'
 import { exportPeriodExcel } from '@/app/actions/exportPayroll'
 import { toast } from 'sonner'
@@ -52,6 +52,8 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
   const [showDelete, setShowDelete]     = useState(false)
   const [deletePassword, setDeletePassword] = useState('')
   const [deleting, setDeleting]         = useState(false)
+  const [liveChecklist, setLiveChecklist] = useState<ChecklistData | null>(null)
+  const [loadingChecklist, setLoadingChecklist] = useState(false)
 
   const isOpen = periodStatus === 'OPEN'
 
@@ -92,15 +94,21 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
     }
     setClosing(false)
     setShowChecklist(false)
+    setLiveChecklist(null)
   }
 
-  function openChecklist() {
+  async function openChecklist() {
+    setLoadingChecklist(true)
+    setShowChecklist(true)
+    const res = await getChecklistData(periodId)
+    setLoadingChecklist(false)
+    if ('error' in res) { toast.error(res.error); setShowChecklist(false); return }
+    setLiveChecklist(res)
     const defaults: Record<string, Disposition> = {}
-    for (const t of checklistData?.negativoTrucks ?? []) {
+    for (const t of res.negativoTrucks ?? []) {
       defaults[t.id] = t.ownerName === 'José Rodríguez' ? 'SIGUIENTE' : 'CAJA_CHICA'
     }
     setDispositions(defaults)
-    setShowChecklist(true)
   }
 
   async function handleReopen() {
@@ -137,7 +145,7 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
     setExporting(false)
   }
 
-  const cl = checklistData
+  const cl = liveChecklist ?? checklistData
 
   return (
     <>
@@ -396,7 +404,7 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
       )}
 
       {/* Modal checklist de cierre */}
-      {showChecklist && cl && (
+      {showChecklist && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl">
             <div className="px-5 py-4 border-b border-zinc-800">
@@ -404,6 +412,15 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
               <p className="text-zinc-500 text-xs mt-0.5">Revisa el estado del período antes de cerrar</p>
             </div>
 
+            {loadingChecklist ? (
+              <div className="px-5 py-10 flex items-center justify-center">
+                <svg className="animate-spin w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                <span className="ml-3 text-zinc-400 text-sm">Verificando datos...</span>
+              </div>
+            ) : !cl ? null : (
             <div className="px-5 py-4 space-y-2.5">
               {/* Nómina generada */}
               {cl.payrollCount > 0 ? (
@@ -537,10 +554,11 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
                 />
               )}
             </div>
+            )}
 
             <div className="px-5 py-4 border-t border-zinc-800 flex justify-end gap-3">
               <button
-                onClick={() => setShowChecklist(false)}
+                onClick={() => { setShowChecklist(false); setLiveChecklist(null) }}
                 disabled={closing}
                 className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
               >
@@ -548,7 +566,7 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
               </button>
               <button
                 onClick={handleClose}
-                disabled={closing || cl.payrollCount === 0}
+                disabled={closing || loadingChecklist || !cl || cl.payrollCount === 0}
                 className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white font-semibold rounded-lg text-sm transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
