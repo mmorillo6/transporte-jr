@@ -348,8 +348,15 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   const totalNprExpenses = nprExpenses.reduce((s, e) => s + e.amount, 0)
 
   if (nprTruck && totalNprCollected > 0) {
-    const nprSaldoInicial = currentSaldos.get(nprTruck.id) ?? 0
-    const nprAbono        = currentAbonos.get(nprTruck.id) ?? 0
+    let nprSaldoInicial: number
+    if (currentSaldos.has(nprTruck.id)) {
+      nprSaldoInicial = currentSaldos.get(nprTruck.id)!
+    } else {
+      const prevNpr = prevByTruck.get(nprTruck.id)
+      nprSaldoInicial = 0
+      if (prevNpr && !prevNpr.paidAt) nprSaldoInicial = prevNpr.netAmount
+    }
+    const nprAbono = currentAbonos.get(nprTruck.id) ?? 0
     const nprNet = Math.round((totalNprCollected - totalNprExpenses + nprSaldoInicial - nprAbono) * 100) / 100
 
     const nprEntry = await prisma.payrollEntry.create({
