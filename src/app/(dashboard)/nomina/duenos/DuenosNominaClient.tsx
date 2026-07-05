@@ -271,33 +271,25 @@ export default function DuenosNominaClient({
               >
                 {/* Main row */}
                 <div
-                  className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 cursor-pointer hover:bg-zinc-800/30 transition-colors"
+                  className="flex flex-col gap-1.5 px-4 py-3 cursor-pointer hover:bg-zinc-800/30 transition-colors"
                   onClick={() => setOpenOwner(prev => prev === row.owner.id ? null : row.owner.id)}
                 >
-                  <span className={`text-zinc-500 text-xs transition-transform flex-shrink-0 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
-
-                  {/* Name + type */}
-                  <div className="flex items-center gap-2 min-w-[140px]">
+                  {/* Top: arrow + name + type + plates */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-zinc-500 text-xs transition-transform flex-shrink-0 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
                     <span className="text-white font-semibold text-sm">{row.owner.name}</span>
-                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${TYPE_STYLE[row.owner.type]}`}>
+                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${TYPE_STYLE[row.owner.type]}`}>
                       {row.owner.type === 'PROPIO' ? 'Propio' : 'Afiliado'}
                     </span>
-                  </div>
-
-                  {/* Truck plates */}
-                  <div className="flex flex-wrap gap-1 flex-shrink-0">
                     {row.trucks.map(t => (
                       <span key={t.truckId}
-                        className="text-xs font-mono bg-zinc-800 text-zinc-300 border border-zinc-700 px-1.5 py-0.5 rounded">
+                        className="text-xs font-mono bg-zinc-800 text-zinc-300 border border-zinc-700 px-1.5 py-0.5 rounded flex-shrink-0">
                         {t.plate}
                       </span>
                     ))}
                   </div>
 
-                  {/* Spacer */}
-                  <div className="flex-1" />
-
-                  {/* Financial summary */}
+                  {/* Bottom: financial summary, always left-aligned */}
                   {(() => {
                     const ownerSaldo = row.trucks.reduce((sum, tr) => {
                       const { auruminSaldo, lpSaldo } = computeTruckSaldos(tr, row.owner.type, row.owner.isNPROwner)
@@ -305,15 +297,15 @@ export default function DuenosNominaClient({
                     }, 0)
                     const allLpPaid = row.trucks.filter(tr => tr.lpGross > 0).every(tr => tr.paidAt)
                     return (
-                      <div className="flex items-center gap-4 text-xs flex-wrap">
+                      <div className="flex items-center gap-4 text-xs flex-wrap pl-4">
                         {t.auruminGross > 0 && (
-                          <div className="text-right">
+                          <div>
                             <p className="text-zinc-500">Aurumin</p>
                             <p className="text-amber-400 font-semibold font-mono">${fmt(t.auruminGross)}</p>
                           </div>
                         )}
                         {t.lpGross > 0 && (
-                          <div className="text-right">
+                          <div>
                             <p className="text-zinc-500">LP</p>
                             <p className={`font-semibold font-mono ${allLpPaid ? 'text-zinc-500 line-through' : 'text-blue-400'}`}>
                               ${fmt(t.lpGross)}
@@ -322,18 +314,18 @@ export default function DuenosNominaClient({
                           </div>
                         )}
                         {totalGastos > 0 && (
-                          <div className="text-right">
+                          <div>
                             <p className="text-zinc-500">Gastos</p>
                             <p className="text-red-400 font-semibold font-mono">-${fmt(totalGastos)}</p>
                           </div>
                         )}
                         {hasTireDebt && (
-                          <div className="text-right">
+                          <div>
                             <p className="text-zinc-500">Cauchos debe</p>
                             <p className="text-orange-400 font-semibold font-mono">-${fmt(totalTireDebt)}</p>
                           </div>
                         )}
-                        <div className="text-right min-w-[80px]">
+                        <div className="min-w-[80px]">
                           <p className="text-zinc-500">Saldo</p>
                           <p className={`font-bold font-mono text-sm ${ownerSaldo < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
                             {ownerSaldo < 0 ? '-' : ''}${fmt(Math.abs(ownerSaldo))}
