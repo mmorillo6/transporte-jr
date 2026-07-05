@@ -14,12 +14,15 @@ export const metadata: Metadata = {
   },
   other: {
     'theme-color': '#09090b',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+    'apple-mobile-web-app-title': 'Transporte JR',
   },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className="h-full">
+    <html lang="es" className="h-full" style={{ backgroundColor: '#09090b' }}>
       <body className="h-full antialiased">{children}</body>
     </html>
   )
