@@ -529,11 +529,13 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
           const gLP      = tLP.reduce((s, t)      => s + (t.amount ?? 0), 0)
           const nprA     = Math.round(gAurumin * nprPct * 100) / 100
           const nprL     = Math.round(gLP      * nprPct * 100) / 100
-          // Sin driverWage — AFILIADO paga sus choferes directo
+          // PROPIO: driverWage se descuenta del neto; AFILIADO: paga chofer directo, es informativo
+          const isPropio = owner.type === 'PROPIO'
           const saldoA   = Math.round((
             (entry.saldoInicial ?? 0) + gAurumin
             - (entry.commissionFee ?? 0) - (entry.mechanicFee ?? 0) - (entry.adminFee ?? 0)
             - nprA - (entry.deductions ?? 0) - (entry.abono ?? 0)
+            - (isPropio ? (entry.driverWage ?? 0) : 0)
           ) * 100) / 100
           const saldoL   = Math.round((gLP - nprL) * 100) / 100
           const opExp    = (periodOpExpenses as any[]).filter((e: any) => e.truck?.plate === plate)
@@ -625,7 +627,11 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                             <Row label="Gastos operativos" value={-tb.commFee} />
                           )
                         )}
-                        {tb.driverWage > 0 && <Row label="Nómina chofer (directo)" value={tb.driverWage} informativo />}
+                        {tb.driverWage > 0 && (
+                          owner.type === 'PROPIO'
+                            ? <Row label="Nómina chofer" value={-tb.driverWage} />
+                            : <Row label="Nómina chofer (directo)" value={tb.driverWage} informativo />
+                        )}
                         {tb.mechFee > 0 && <Row label="Mecánica" value={-tb.mechFee} />}
                         {tb.adminFee > 0 && <Row label="Administrativo" value={-tb.adminFee} />}
                         <Row label={`${owner.nprPercent}% NPR`} value={-tb.nprA} />
