@@ -68,8 +68,17 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     diasChoferByTruck.set(choferTruck, (diasChoferByTruck.get(choferTruck) ?? 0) + d.totalHoras)
   }
 
-  // También incluir camiones PROPIO/NPR-owner con gastos pero sin viajes
+  // Identificar el camión NPR antes del loop principal para excluirlo
+  // (A15AE9Y se procesa por separado en la sección NPR con sus gastos incluidos)
+  const nprTruckPre = await prisma.truck.findFirst({
+    where: { plate: 'A15AE9Y' },
+    select: { id: true },
+  })
+  const nprTruckId = nprTruckPre?.id
+
+  // También incluir camiones PROPIO con gastos pero sin viajes
   // (ej. un camión en reparación que no trabajó pero sí tiene expenses)
+  // Se excluye A15AE9Y — sus gastos los maneja la sección NPR
   const extraExpTrucks = await prisma.expense.findMany({
     where: {
       truckId: { not: null },
@@ -80,7 +89,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     distinct: ['truckId'],
   })
   for (const { truckId } of extraExpTrucks) {
-    if (truckId && !byTruck.has(truckId)) {
+    if (truckId && truckId !== nprTruckId && !byTruck.has(truckId)) {
       byTruck.set(truckId, [])
       truckIds.push(truckId)
     }
@@ -336,10 +345,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     totalNprCollected += gross * (truck.owner.nprPercent / 100)
   }
 
-  const nprTruck = await prisma.truck.findFirst({
-    where: { plate: 'A15AE9Y' },
-    select: { id: true },
-  })
+  const nprTruck = nprTruckPre  // ya buscado antes del loop principal
 
   const nprExpenses = nprTruck ? await prisma.expense.findMany({
     where: { periodId, truckId: nprTruck.id },
@@ -347,7 +353,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   }) : []
   const totalNprExpenses = nprExpenses.reduce((s, e) => s + e.amount, 0)
 
-  if (nprTruck && totalNprCollected > 0) {
+  if (nprTruck && (totalNprCollected > 0 || totalNprExpenses > 0)) {
     let nprSaldoInicial: number
     if (currentSaldos.has(nprTruck.id)) {
       nprSaldoInicial = currentSaldos.get(nprTruck.id)!
