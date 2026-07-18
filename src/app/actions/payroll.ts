@@ -358,9 +358,18 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     if (currentSaldos.has(nprTruck.id)) {
       nprSaldoInicial = currentSaldos.get(nprTruck.id)!
     } else {
-      const prevNpr = prevByTruck.get(nprTruck.id)
+      // prevByTruck no incluye A15AE9Y cuando no tuvo viajes ni gastos en generaciones anteriores,
+      // así que consultamos directamente el período anterior para obtener el carry correcto
+      const prevNprEntry = await prisma.payrollEntry.findFirst({
+        where: {
+          truckId: nprTruck.id,
+          period: { endDate: { lt: period.startDate } },
+        },
+        orderBy: { period: { endDate: 'desc' } },
+        select: { netAmount: true, paidAt: true },
+      })
       nprSaldoInicial = 0
-      if (prevNpr && !prevNpr.paidAt) nprSaldoInicial = prevNpr.netAmount
+      if (prevNprEntry && !prevNprEntry.paidAt) nprSaldoInicial = prevNprEntry.netAmount
     }
     const nprAbono = currentAbonos.get(nprTruck.id) ?? 0
     const nprNet = Math.round((totalNprCollected - totalNprExpenses + nprSaldoInicial - nprAbono) * 100) / 100
