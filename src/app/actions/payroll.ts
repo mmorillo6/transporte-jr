@@ -95,6 +95,19 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     }
   }
 
+  // Incluir SIEMPRE todos los camiones activos del dueño NPR (José, excl. A15AE9Y)
+  // para que los carries no desaparezcan cuando no hay actividad en el período
+  const joseActiveTrucks = await prisma.truck.findMany({
+    where: { owner: { isNPROwner: true }, active: true },
+    select: { id: true },
+  })
+  for (const { id } of joseActiveTrucks) {
+    if (id !== nprTruckId && !byTruck.has(id)) {
+      byTruck.set(id, [])
+      truckIds.push(id)
+    }
+  }
+
   // Incluir camiones con días internos (trabajados o como chofer habitual) sin viajes ni gastos
   for (const truckId of new Set([...diasByTruck.keys(), ...diasChoferByTruck.keys()])) {
     if (!byTruck.has(truckId)) {
