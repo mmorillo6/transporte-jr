@@ -54,6 +54,13 @@ export async function sendEmailNotification({
   if (error) throw new Error(error.message)
 }
 
+export async function sendWhatsAppRaw(phone: string, apiKey: string, message: string) {
+  const digits = phone.replace(/\D/g, '')
+  const url = `https://api.callmebot.com/whatsapp.php?phone=${digits}&text=${encodeURIComponent(message)}&apikey=${apiKey}`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`CallMeBot error: ${res.status}`)
+}
+
 export async function sendWhatsAppNotification({
   phone,
   apiKey,
