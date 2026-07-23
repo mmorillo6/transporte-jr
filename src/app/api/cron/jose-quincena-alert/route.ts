@@ -12,8 +12,10 @@ export async function GET(req: NextRequest) {
   const veNow = new Date(now.getTime() - 4 * 60 * 60 * 1000)
   const [veYear, veMonth, veDay] = veNow.toISOString().split('T')[0].split('-').map(Number)
 
-  if (veDay !== 16 && veDay !== 17) {
-    return NextResponse.json({ skipped: true, reason: 'not day 16 or 17' })
+  // Avisa el día 16 y luego cada 3 días (19, 22, 25...) mientras siga sin cerrarse
+  const daysSince16 = veDay - 16
+  if (daysSince16 < 0 || daysSince16 % 3 !== 0) {
+    return NextResponse.json({ skipped: true, reason: 'not an alert day' })
   }
 
   // Primera quincena del mes en curso: del 1 al 15
@@ -44,8 +46,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'José phone or apiKey not configured' }, { status: 500 })
   }
 
+  const diasTranscurridos = veDay - 15
   const text = encodeURIComponent(
-    `⚠️ *Transporte JR*\nFernando aún no ha cerrado la quincena del 1 al 15. Ya estamos a día ${veDay}.`
+    `📋 *Transporte JR*\nLa quincena del 1 al 15 aún no ha sido cerrada en el sistema. Han pasado ${diasTranscurridos} día${diasTranscurridos === 1 ? '' : 's'} desde que finalizó.`
   )
   const digits = jose.phone.replace(/\D/g, '')
   const url = `https://api.callmebot.com/whatsapp.php?phone=${digits}&text=${text}&apikey=${jose.whatsappApiKey}`
