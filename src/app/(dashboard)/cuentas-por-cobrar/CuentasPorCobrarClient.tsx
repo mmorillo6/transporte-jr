@@ -27,6 +27,9 @@ type CxC = {
 }
 
 type DistRow = { cxcId: string; label: string; balance: number; allocated: number }
+type PayLine = { method: string; amount: string }
+
+const METHOD_OPTIONS = ['USDT', 'Transferencia', 'Efectivo', 'Zelle', 'Otro']
 
 export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) {
   const router = useRouter()
@@ -34,7 +37,7 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing]   = useState<CxC | null>(null)
   const [payingId, setPayingId] = useState<string | null>(null)
-  const [paymentAmount, setPaymentAmount] = useState('')
+  const [paymentLines, setPaymentLines] = useState<PayLine[]>([{ method: 'USDT', amount: '' }])
   const [expanded, setExpanded] = useState<string | null>(null)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
@@ -43,7 +46,7 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
   const [globalPayModal, setGlobalPayModal]   = useState<string | null>(null) // clientName
   const [globalPayAmount, setGlobalPayAmount] = useState('')
   const [globalPayDate, setGlobalPayDate]     = useState('')
-  const [globalPayMethod, setGlobalPayMethod] = useState('USDT')
+  const [globalPayLines, setGlobalPayLines] = useState<PayLine[]>([{ method: 'USDT', amount: '' }])
   const [globalPayNotes, setGlobalPayNotes]   = useState('')
   const [globalDist, setGlobalDist]           = useState<DistRow[]>([])
   const [globalPayError, setGlobalPayError]   = useState('')
@@ -107,10 +110,17 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
 
   async function handlePayment(e: React.FormEvent<HTMLFormElement>, cxcId: string) {
     e.preventDefault()
-    setLoading(true); setError('')
-    const res = await addPayment(cxcId, new FormData(e.currentTarget))
+    setError('')
+    const activeLines = paymentLines
+      .map(l => ({ method: l.method, amount: parseFloat(l.amount) }))
+      .filter(l => !isNaN(l.amount) && l.amount > 0)
+    if (!activeLines.length) { setError('Agrega al menos un monto'); return }
+    setLoading(true)
+    const fd = new FormData(e.currentTarget)
+    fd.set('lines', JSON.stringify(activeLines))
+    const res = await addPayment(cxcId, fd)
     if (res?.error) { setError(res.error); setLoading(false) }
-    else { setPayingId(null); setPaymentAmount(''); router.refresh(); setLoading(false) }
+    else { setPayingId(null); setPaymentLines([{ method: 'USDT', amount: '' }]); router.refresh(); setLoading(false) }
   }
 
   async function handleDelete(id: string) {
@@ -119,9 +129,20 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
   }
 
   function togglePaying(id: string) {
-    if (payingId === id) { setPayingId(null); setPaymentAmount(''); setError('') }
-    else { setPayingId(id); setPaymentAmount(''); setError('') }
+    if (payingId === id) { setPayingId(null); setPaymentLines([{ method: 'USDT', amount: '' }]); setError('') }
+    else { setPayingId(id); setPaymentLines([{ method: 'USDT', amount: '' }]); setError('') }
   }
+
+  function addPaymentLine() {
+    setPaymentLines(prev => [...prev, { method: 'Efectivo', amount: '' }])
+  }
+  function removePaymentLine(idx: number) {
+    setPaymentLines(prev => prev.filter((_, i) => i !== idx))
+  }
+  function updatePaymentLine(idx: number, patch: Partial<PayLine>) {
+    setPaymentLines(prev => prev.map((l, i) => i === idx ? { ...l, ...patch } : l))
+  }
+  const paymentTotal = paymentLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
 
   // ── Global payment helpers ──────────────────────────────────────────────────
 
@@ -147,11 +168,22 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
     setGlobalDist(rows)
     setGlobalPayAmount('')
     setGlobalPayDate(today)
-    setGlobalPayMethod('USDT')
+    setGlobalPayLines([{ method: 'USDT', amount: '' }])
     setGlobalPayNotes('')
     setGlobalPayError('')
     setGlobalPayModal(clientName)
   }
+
+  function addGlobalPayLine() {
+    setGlobalPayLines(prev => [...prev, { method: 'Efectivo', amount: '' }])
+  }
+  function removeGlobalPayLine(idx: number) {
+    setGlobalPayLines(prev => prev.filter((_, i) => i !== idx))
+  }
+  function updateGlobalPayLine(idx: number, patch: Partial<PayLine>) {
+    setGlobalPayLines(prev => prev.map((l, i) => i === idx ? { ...l, ...patch } : l))
+  }
+  const globalLinesTotal = globalPayLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
 
   function handleGlobalAmountChange(val: string) {
     setGlobalPayAmount(val)
@@ -176,13 +208,21 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
       setGlobalPayError(`La distribución suma $${distSum.toFixed(2)} pero el total es $${amount.toFixed(2)}`)
       return
     }
+    const activeLines = globalPayLines
+      .map(l => ({ method: l.method, amount: parseFloat(l.amount) || 0 }))
+      .filter(l => l.amount > 0)
+    const linesSum = Math.round(activeLines.reduce((s, l) => s + l.amount, 0) * 100) / 100
+    if (!activeLines.length || Math.abs(linesSum - amount) > 0.05) {
+      setGlobalPayError(`Los métodos de pago suman $${linesSum.toFixed(2)} pero el total es $${amount.toFixed(2)}`)
+      return
+    }
     setGlobalPayLoading(true)
     setGlobalPayError('')
     const res = await addGlobalPayment(
       globalPayModal!,
       amount,
       globalPayDate,
-      globalPayMethod,
+      activeLines,
       globalPayNotes,
       globalDist.map(r => ({ cxcId: r.cxcId, amount: r.allocated })),
     )
@@ -197,6 +237,7 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
   const globalDistSum = Math.round(globalDist.reduce((s, r) => s + r.allocated, 0) * 100) / 100
   const globalAmountNum = parseFloat(globalPayAmount)
   const globalSumOk = !isNaN(globalAmountNum) && Math.abs(globalDistSum - globalAmountNum) <= 0.05
+  const globalLinesOk = !isNaN(globalAmountNum) && globalLinesTotal > 0 && Math.abs(globalLinesTotal - globalAmountNum) <= 0.05
 
   return (
     <div className="space-y-4">
@@ -457,49 +498,61 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
                                 2. Registrar un <strong>EGRESO en Caja</strong> por el monto que se le devuelve a José.
                               </div>
                             )}
-                            <form onSubmit={e => handlePayment(e, c.id)} className="flex flex-wrap gap-3 items-end">
-                              <div className="flex-shrink-0">
-                                <p className="text-emerald-400 text-xs font-semibold mb-0.5">Registrando pago — {c.clientName}</p>
-                                <p className="text-zinc-500 text-xs">Saldo pendiente: <span className="text-amber-400 font-bold">${cxcBalance.toFixed(2)}</span></p>
+                            <form onSubmit={e => handlePayment(e, c.id)} className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-emerald-400 text-xs font-semibold mb-0.5">Registrando pago — {c.clientName}</p>
+                                  <p className="text-zinc-500 text-xs">Saldo pendiente: <span className="text-amber-400 font-bold">${cxcBalance.toFixed(2)}</span></p>
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-zinc-400 mb-1">Fecha *</label>
+                                  <input name="date" type="date" required defaultValue={today}
+                                    className="bg-zinc-700 border border-zinc-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" />
+                                </div>
                               </div>
-                              <div>
-                                <label className="block text-xs text-zinc-400 mb-1">Monto $ *</label>
-                                <input name="amount" type="number" step="0.01" min="0.01" required autoFocus
-                                  placeholder="0.00"
-                                  value={paymentAmount}
-                                  onChange={e => setPaymentAmount(e.target.value)}
-                                  className="w-32 bg-zinc-700 border border-zinc-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 placeholder:text-zinc-500" />
-                                {paymentAmount && parseFloat(paymentAmount) > cxcBalance && (
-                                  <p className="text-red-400 text-xs mt-1 w-48">
-                                    ⚠ ${parseFloat(paymentAmount).toFixed(2)} supera el saldo (${cxcBalance.toFixed(2)})
-                                  </p>
-                                )}
+
+                              {/* Líneas de pago: permite combinar efectivo + USDT en un mismo abono */}
+                              <div className="space-y-2">
+                                {paymentLines.map((line, idx) => (
+                                  <div key={idx} className="flex flex-wrap gap-2 items-center">
+                                    <input type="number" step="0.01" min="0.01" autoFocus={idx === 0}
+                                      placeholder="0.00"
+                                      value={line.amount}
+                                      onChange={e => updatePaymentLine(idx, { amount: e.target.value })}
+                                      className="w-32 bg-zinc-700 border border-zinc-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 placeholder:text-zinc-500" />
+                                    <select value={line.method}
+                                      onChange={e => updatePaymentLine(idx, { method: e.target.value })}
+                                      className="bg-zinc-700 border border-zinc-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
+                                      {METHOD_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                    {paymentLines.length > 1 && (
+                                      <button type="button" onClick={() => removePaymentLine(idx)}
+                                        className="text-zinc-600 hover:text-red-400 text-xs px-1.5 transition-colors">✕</button>
+                                    )}
+                                  </div>
+                                ))}
+                                <button type="button" onClick={addPaymentLine}
+                                  className="text-emerald-400 hover:text-emerald-300 text-xs font-medium transition-colors">
+                                  + Agregar otro método (ej. efectivo + USDT)
+                                </button>
                               </div>
-                              <div>
-                                <label className="block text-xs text-zinc-400 mb-1">Fecha *</label>
-                                <input name="date" type="date" required defaultValue={today}
-                                  className="bg-zinc-700 border border-zinc-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" />
+
+                              <div className="flex flex-wrap gap-3 items-end">
+                                <div>
+                                  <label className="block text-xs text-zinc-400 mb-1">Notas</label>
+                                  <input name="notes" placeholder="Referencia..."
+                                    className="w-36 bg-zinc-700 border border-zinc-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 placeholder:text-zinc-500" />
+                                </div>
+                                <button type="submit" disabled={loading || paymentTotal <= 0}
+                                  className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-lg px-4 py-2 text-sm transition-colors whitespace-nowrap">
+                                  {loading ? 'Guardando...' : `Confirmar cobro ($${paymentTotal.toFixed(2)})`}
+                                </button>
                               </div>
-                              <div>
-                                <label className="block text-xs text-zinc-400 mb-1">Método</label>
-                                <select name="method"
-                                  className="bg-zinc-700 border border-zinc-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
-                                  <option value="USDT">USDT</option>
-                                  <option value="Transferencia">Transferencia</option>
-                                  <option value="Efectivo">Efectivo</option>
-                                  <option value="Zelle">Zelle</option>
-                                  <option value="Otro">Otro</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-xs text-zinc-400 mb-1">Notas</label>
-                                <input name="notes" placeholder="Referencia..."
-                                  className="w-36 bg-zinc-700 border border-zinc-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 placeholder:text-zinc-500" />
-                              </div>
-                              <button type="submit" disabled={loading}
-                                className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-lg px-4 py-2 text-sm transition-colors whitespace-nowrap">
-                                {loading ? 'Guardando...' : 'Confirmar cobro'}
-                              </button>
+                              {paymentTotal > cxcBalance && (
+                                <p className="text-red-400 text-xs">
+                                  ⚠ ${paymentTotal.toFixed(2)} supera el saldo (${cxcBalance.toFixed(2)})
+                                </p>
+                              )}
                               {error && <p className="text-red-400 text-xs w-full">{error}</p>}
                             </form>
                           </td>
@@ -576,29 +629,45 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1.5">Método</label>
-                  <select
-                    value={globalPayMethod}
-                    onChange={e => setGlobalPayMethod(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500">
-                    <option value="USDT">USDT</option>
-                    <option value="Transferencia">Transferencia</option>
-                    <option value="Efectivo">Efectivo</option>
-                    <option value="Zelle">Zelle</option>
-                    <option value="Otro">Otro</option>
-                  </select>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1.5">Métodos de pago</label>
+                <div className="space-y-2">
+                  {globalPayLines.map((line, idx) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <input type="number" step="0.01" min="0.01" placeholder="0.00"
+                        value={line.amount}
+                        onChange={e => updateGlobalPayLine(idx, { amount: e.target.value })}
+                        className="w-28 bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500 placeholder:text-zinc-600" />
+                      <select value={line.method}
+                        onChange={e => updateGlobalPayLine(idx, { method: e.target.value })}
+                        className="flex-1 bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                        {METHOD_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      {globalPayLines.length > 1 && (
+                        <button type="button" onClick={() => removeGlobalPayLine(idx)}
+                          className="text-zinc-600 hover:text-red-400 text-xs px-1.5 transition-colors">✕</button>
+                      )}
+                    </div>
+                  ))}
+                  <button type="button" onClick={addGlobalPayLine}
+                    className="text-blue-400 hover:text-blue-300 text-xs font-medium transition-colors">
+                    + Agregar otro método (ej. efectivo + USDT)
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1.5">Notas / Referencia</label>
-                  <input
-                    placeholder="Referencia..."
-                    value={globalPayNotes}
-                    onChange={e => setGlobalPayNotes(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 placeholder:text-zinc-600"
-                  />
-                </div>
+                {!isNaN(globalAmountNum) && globalAmountNum > 0 && (
+                  <p className={`text-xs mt-1.5 ${globalLinesOk ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {globalLinesOk ? '✓' : ''} Suma de métodos: ${globalLinesTotal.toFixed(2)} / Total: ${globalAmountNum.toFixed(2)}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1.5">Notas / Referencia</label>
+                <input
+                  placeholder="Referencia..."
+                  value={globalPayNotes}
+                  onChange={e => setGlobalPayNotes(e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 placeholder:text-zinc-600"
+                />
               </div>
 
               {/* Distribution table */}
@@ -657,7 +726,7 @@ export default function CuentasPorCobrarClient({ cuentas }: { cuentas: CxC[] }) 
               </button>
               <button
                 onClick={handleGlobalSubmit}
-                disabled={globalPayLoading || !globalSumOk || !globalPayDate}
+                disabled={globalPayLoading || !globalSumOk || !globalLinesOk || !globalPayDate}
                 className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold rounded-xl px-5 py-2 text-sm transition-colors">
                 {globalPayLoading ? 'Guardando...' : 'Confirmar abono global'}
               </button>
