@@ -212,6 +212,11 @@ function resolveRouteName(supplier: string, origin: string): string | null {
   return MAP[s] ?? null
 }
 
+// Normaliza nombres de conductor para comparar (mayúsculas, sin acentos, espacios colapsados)
+function normDriverName(s: string): string {
+  return s.toUpperCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ')
+}
+
 export async function importTripsFromExcel(formData: FormData) {
   const session = await getSession()
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {
@@ -227,62 +232,83 @@ export async function importTripsFromExcel(formData: FormData) {
   const XLSX = await import('xlsx')
   const workbook = XLSX.read(buffer, { type: 'buffer' })
 
-  // ── Pre-scan: detectar si el archivo ya fue cargado ─────────────────────────
+  // Solo camiones y rutas activos — se necesitan tanto para el pre-scan como para la importación
+  const [trucks, routes] = await Promise.all([
+    prisma.truck.findMany({ where: { active: true }, select: { id: true, plate: true, driver: { select: { name: true } } } }),
+    prisma.route.findMany({ where: { active: true }, select: { id: true, name: true, rateType: true, rate: true, hasViatico: true, viaticoSingle: true, viaticoDouble: true } }),
+  ])
+  const truckByPlate = new Map(trucks.map(t => [t.plate.toUpperCase().replace(/\s+/g, ''), t]))
+
+  // ── Pre-scan: archivo duplicado + placas que no coinciden con el chofer asignado ──
   if (!confirmed) {
     const scanRows: any[] = XLSX.utils.sheet_to_json(
       workbook.Sheets[workbook.SheetNames[0]],
       { header: 1, defval: null }
     )
-    const tickets = scanRows.slice(10)
-      .filter((r: any[]) => r[4] && r[5])
-      .map((r: any[]) => String(r[4]).trim())
-      .filter(Boolean)
+    const dataRows = scanRows.slice(10).filter((r: any[]) => r[4] && r[5])
+    const tickets = dataRows.map((r: any[]) => String(r[4]).trim()).filter(Boolean)
 
-    if (tickets.length > 0) {
-      const existing = await prisma.trip.count({
-        where: { ticketNo: { in: tickets } },
-      })
-      const pct = Math.round((existing / tickets.length) * 100)
+    const existing = tickets.length > 0
+      ? await prisma.trip.count({ where: { ticketNo: { in: tickets } } })
+      : 0
+    const pct = tickets.length > 0 ? Math.round((existing / tickets.length) * 100) : 0
 
-      if (pct >= 30) {
-        // Detect date range from the file
-        const dates = scanRows.slice(10)
-          .filter((r: any[]) => r[4] && r[5])
-          .map((r: any[]) => {
-            const v = r[5]
-            if (typeof v === 'number') {
-              const d = XLSX.SSF.parse_date_code(v)
-              return new Date(d.y, d.m - 1, d.d)
-            }
-            return v instanceof Date ? v : new Date(String(v))
-          })
-          .filter((d: Date) => !isNaN(d.getTime())) as Date[]
-
-        const minDate = new Date(Math.min(...dates.map(d => d.getTime())))
-        const maxDate = new Date(Math.max(...dates.map(d => d.getTime())))
-        const fmt = (d: Date) => d.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })
-
-        return {
-          warning: true,
-          existingCount: existing,
-          totalCount: tickets.length,
-          pct,
-          dateRange: `${fmt(minDate)} — ${fmt(maxDate)}`,
+    // Placa trocada: el conductor que trae el archivo no es el chofer asignado a esa placa
+    // (así se detectaron los casos reales de tickets con la placa de otro camión muy parecida)
+    const mismatches: { ticketNo: string; date: string; plate: string; driverInFile: string; assignedDriver: string }[] = []
+    for (const r of dataRows) {
+      const plate = r[15] ? String(r[15]).toUpperCase().replace(/\s+/g, '').trim() : null
+      const driverInFile = r[13] ? String(r[13]).trim() : ''
+      if (!plate || !driverInFile) continue
+      const truck = truckByPlate.get(plate)
+      if (!truck?.driver?.name) continue
+      if (normDriverName(driverInFile) !== normDriverName(truck.driver.name)) {
+        const rawDate = r[5]
+        let dateLabel = String(rawDate)
+        if (typeof rawDate === 'number') {
+          const d = XLSX.SSF.parse_date_code(rawDate)
+          dateLabel = `${String(d.d).padStart(2, '0')}/${String(d.m).padStart(2, '0')}/${d.y}`
         }
+        mismatches.push({
+          ticketNo: r[4] ? String(r[4]).trim() : '',
+          date: dateLabel,
+          plate,
+          driverInFile,
+          assignedDriver: truck.driver.name,
+        })
+      }
+    }
+
+    if (pct >= 30 || mismatches.length > 0) {
+      const dates = dataRows
+        .map((r: any[]) => {
+          const v = r[5]
+          if (typeof v === 'number') {
+            const d = XLSX.SSF.parse_date_code(v)
+            return new Date(d.y, d.m - 1, d.d)
+          }
+          return v instanceof Date ? v : new Date(String(v))
+        })
+        .filter((d: Date) => !isNaN(d.getTime())) as Date[]
+
+      const fmt = (d: Date) => d.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit' })
+      const dateRange = dates.length > 0
+        ? `${fmt(new Date(Math.min(...dates.map(d => d.getTime()))))} — ${fmt(new Date(Math.max(...dates.map(d => d.getTime()))))}`
+        : ''
+
+      return {
+        warning: true,
+        existingCount: existing,
+        totalCount: tickets.length,
+        pct,
+        dateRange,
+        mismatches,
       }
     }
   }
   // ────────────────────────────────────────────────────────────────────────────
 
-  // Solo camiones y rutas activos
-  const [trucks, routes] = await Promise.all([
-    prisma.truck.findMany({ where: { active: true }, select: { id: true, plate: true } }),
-    prisma.route.findMany({ where: { active: true }, select: { id: true, name: true, rateType: true, rate: true, hasViatico: true, viaticoSingle: true, viaticoDouble: true } }),
-  ])
-
-  // Normalizar placas: sin espacios, mayúsculas
-  const truckByPlate = new Map(trucks.map(t => [t.plate.toUpperCase().replace(/\s+/g, ''), t]))
-  const routeByName  = new Map(routes.map(r => [r.name.toUpperCase().trim(), r]))
+  const routeByName = new Map(routes.map(r => [r.name.toUpperCase().trim(), r]))
 
   let created = 0
   let skipped = 0
