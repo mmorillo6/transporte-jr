@@ -20,7 +20,7 @@ export default async function DiasInternosPage({
   const [trucks, openPeriod] = await Promise.all([
     prisma.truck.findMany({
       where: { active: true },
-      select: { id: true, plate: true, driver: { select: { name: true } } },
+      select: { id: true, plate: true, ownerId: true, driver: { select: { name: true } } },
       orderBy: { plate: 'asc' },
     }),
     prisma.period.findFirst({

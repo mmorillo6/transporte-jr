@@ -64,6 +64,14 @@ export default async function TruckRelacionPage({
 
   if (!period || !entry) notFound()
 
+  // Horas internas trabajadas por este camión durante el período (no pasan por romana)
+  const diasInternos = await prisma.diasInternosEntry.findMany({
+    where: { truckId, fecha: { gte: period.startDate, lte: period.endDate } },
+    orderBy: { fecha: 'asc' },
+  })
+  const diasInternosHoras = diasInternos.reduce((s, d) => s + d.totalHoras, 0)
+  const diasInternosMonto = Math.round(diasInternosHoras * 20 * 100) / 100
+
   const truck   = entry.truck
   const e       = entry as any
 
@@ -87,7 +95,11 @@ export default async function TruckRelacionPage({
   const grossTripLuisPena = tripsLuisPena.reduce((s, t) => s + t.amount, 0)
   const nprPct      = (truck?.owner?.nprPercent ?? 10) / 100
   const isNPROwner  = truck?.owner?.isNPROwner ?? false
-  const nprAurumin  = Math.round(grossTripAurumin  * nprPct * 100) / 100
+  const isAfiliado  = truck?.owner?.type === 'AFILIADO'
+  // Las horas internas no tienen cliente propio (no son un Trip) — se suman al bloque Aurumin,
+  // igual que en la nómina real (payroll.ts las incluye en el grossAmount total del camión)
+  const grossAurumin = grossTripAurumin + diasInternosMonto
+  const nprAurumin  = Math.round(grossAurumin      * nprPct * 100) / 100
   const nprLuisPena = Math.round(grossTripLuisPena * nprPct * 100) / 100
 
   return (
@@ -217,6 +229,44 @@ export default async function TruckRelacionPage({
           </>
         )}
 
+        {/* Tabla de horas internas — no pasan por romana */}
+        {diasInternos.length > 0 && (
+          <div className="px-6 py-4 border-b border-zinc-800 print:border-zinc-200">
+            <h2 className="text-white font-semibold text-sm mb-3 print:text-black">Horas internas</h2>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-zinc-700 print:border-zinc-300">
+                  <th className="text-left text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Fecha</th>
+                  <th className="text-left text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Horario</th>
+                  <th className="text-left text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Actividad</th>
+                  <th className="text-right text-zinc-500 font-medium py-2 pr-3 print:text-zinc-500">Horas</th>
+                  <th className="text-right text-zinc-500 font-medium py-2 print:text-zinc-500">Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {diasInternos.map(d => (
+                  <tr key={d.id} className="border-b border-zinc-800/50 print:border-zinc-100">
+                    <td className="py-2 pr-3 text-zinc-300 print:text-zinc-700">{fmtDate(d.fecha)}</td>
+                    <td className="py-2 pr-3 text-zinc-400 font-mono print:text-zinc-600">{d.horaInicio}–{d.horaFin}</td>
+                    <td className="py-2 pr-3 text-zinc-300 print:text-zinc-700">{d.actividad}</td>
+                    <td className="py-2 pr-3 text-right text-zinc-300 print:text-zinc-700">{d.totalHoras.toFixed(2)}</td>
+                    <td className="py-2 text-right text-violet-400 font-mono print:text-violet-700">${fmt(d.totalHoras * 20)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-zinc-700 print:border-zinc-300">
+                  <td colSpan={3} className="py-2 pr-3 text-zinc-400 font-semibold print:text-zinc-500">
+                    Total ({diasInternos.length} registro{diasInternos.length === 1 ? '' : 's'})
+                  </td>
+                  <td className="py-2 pr-3 text-right text-white font-bold print:text-black">{diasInternosHoras.toFixed(2)}</td>
+                  <td className="py-2 text-right text-violet-400 font-bold font-mono print:text-violet-700">${fmt(diasInternosMonto)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+
         {/* Tabla de gastos */}
         {expenses.length > 0 && (
           <div className="px-6 py-4 border-b border-zinc-800 print:border-zinc-200">
@@ -264,12 +314,12 @@ export default async function TruckRelacionPage({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
             {/* ── Aurumin ── */}
-            {grossTripAurumin > 0 && (() => {
+            {grossAurumin > 0 && (() => {
               const saldoA = Math.round((
                 (e.saldoInicial ?? 0)
-                + grossTripAurumin
+                + grossAurumin
                 - (e.commissionFee ?? 0)
-                - e.driverWage
+                - (isAfiliado ? 0 : e.driverWage)
                 - (e.mechanicFee ?? 0)
                 - (e.adminFee ?? 0)
                 + (isNPROwner ? nprAurumin : -nprAurumin)
@@ -280,9 +330,10 @@ export default async function TruckRelacionPage({
                 <div className="space-y-1.5">
                   <p className="text-amber-400 text-xs font-bold uppercase tracking-widest print:text-amber-600">Aurumin</p>
                   {(e.saldoInicial ?? 0) !== 0 && <FinRow label="Saldo anterior" value={`${(e.saldoInicial??0)<0?'-':''}$${fmt(Math.abs(e.saldoInicial??0))}`} color={(e.saldoInicial??0)<0?'text-red-400':'text-emerald-400'} />}
-                  <FinRow label="Facturación"       value={`$${fmt(grossTripAurumin)}`}          color="text-white print:text-black" />
+                  {grossTripAurumin > 0 && <FinRow label="Facturación viajes"    value={`$${fmt(grossTripAurumin)}`}        color="text-white print:text-black" />}
+                  {diasInternosMonto > 0 && <FinRow label="Facturación horas internas" value={`$${fmt(diasInternosMonto)}`} color="text-white print:text-black" />}
                   {(e.commissionFee ?? 0) > 0 && <FinRow label="Gastos operativos"  value={`-$${fmt(e.commissionFee)}`}         color="text-red-400 print:text-red-700" />}
-                  {e.driverWage > 0           && <FinRow label="Nómina chofer"      value={`-$${fmt(e.driverWage)}`}            color="text-orange-400 print:text-orange-700" />}
+                  {e.driverWage > 0           && <FinRow label={`Nómina chofer${isAfiliado ? ' (paga el dueño directo)' : ''}`} value={isAfiliado ? `$${fmt(e.driverWage)}` : `-$${fmt(e.driverWage)}`} color={isAfiliado ? 'text-zinc-500 print:text-zinc-500' : 'text-orange-400 print:text-orange-700'} />}
                   {(e.mechanicFee ?? 0) > 0   && <FinRow label="Nómina mecánicos"   value={`-$${fmt(e.mechanicFee)}`}           color="text-purple-400 print:text-purple-700" />}
                   {(e.adminFee ?? 0) > 0      && <FinRow label="Administrativo"     value={`-$${fmt(e.adminFee)}`}              color="text-zinc-400 print:text-zinc-600" />}
                   {nprAurumin > 0             && <FinRow label={`${truck?.owner?.nprPercent ?? 10}% NPR`} value={`${isNPROwner ? '+' : '-'}$${fmt(nprAurumin)}`} color={isNPROwner ? 'text-emerald-400 print:text-emerald-700' : 'text-red-400 print:text-red-700'} />}
@@ -349,7 +400,7 @@ export default async function TruckRelacionPage({
             })()}
 
           {/* Total a cobrar */}
-          {(grossTripAurumin > 0 || grossTripLuisPena > 0 || (isNPROwner && (e.nprFee ?? 0) > 0)) && (
+          {(grossAurumin > 0 || grossTripLuisPena > 0 || (isNPROwner && (e.nprFee ?? 0) > 0)) && (
             <div className="mt-4 pt-3 border-t border-zinc-700 print:border-zinc-300 flex justify-between items-center">
               <span className="text-white font-bold print:text-black">Total a cobrar</span>
               <span className={`text-xl font-bold font-mono ${e.netAmount < 0 ? 'text-red-400 print:text-red-700' : 'text-amber-400 print:text-amber-600'}`}>

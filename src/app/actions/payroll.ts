@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
 import { getConfigValue } from './systemConfig'
 import { notifyPeriodReady } from './notify'
+import { SAN_CASIMIRO_OWNER_ID } from '@/lib/constants'
 import bcrypt from 'bcryptjs'
 
 // ─── Generar / recalcular nómina de un período ────────────────────────────────
@@ -250,7 +251,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     const isPropio    = truck.owner.type === 'PROPIO'
     const isAfiliado  = truck.owner.type === 'AFILIADO'
     const isNPROwner  = truck.owner.isNPROwner
-    const isLuisRivas = truck.owner.id === 'owner-sancasimiro'
+    const isLuisRivas = truck.owner.id === SAN_CASIMIRO_OWNER_ID
     const nprPct      = truck.owner.nprPercent / 100
 
     // Facturación — incluye días internos ($20/h)

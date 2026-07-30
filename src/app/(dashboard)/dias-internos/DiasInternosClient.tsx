@@ -2,8 +2,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getDiasInternosEntries, createDiasInternosEntry, updateDiasInternosEntry, deleteDiasInternosEntry, getDiasInternosDetections, createDiasInternosBulk } from '@/app/actions/diasInternos'
+import { SAN_CASIMIRO_OWNER_ID } from '@/lib/constants'
 
-type Truck = { id: string; plate: string; driver: { name: string } | null }
+type Truck = { id: string; plate: string; ownerId: string; driver: { name: string } | null }
 type Entry = {
   id: string; fecha: Date; truckId: string; conductor: string
   descripcion: string; actividad: string; horaInicio: string; horaFin: string
@@ -322,9 +323,15 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
                               <option key={t.id} value={t.id}>{t.plate}{t.driver ? ` — ${t.driver.name}` : ''}</option>
                             ))}
                           </select>
-                          {bulkSelected[truck.id].driverTruckId && (
-                            <p className="text-violet-400 text-xs">→ sueldo a {trucks.find(t => t.id === bulkSelected[truck.id].driverTruckId)?.plate}</p>
-                          )}
+                          {bulkSelected[truck.id].driverTruckId && (() => {
+                            const choferTruck = trucks.find(t => t.id === bulkSelected[truck.id].driverTruckId)
+                            const esSanCasimiro = choferTruck?.ownerId === SAN_CASIMIRO_OWNER_ID
+                            return (
+                              <p className="text-violet-400 text-xs">
+                                → sueldo ({esSanCasimiro ? '20%' : '$2.50/h'}) a {choferTruck?.plate}
+                              </p>
+                            )
+                          })()}
                         </div>
                       ) : (
                         <p className="text-zinc-500 text-xs truncate">{truck.driver?.name ?? '—'}</p>
@@ -435,11 +442,15 @@ export default function DiasInternosClient({ trucks }: { trucks: Truck[] }) {
                   <option key={t.id} value={t.id}>{t.plate}{t.driver ? ` — ${t.driver.name}` : ''}</option>
                 ))}
               </select>
-              {driverTruckId && (
-                <p className="text-violet-400 text-xs mt-1">
-                  El sueldo ($2.50/h) se cargará al camión {trucks.find(t => t.id === driverTruckId)?.plate}
-                </p>
-              )}
+              {driverTruckId && (() => {
+                const choferTruck = trucks.find(t => t.id === driverTruckId)
+                const esSanCasimiro = choferTruck?.ownerId === SAN_CASIMIRO_OWNER_ID
+                return (
+                  <p className="text-violet-400 text-xs mt-1">
+                    El sueldo ({esSanCasimiro ? '20% de lo generado por el camión' : '$2.50/h'}) se cargará al camión {choferTruck?.plate}
+                  </p>
+                )
+              })()}
             </div>
 
             <div className="grid grid-cols-3 gap-4">
