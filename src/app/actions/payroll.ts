@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
 import { getConfigValue } from './systemConfig'
 import { notifyPeriodReady } from './notify'
+import { notifyOwnersOfSensitiveAction } from '@/lib/notifications'
 import { SAN_CASIMIRO_OWNER_ID } from '@/lib/constants'
 import bcrypt from 'bcryptjs'
 
@@ -836,12 +837,22 @@ export async function reopenPeriod(periodId: string) {
     return { error: 'No autorizado' }
   }
 
-  await prisma.period.update({
+  const period = await prisma.period.update({
     where: { id: periodId },
     data: { status: 'OPEN' },
   })
 
   revalidatePath('/nomina')
+
+  const fmt = (d: Date) => d.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
+  try {
+    await notifyOwnersOfSensitiveAction(
+      `📋 *Transporte JR*\n${session.name} (${session.role === 'DUENO' ? 'Dueño' : 'Encargado'}) reabrió el período ${fmt(period.startDate)} — ${fmt(period.endDate)}, que ya estaba cerrado.`
+    )
+  } catch (e) {
+    console.error('notify reopenPeriod:', (e as Error).message)
+  }
+
   return { ok: true }
 }
 
@@ -1017,5 +1028,15 @@ export async function deletePeriodWithPassword(periodId: string, password: strin
   await prisma.period.delete({ where: { id: periodId } })
 
   revalidatePath('/nomina')
+
+  const fmt = (d: Date) => d.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
+  try {
+    await notifyOwnersOfSensitiveAction(
+      `⚠️ *Transporte JR*\n${session.name} (${session.role === 'DUENO' ? 'Dueño' : 'Encargado'}) eliminó el período ${fmt(period.startDate)} — ${fmt(period.endDate)} junto con sus viajes, gastos y nómina.`
+    )
+  } catch (e) {
+    console.error('notify deletePeriodWithPassword:', (e as Error).message)
+  }
+
   return { ok: true }
 }

@@ -61,6 +61,23 @@ export async function sendWhatsAppRaw(phone: string, apiKey: string, message: st
   if (!res.ok) throw new Error(`CallMeBot error: ${res.status}`)
 }
 
+// Avisa a los dueños (rol DUENO) sobre una acción sensible tomada por el encargado
+// (reabrir o eliminar un período). Best-effort: nunca debe tumbar la acción que la origina.
+export async function notifyOwnersOfSensitiveAction(text: string) {
+  const { prisma } = await import('@/lib/prisma')
+  const owners = await prisma.user.findMany({
+    where: { role: 'DUENO', active: true, phone: { not: null }, whatsappApiKey: { not: null } },
+    select: { phone: true, whatsappApiKey: true },
+  })
+  await Promise.all(
+    owners.map(o =>
+      sendWhatsAppRaw(o.phone!, o.whatsappApiKey!, text).catch(e =>
+        console.error('notifyOwnersOfSensitiveAction error:', (e as Error).message)
+      )
+    )
+  )
+}
+
 export async function sendWhatsAppNotification({
   phone,
   apiKey,
