@@ -633,6 +633,7 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
     prisma.period.findUnique({
       where: { id: periodId },
       select: {
+        status:    true,
         startDate: true,
         endDate:   true,
         trips: { select: { amount: true, route: { select: { clientName: true } } } },
@@ -642,6 +643,7 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
 
   if (entries.length === 0) return { error: 'Genera la nómina antes de cerrar el período' }
   if (!period) return { error: 'Período no encontrado' }
+  if (period.status === 'CLOSED') return { error: 'El período ya está cerrado' }
 
   const diasInternosAgg = await prisma.diasInternosEntry.aggregate({
     where: { fecha: { gte: period.startDate, lte: period.endDate } },

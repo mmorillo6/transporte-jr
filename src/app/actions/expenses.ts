@@ -34,9 +34,9 @@ export async function createExpense(formData: FormData) {
   const day = date.getDate()
   const month = date.getMonth()
   const year = date.getFullYear()
-  const isFirstHalf = day <= 16
-  const startDay = isFirstHalf ? 1 : 17
-  const endDay   = isFirstHalf ? 16 : new Date(year, month + 1, 0).getDate()
+  const isFirstHalf = day <= 15
+  const startDay = isFirstHalf ? 1 : 16
+  const endDay   = isFirstHalf ? 15 : new Date(year, month + 1, 0).getDate()
   const startDate = new Date(Date.UTC(year, month, startDay, 0, 0, 0))
   const endDate   = new Date(Date.UTC(year, month, endDay,   23, 59, 59))
 
@@ -112,9 +112,9 @@ export async function createExpensesForTrucks(
   if (!period) {
     const d = date
     const day = d.getUTCDate(), month = d.getUTCMonth(), year = d.getUTCFullYear()
-    const isFirstHalf = day <= 16
-    const startDay = isFirstHalf ? 1 : 17
-    const endDay = isFirstHalf ? 16 : new Date(year, month + 1, 0).getDate()
+    const isFirstHalf = day <= 15
+    const startDay = isFirstHalf ? 1 : 16
+    const endDay = isFirstHalf ? 15 : new Date(year, month + 1, 0).getDate()
     period = await prisma.period.create({
       data: {
         startDate: new Date(Date.UTC(year, month, startDay, 0, 0, 0)),

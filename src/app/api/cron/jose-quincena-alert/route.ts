@@ -59,7 +59,61 @@ export async function GET(req: NextRequest) {
     result.quincena = { skipped: true, reason: 'not an alert day' }
   }
 
-  // ── 2. Alertas operativas (CxC vencida, mantenimiento, cauchos, préstamos, caja) ──
+  // ── 2. Segunda quincena sin cerrar (16 al fin del mes anterior, solo a José) ──
+  // El período 16-fin siempre termina el último día de SU mes, así que se compara
+  // contra "el mes anterior al de hoy" — esto funciona sin importar el día del mes
+  // en que estemos, incluso si sigue sin cerrarse muchos días después de terminar.
+  {
+    const prevMonthDate = new Date(Date.UTC(veYear, veMonth - 2, 1))
+    const prevYear  = prevMonthDate.getUTCFullYear()
+    const prevMonth = prevMonthDate.getUTCMonth() // 0-indexed
+    const prevMonthLastDay = new Date(Date.UTC(prevYear, prevMonth + 1, 0)).getUTCDate()
+
+    const secondQStart    = new Date(Date.UTC(prevYear, prevMonth, 16, 0, 0, 0))
+    const secondQStartEnd = new Date(Date.UTC(prevYear, prevMonth, 16, 23, 59, 59, 999))
+    const secondQEndStart = new Date(Date.UTC(prevYear, prevMonth, prevMonthLastDay, 0, 0, 0))
+    const secondQEndEnd   = new Date(Date.UTC(prevYear, prevMonth, prevMonthLastDay, 23, 59, 59, 999))
+
+    // "Día después de que terminó" = día 1 del mes actual (día en que dispara por primera vez,
+    // igual que la primera quincena dispara el día 16 = el día siguiente al 15)
+    const dayAfterPeriodEnd = new Date(Date.UTC(veYear, veMonth - 1, 1))
+    const daysSincePeriodEnd = Math.floor((todayMid.getTime() - dayAfterPeriodEnd.getTime()) / 86400000)
+
+    if (daysSincePeriodEnd >= 0 && daysSincePeriodEnd % 3 === 0) {
+      const period2 = await prisma.period.findFirst({
+        where: {
+          startDate: { gte: secondQStart, lte: secondQStartEnd },
+          endDate:   { gte: secondQEndStart, lte: secondQEndEnd },
+        },
+        orderBy: { startDate: 'desc' },
+        select: { id: true, status: true },
+      })
+
+      if (period2?.status !== 'CLOSED') {
+        const jose = await prisma.user.findFirst({
+          where: { role: 'DUENO', active: true },
+          select: { name: true, phone: true, whatsappApiKey: true },
+        })
+        if (jose?.phone && jose.whatsappApiKey) {
+          const text = `📋 *Transporte JR*\nLa quincena del 16 al ${prevMonthLastDay} aún no ha sido cerrada en el sistema. Han pasado ${daysSincePeriodEnd} día${daysSincePeriodEnd === 1 ? '' : 's'} desde que finalizó.`
+          try {
+            await sendWhatsAppRaw(jose.phone, jose.whatsappApiKey, text)
+            result.quincena2 = { sent: true, to: jose.name }
+          } catch (e) {
+            result.quincena2 = { error: (e as Error).message }
+          }
+        } else {
+          result.quincena2 = { error: 'José phone or apiKey not configured' }
+        }
+      } else {
+        result.quincena2 = { skipped: true, reason: 'period already closed' }
+      }
+    } else {
+      result.quincena2 = { skipped: true, reason: 'not an alert day' }
+    }
+  }
+
+  // ── 3. Alertas operativas (CxC vencida, mantenimiento, cauchos, préstamos, caja) ──
   // Se envían tanto a José como a Fernando (cualquier DUEÑO/ENCARGADO activo con WhatsApp configurado)
   const opsMessage = await buildOperationalAlertsMessage(todayMid, veDay)
   if (opsMessage) {

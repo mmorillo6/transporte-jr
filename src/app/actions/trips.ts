@@ -11,9 +11,9 @@ async function getOrCreateActivePeriod(date: Date) {
   const month = date.getMonth()
   const year = date.getFullYear()
 
-  const isFirstHalf = day <= 16
-  const startDay = isFirstHalf ? 1 : 17
-  const endDay   = isFirstHalf ? 16 : new Date(year, month + 1, 0).getDate()
+  const isFirstHalf = day <= 15
+  const startDay = isFirstHalf ? 1 : 16
+  const endDay   = isFirstHalf ? 15 : new Date(year, month + 1, 0).getDate()
   const startDate = new Date(Date.UTC(year, month, startDay, 0, 0, 0))
   const endDate   = new Date(Date.UTC(year, month, endDay,   23, 59, 59))
 
@@ -146,14 +146,22 @@ export async function updateTrip(id: string, formData: FormData) {
 
   const amount = calcAmount(route.rateType, route.rate, netWeightKg)
 
+  // El viático depende de si este viaje fue el PRIMERO en crearse ese día para
+  // este camión (single) o no (double) — se usa el orden de creación (createdAt),
+  // no si "hay otros viajes ese día", para que editar el primer viaje del día
+  // (ej. corregir un dato) no lo convierta en double solo porque después se
+  // creó un segundo viaje.
   let viatico = 0
   if (route.hasViatico) {
     const dayStart = new Date(date); dayStart.setHours(0, 0, 0, 0)
     const dayEnd = new Date(date); dayEnd.setHours(23, 59, 59, 999)
-    const tripsToday = await prisma.trip.count({
-      where: { truckId, date: { gte: dayStart, lte: dayEnd }, id: { not: id } },
+    const earliestTripToday = await prisma.trip.findFirst({
+      where: { truckId, date: { gte: dayStart, lte: dayEnd } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
     })
-    viatico = tripsToday >= 1 ? route.viaticoDouble : route.viaticoSingle
+    const isFirstOfDay = !earliestTripToday || earliestTripToday.id === id
+    viatico = isFirstOfDay ? route.viaticoSingle : route.viaticoDouble
   }
 
   const period = await getOrCreateActivePeriod(date)
