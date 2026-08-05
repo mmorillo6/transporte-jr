@@ -256,6 +256,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
   const periodTons      = periodTrips.reduce((s, t) => s + (t.netWeightKg ?? 0), 0) / 1000
   const lastPaidPeriod  = periodHistory.find(p => p.period.status === 'CLOSED')
   const pendingPeriod   = periodHistory.find(p => p.period.status === 'OPEN')
+  const pendingNegative = !!pendingPeriod && pendingPeriod.netAmount < 0
 
   // Viajes por camión en el período actual
   const tripsByTruck = new Map<string, number>()
@@ -327,13 +328,22 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
           <p className="text-zinc-600 text-xs mt-2">{periodTons.toFixed(1)} ton</p>
         </div>
 
-        <div className={`rounded-2xl p-4 border ${pendingPeriod ? 'bg-amber-500/5 border-amber-500/20' : 'bg-zinc-900 border-zinc-800'}`}>
-          <p className="text-zinc-500 text-xs font-medium mb-2">Por cobrar (período abierto)</p>
-          <p className={`text-3xl font-bold ${pendingPeriod ? 'text-amber-400' : 'text-zinc-500'}`}>
-            ${pendingPeriod ? pendingPeriod.netAmount.toFixed(0) : '0'}
+        <div className={`rounded-2xl p-4 border ${
+          pendingNegative ? 'bg-red-500/5 border-red-500/20'
+          : pendingPeriod ? 'bg-amber-500/5 border-amber-500/20' : 'bg-zinc-900 border-zinc-800'
+        }`}>
+          <p className="text-zinc-500 text-xs font-medium mb-2">
+            {pendingNegative ? 'Adelanto recibido de más' : 'Por cobrar (período abierto)'}
+          </p>
+          <p className={`text-3xl font-bold ${pendingNegative ? 'text-red-400' : pendingPeriod ? 'text-amber-400' : 'text-zinc-500'}`}>
+            {pendingPeriod
+              ? pendingNegative ? `− $${Math.abs(pendingPeriod.netAmount).toFixed(0)}` : `$${pendingPeriod.netAmount.toFixed(0)}`
+              : '$0'}
           </p>
           <p className="text-zinc-600 text-xs mt-2">
-            {pendingPeriod ? `${pendingPeriod.tons.toFixed(1)} ton · bruto $${pendingPeriod.grossAmount.toFixed(0)}` : 'sin nómina aún'}
+            {pendingPeriod
+              ? pendingNegative ? 'Se descuenta del próximo período' : `${pendingPeriod.tons.toFixed(1)} ton · bruto $${pendingPeriod.grossAmount.toFixed(0)}`
+              : 'sin nómina aún'}
           </p>
         </div>
 
@@ -514,7 +524,11 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         )
 
         // Desglose por camión — AFILIADO: driverWage es informativo, NO se descuenta
-        const nprPct      = owner.nprPercent / 100
+        // IMPORTANTE: Facturación/NPR/saldo se anclan a los campos ya calculados y
+        // guardados en PayrollEntry (grossAmount, nprFee, netAmount) — NUNCA se
+        // recalculan de forma independiente sumando viajes, porque eso ignora
+        // ingresos que no son Trip (p.ej. días internos, $20/h) y desincroniza
+        // este desglose del total real de la nómina.
         const mecItems    = mecExpenses as { id: string; description: string; amount: number; truck: { plate: string } | null }[]
         const mecRepuesto = mecItems
           .filter(e => !e.description?.toLowerCase().includes('nómina') && !e.description?.toLowerCase().includes('nomina'))
@@ -522,22 +536,30 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
         const prestamosLP = ownerLoans.reduce((s, l) => s + l.balance, 0)
 
         const truckBreakdowns = openEntries.map(entry => {
-          const plate    = (entry as any).truck?.plate ?? ''
-          const tAurumin = periodTrips.filter(t => t.truckId === entry.truckId && (t as any).route?.clientName !== 'LUIS PEÑA')
-          const tLP      = periodTrips.filter(t => t.truckId === entry.truckId && (t as any).route?.clientName === 'LUIS PEÑA')
-          const gAurumin = tAurumin.reduce((s, t) => s + (t.amount ?? 0), 0)
-          const gLP      = tLP.reduce((s, t)      => s + (t.amount ?? 0), 0)
-          const nprA     = Math.round(gAurumin * nprPct * 100) / 100
-          const nprL     = Math.round(gLP      * nprPct * 100) / 100
-          // PROPIO: driverWage se descuenta del neto; AFILIADO: paga chofer directo, es informativo
-          const isPropio = owner.type === 'PROPIO'
-          const saldoA   = Math.round((
-            (entry.saldoInicial ?? 0) + gAurumin
-            - (entry.commissionFee ?? 0) - (entry.mechanicFee ?? 0) - (entry.adminFee ?? 0)
-            - nprA - (entry.deductions ?? 0) - (entry.abono ?? 0)
-            - (isPropio ? (entry.driverWage ?? 0) : 0)
-          ) * 100) / 100
-          const saldoL   = Math.round((gLP - nprL) * 100) / 100
+          const plate         = (entry as any).truck?.plate ?? ''
+          const tAurumin      = periodTrips.filter(t => t.truckId === entry.truckId && (t as any).route?.clientName !== 'LUIS PEÑA')
+          const tLP           = periodTrips.filter(t => t.truckId === entry.truckId && (t as any).route?.clientName === 'LUIS PEÑA')
+          const gAuruminTrips = tAurumin.reduce((s, t) => s + (t.amount ?? 0), 0)
+          const gLP           = tLP.reduce((s, t)      => s + (t.amount ?? 0), 0)
+          // gAurumin = grossAmount autoritativo menos LP — incluye días internos
+          // (que no aparecen en periodTrips) atribuidos al bucket Aurumin, igual
+          // que hace el backend (nunca los separa por cliente).
+          const gAurumin      = Math.max(0, Math.round(((entry.grossAmount ?? 0) - gLP) * 100) / 100)
+          const diasInternos  = Math.max(0, Math.round((gAurumin - gAuruminTrips) * 100) / 100)
+          const totalFact     = gAurumin + gLP
+
+          // Split informativo del NPR autoritativo (entry.nprFee) — nunca se
+          // recalcula el 5%/10% de forma independiente. nprA + nprL === entry.nprFee siempre.
+          const nprA = totalFact > 0
+            ? Math.round((entry.nprFee ?? 0) * gAurumin / totalFact * 100) / 100
+            : Math.round((entry.nprFee ?? 0) * 100) / 100
+          const nprL = Math.round(((entry.nprFee ?? 0) - nprA) * 100) / 100
+
+          const saldoL = Math.round((gLP - nprL) * 100) / 100
+          // saldoA se deriva por resta del netAmount autoritativo — no por re-suma
+          // de cada fee — así saldoA + saldoL === entry.netAmount siempre, por construcción.
+          const saldoA = Math.round(((entry.netAmount ?? 0) - saldoL) * 100) / 100
+
           const opExp    = (periodOpExpenses as any[]).filter((e: any) => e.truck?.plate === plate)
           const opTotal  = opExp.reduce((s: number, e: any) => s + e.amount, 0)
           const viaticos = Math.max(0, Math.round(((entry.commissionFee ?? 0) - opTotal) * 100) / 100)
@@ -545,7 +567,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
             truckId: entry.truckId, plate,
             driverWage:   entry.driverWage,
             saldoInicial: entry.saldoInicial ?? 0,
-            gAurumin, gLP, nprA, nprL,
+            gAurumin, gLP, nprA, nprL, diasInternos,
             commFee:    entry.commissionFee ?? 0,
             mechFee:    entry.mechanicFee   ?? 0,
             adminFee:   entry.adminFee      ?? 0,
@@ -601,6 +623,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                         <p className="text-amber-400 text-xs font-bold uppercase tracking-widest mb-3">Aurumin</p>
                         {tb.saldoInicial !== 0 && <Row label="Saldo anterior" value={tb.saldoInicial} />}
                         <Row label="Facturación" value={tb.gAurumin} highlight />
+                        {tb.diasInternos > 0.005 && <Row label="Incl. días internos" value={tb.diasInternos} informativo />}
                         {tb.commFee > 0 && (
                           tb.opExp.length > 0 || tb.viaticos > 0.005 ? (
                             <details className="border-b border-zinc-800/50 last:border-0">
@@ -654,7 +677,9 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                         <Row label={`${owner.nprPercent}% NPR`} value={-tb.nprL} />
                         <div className="flex justify-between items-center pt-2 mt-1 border-t border-zinc-700">
                           <span className="text-white font-semibold text-sm">Saldo LP</span>
-                          <span className="font-mono font-bold text-lg text-blue-400">${money(tb.saldoL)}</span>
+                          <span className={`font-mono font-bold text-lg ${tb.saldoL < 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                            {tb.saldoL < 0 ? `− $${money(Math.abs(tb.saldoL))}` : `$${money(tb.saldoL)}`}
+                          </span>
                         </div>
                       </div>
                     )}
@@ -663,9 +688,15 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
               ))}
             </div>
             {/* Total a cobrar */}
-            <div className="mt-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-3 flex justify-between items-center">
-              <span className="text-emerald-300 font-semibold text-sm">Total a cobrar este período</span>
-              <span className="text-emerald-400 font-bold text-xl font-mono">${money(totalACobrar)}</span>
+            <div className={`mt-3 rounded-2xl px-4 py-3 flex justify-between items-center border ${
+              totalACobrar < 0 ? 'bg-red-500/10 border-red-500/20' : 'bg-emerald-500/10 border-emerald-500/20'
+            }`}>
+              <span className={`font-semibold text-sm ${totalACobrar < 0 ? 'text-red-300' : 'text-emerald-300'}`}>
+                {totalACobrar < 0 ? 'Adelanto recibido de más (se descuenta el próximo período)' : 'Total a cobrar este período'}
+              </span>
+              <span className={`font-bold text-xl font-mono ${totalACobrar < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                {totalACobrar < 0 ? `− $${money(Math.abs(totalACobrar))}` : `$${money(totalACobrar)}`}
+              </span>
             </div>
           </div>
         )
