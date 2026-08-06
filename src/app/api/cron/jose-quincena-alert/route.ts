@@ -121,18 +121,21 @@ export async function GET(req: NextRequest) {
       where: { role: { in: ['DUENO', 'ENCARGADO'] }, active: true, phone: { not: null }, whatsappApiKey: { not: null } },
       select: { name: true, phone: true, whatsappApiKey: true },
     })
-    const sent: string[] = []
-    const failed: string[] = []
-    for (const r of recipients) {
+    // En paralelo, no secuencial — mismo motivo que notify.ts: sin esto, un
+    // solo destinatario lento bloquea a los que siguen en la lista.
+    const outcomes = await Promise.all(recipients.map(async r => {
       try {
         await sendWhatsAppRaw(r.phone!, r.whatsappApiKey!, opsMessage)
-        sent.push(r.name)
+        return { name: r.name, ok: true as const }
       } catch (e) {
         console.error(`CallMeBot error for ${r.name}:`, (e as Error).message)
-        failed.push(r.name)
+        return { name: r.name, ok: false as const }
       }
+    }))
+    result.operational = {
+      sent:   outcomes.filter(o => o.ok).map(o => o.name),
+      failed: outcomes.filter(o => !o.ok).map(o => o.name),
     }
-    result.operational = { sent, failed }
   } else {
     result.operational = { skipped: true, reason: 'nothing to report' }
   }

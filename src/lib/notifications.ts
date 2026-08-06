@@ -4,6 +4,19 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM = process.env.RESEND_FROM ?? 'Transporte JR <noreply@baro.cash>'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://transporte.vercel.app'
 
+// CallMeBot puede tardar mucho o quedarse colgado — sin timeout, una sola llamada
+// lenta bloquea (o mata, en un loop secuencial) el envío al resto de destinatarios.
+const CALLMEBOT_TIMEOUT_MS = 15_000
+async function fetchWithTimeout(url: string, timeoutMs = CALLMEBOT_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export async function sendEmailNotification({
   to,
   name,
@@ -57,7 +70,7 @@ export async function sendEmailNotification({
 export async function sendWhatsAppRaw(phone: string, apiKey: string, message: string) {
   const digits = phone.replace(/\D/g, '')
   const url = `https://api.callmebot.com/whatsapp.php?phone=${digits}&text=${encodeURIComponent(message)}&apikey=${apiKey}`
-  const res = await fetch(url)
+  const res = await fetchWithTimeout(url)
   if (!res.ok) throw new Error(`CallMeBot error: ${res.status}`)
 }
 
@@ -94,6 +107,6 @@ export async function sendWhatsAppNotification({
   )
   const digits = phone.replace(/\D/g, '')
   const url = `https://api.callmebot.com/whatsapp.php?phone=${digits}&text=${text}&apikey=${apiKey}`
-  const res = await fetch(url)
+  const res = await fetchWithTimeout(url)
   if (!res.ok) throw new Error(`CallMeBot error: ${res.status}`)
 }

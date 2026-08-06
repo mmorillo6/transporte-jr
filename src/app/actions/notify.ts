@@ -53,10 +53,11 @@ export async function notifyPeriodReady(periodId: string): Promise<NotifyResult>
   const seen = new Set<string>()
   const users = [...ownerUsers, ...encargados].filter(u => { if (seen.has(u.id)) return false; seen.add(u.id); return true })
 
-  const sent: NotifyResult['sent'] = []
-  const skipped: NotifyResult['skipped'] = []
-
-  for (const user of users) {
+  // Notificar a todos EN PARALELO — antes era secuencial (uno por uno) y, sin
+  // timeout en CallMeBot, una sola llamada lenta bloqueaba a todos los que
+  // seguían en la lista. Con ~10 destinatarios eso podía tomar minutos y la
+  // función serverless se cortaba a la mitad, dejando a la mayoría sin avisar.
+  const results = await Promise.all(users.map(async user => {
     let emailOk = false
     let waOk = false
 
@@ -81,12 +82,17 @@ export async function notifyPeriodReady(periodId: string): Promise<NotifyResult>
       }
     }
 
-    if (emailOk || waOk) {
-      sent.push({ name: user.name, email: emailOk, whatsapp: waOk })
-    } else {
-      skipped.push({ name: user.name, reason: 'No se pudo enviar por ningún canal' })
-    }
-  }
+    return emailOk || waOk
+      ? { kind: 'sent' as const, name: user.name, email: emailOk, whatsapp: waOk }
+      : { kind: 'skipped' as const, name: user.name, reason: 'No se pudo enviar por ningún canal' }
+  }))
+
+  const sent: NotifyResult['sent'] = results
+    .filter((r): r is Extract<typeof r, { kind: 'sent' }> => r.kind === 'sent')
+    .map(({ name, email, whatsapp }) => ({ name, email, whatsapp }))
+  const skipped: NotifyResult['skipped'] = results
+    .filter((r): r is Extract<typeof r, { kind: 'skipped' }> => r.kind === 'skipped')
+    .map(({ name, reason }) => ({ name, reason }))
 
   if (users.length === 0) {
     skipped.push({ name: '—', reason: 'No hay dueños/afiliados vinculados a camiones de este período' })

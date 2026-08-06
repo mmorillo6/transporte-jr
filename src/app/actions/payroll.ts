@@ -1,5 +1,6 @@
 'use server'
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
 import { getConfigValue } from './systemConfig'
@@ -739,8 +740,12 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
   revalidatePath('/cuentas-por-cobrar')
   revalidatePath('/reportes/deuda')
 
-  // Notificar automáticamente al cerrar — errores de envío no bloquean el cierre
-  notifyPeriodReady(periodId).catch(e => console.error('Auto-notify failed:', e))
+  // Notificar automáticamente al cerrar — errores de envío no bloquean el cierre.
+  // Usamos after() (no una promesa suelta): en serverless, una promesa sin
+  // await puede quedar cortada apenas la función responde. after() le pide a
+  // la plataforma (waitUntil) que mantenga viva la invocación hasta que esto
+  // termine, sin retrasar la respuesta de closePeriod.
+  after(() => notifyPeriodReady(periodId).catch(e => console.error('Auto-notify failed:', e)))
 
   return { ok: true, prestamos, cxcCreadas }
 }
