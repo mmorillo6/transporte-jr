@@ -134,6 +134,15 @@ export default function RomanaClient({ openPeriodId, systemConfig = [], owners =
     ...preview.trips.filter(t => !t.truckId && !t.duplicate).map(t => t.plate),
     ...preview.unknownProveedores.flatMap(up => up.rows).filter(r => !r.truckId && !r.duplicate).map(r => r.plate),
   ])] : []
+  // Camión + fecha detectados como días internos (ticket $0 en la romana) en este archivo —
+  // recordatorio para cargar las horas reales en /dias-internos antes de generar la relación.
+  const diasInternosDetectados = preview
+    ? [...new Map(
+        preview.trips
+          .filter(t => !t.duplicate && t.routeName.toUpperCase().includes('DIAS INTERNOS'))
+          .map(t => [`${t.plate}|${t.date.slice(0, 10)}`, { plate: t.plate, date: t.date.slice(0, 10) }])
+      ).values()]
+    : []
   // plateMappings: placa errónea → truckId del camión correcto
   const [plateMappings, setPlateMappings] = useState<Record<string, string>>({})
   const [sugerenciasRechazadas, setSugerenciasRechazadas] = useState<Set<string>>(new Set())
@@ -309,41 +318,52 @@ export default function RomanaClient({ openPeriodId, systemConfig = [], owners =
 
               <StepLink
                 n={2}
+                href="/dias-internos"
+                label="Cargar días internos manualmente"
+                sublabel={
+                  diasInternosDetectados.length > 0
+                    ? `Este archivo trae ${diasInternosDetectados.length} camión-día por horario (TRONCAL/H66/PLANTA) sin horas cargadas: ${diasInternosDetectados.map(d => `${d.plate} (${d.date})`).join(', ')}. Ve a Días Internos y regístralas — la romana no las cobra sola.`
+                    : '¿Hubo algún camión trabajando interno (troncal/planta) que no generó ticket en la romana? La romana solo detecta los que sí tienen ticket — revisa y cárgalo a mano si falta.'
+                }
+              />
+
+              <StepLink
+                n={3}
                 href={resultado.periodId ? `/nomina/${resultado.periodId}` : '/nomina'}
                 label="Generar la relación"
                 sublabel="Abre el período → botón «Generar relación» → revisa que los montos cuadren"
               />
 
               <StepLink
-                n={3}
+                n={4}
                 href={resultado.periodId ? `/nomina/${resultado.periodId}` : '/nomina'}
                 label="Ingresar gastos comunes"
                 sublabel="Nómina mecánicos ($175/carro), Starlink, admin — se aplican a todos los camiones"
               />
 
               <StepLink
-                n={4}
+                n={5}
                 href="/cuentas-por-cobrar"
                 label="Registrar cobros de Aurumin / Luis Peña"
                 sublabel="¿Pagaron o abonaron algo? Regístralo aquí — se reflejará en Caja automáticamente"
               />
 
               <StepLink
-                n={5}
+                n={6}
                 href={resultado.periodId ? `/nomina/${resultado.periodId}` : '/nomina'}
                 label="Marcar choferes como pagados"
                 sublabel="En «Relación final — choferes» usa «Pagar todos» o marca uno por uno con el método"
               />
 
               <StepLink
-                n={6}
+                n={7}
                 href={resultado.periodId ? `/nomina/${resultado.periodId}` : '/nomina'}
                 label="Cerrar el período"
                 sublabel="Botón «Cerrar período» — solo cuando todo esté revisado y pagado"
               />
 
               <StepLink
-                n={7}
+                n={8}
                 href={resultado.periodId ? `/nomina/${resultado.periodId}` : '/nomina'}
                 label="Notificar a los dueños"
                 sublabel="Envía el resumen por email y WhatsApp a cada propietario (requiere período cerrado)"

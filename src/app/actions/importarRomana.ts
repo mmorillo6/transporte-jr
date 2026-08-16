@@ -133,8 +133,11 @@ function resolveRoute(proveedor: string, procedencia: string): string | null {
   const prov = proveedor.trim().toUpperCase()
   const proc = procedencia.trim().toUpperCase()
 
-  // Viaje por horario interno (TRONCAL, H66, PLANTA en procedencia)
-  if (HOURLY_KEYWORDS.some(kw => proc === kw || proc.includes(kw))) {
+  // Viaje por horario interno (TRONCAL, H66, PLANTA en procedencia).
+  // Se normaliza quitando guiones/espacios/puntos ("H-66", "H 66" → "H66")
+  // porque la romana no siempre escribe la palabra clave igual.
+  const procKey = proc.replace(/[^A-Z0-9]/g, '')
+  if (HOURLY_KEYWORDS.some(kw => procKey === kw || procKey.includes(kw))) {
     return 'DIAS INTERNOS (PLANTA)'
   }
 
@@ -437,7 +440,7 @@ export async function parseRomana(base64: string, periodId?: string): Promise<Ro
 
     // Detectar si alguna procedencia parece TRONCAL/H66/PLANTA (fuzzy)
     const likelyHourly = rows.some(row => {
-      const proc = row.procedencia.toUpperCase().replace(/\s+/g, '')
+      const proc = row.procedencia.toUpperCase().replace(/[^A-Z0-9]/g, '')
       return ['TRONCAL', 'H66', 'PLANTA'].some(kw =>
         proc.includes(kw) || levenshtein(proc, kw) <= 2
       )
