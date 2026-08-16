@@ -28,8 +28,8 @@ export default function LoginPage() {
         <div className="flex justify-center mb-10">
           <Image
             src="/assets/logos/logo-full.png"
-            alt="Transporte José Rodríguez"
-            width={1219}
+            alt="Transporte JR"
+            width={1222}
             height={386}
             priority
             className="w-full max-w-[480px] h-auto"
