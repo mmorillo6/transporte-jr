@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { getSession } from '@/lib/session'
 
 const ESTERIL_RATE     = 100   // $100 por viaje (flete)
-const ESTERIL_WAGE     = 10    // $10 sueldo chofer por viaje de estéril
+const ESTERIL_WAGE     = 20    // $20 sueldo chofer por viaje de estéril
 
 async function getOrCreateEsterilRoute(clientName: 'AURUMIN' | 'LUIS PEÑA') {
   const name = `MATERIAL ESTERIL - ${clientName}`
