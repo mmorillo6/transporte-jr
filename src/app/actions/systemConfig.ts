@@ -3,7 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/session'
 import { revalidatePath } from 'next/cache'
 
-export type ConfigKey = 'adminFeePerTruck' | 'laFeViatico' | 'nuevoCallaoDoubleViatico'
+export type ConfigKey =
+  | 'adminFeePerTruck'
+  | 'laFeViatico'
+  | 'nuevoCallaoDoubleViatico'
+  | 'diasInternosRate'
+  | 'diasInternosChoferRate'
 
 export type GastoDefault = { description: string; category: string; amount: string; includeAfiliados: boolean }
 

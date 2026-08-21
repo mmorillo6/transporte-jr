@@ -49,6 +49,10 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   if (!period) return { error: 'Período no encontrado' }
   if (period.status === 'CLOSED') return { error: 'El período está cerrado. Reabre primero para recalcular.' }
 
+  // Tarifas de días internos — editables por Fernando en Romana → Parámetros globales
+  const diasInternosRate       = await getConfigValue('diasInternosRate')       || 20
+  const diasInternosChoferRate = await getConfigValue('diasInternosChoferRate') || 2.50
+
   // Agrupar viajes por camión
   const byTruck = new Map<string, typeof period.trips>()
   for (const trip of period.trips) {
@@ -57,8 +61,8 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
 
   const truckIds = Array.from(byTruck.keys())
 
-  // Días internos del período — bruto ($20/h) va al camión trabajado (truckId),
-  // chofer ($2.50/h) va al camión habitual del sustituto (driverTruckId) si está definido
+  // Días internos del período — bruto (diasInternosRate) va al camión trabajado (truckId),
+  // chofer (diasInternosChoferRate) va al camión habitual del sustituto (driverTruckId) si está definido
   const diasInternosAll = await prisma.diasInternosEntry.findMany({
     where: { fecha: { gte: period.startDate, lte: period.endDate } },
     select: { truckId: true, totalHoras: true, driverTruckId: true },
@@ -257,10 +261,10 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     const isLuisRivas = truck.owner.id === SAN_CASIMIRO_OWNER_ID
     const nprPct      = truck.owner.nprPercent / 100
 
-    // Facturación — incluye días internos ($20/h)
+    // Facturación — incluye días internos (diasInternosRate $/h)
     const diasHoras   = diasByTruck.get(truckId) ?? 0
     const totalTons   = trips.reduce((s, t) => s + (t.netWeightKg ?? 0) / 1000, 0)
-    const grossAmount = trips.reduce((s, t) => s + t.amount, 0) + diasHoras * 20
+    const grossAmount = trips.reduce((s, t) => s + t.amount, 0) + diasHoras * diasInternosRate
     const viaticos    = 0  // Fernando entra viáticos como gasto VIATICO manual
 
     // NPR — siempre se calcula; para isNPROwner (José) se SUMA al neto (ingreso NPR)
@@ -270,7 +274,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     const diasChoferHoras = diasChoferByTruck.get(truckId) ?? 0
     const driverWageCalc = isLuisRivas
       ? (grossAmount - nprFee) * 0.20
-      : trips.reduce((s, t) => s + (t.route?.driverWage ?? 0), 0) + diasChoferHoras * 2.50
+      : trips.reduce((s, t) => s + (t.route?.driverWage ?? 0), 0) + diasChoferHoras * diasInternosChoferRate
     const driverWage = currentWageOverrides.get(truckId) ?? driverWageCalc
 
     // Mecánica y admin — solo PROPIO con viajes Aurumin (incluye José)
@@ -358,7 +362,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   for (const [truckId, trips] of byTruck) {
     const truck = truckMap.get(truckId)
     if (!truck || truck.owner.isNPROwner || !truck.owner.nprContributor) continue
-    const gross = trips.reduce((s, t) => s + t.amount, 0) + (diasByTruck.get(truckId) ?? 0) * 20
+    const gross = trips.reduce((s, t) => s + t.amount, 0) + (diasByTruck.get(truckId) ?? 0) * diasInternosRate
     totalNprCollected += gross * (truck.owner.nprPercent / 100)
   }
 
@@ -651,7 +655,8 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
     where: { fecha: { gte: period.startDate, lte: period.endDate } },
     _sum: { totalHoras: true },
   })
-  const diasInternosBilling = (diasInternosAgg._sum.totalHoras ?? 0) * 20
+  const diasInternosRateClose = (await getConfigValue('diasInternosRate')) || 20
+  const diasInternosBilling = (diasInternosAgg._sum.totalHoras ?? 0) * diasInternosRateClose
 
   // Carros con saldo negativo — procesar según disposición elegida
   const negativos = entries.filter(e => e.netAmount < 0 && !e.cashEntryId)
@@ -784,7 +789,8 @@ export async function getChecklistData(periodId: string) {
   ])
 
   const diasInternosHoras   = diasInternosAgg._sum.totalHoras ?? 0
-  const diasInternosBilling = diasInternosHoras * 20
+  const diasInternosRateChecklist = (await getConfigValue('diasInternosRate')) || 20
+  const diasInternosBilling = diasInternosHoras * diasInternosRateChecklist
 
   return {
     payrollCount:         entries.length,
