@@ -210,8 +210,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   const ownerLoanApplied = new Set<string>()
 
   // ── Saldo inicial: netAmount del período anterior por camión ──────────────────
-  // Siempre se hereda completo (deuda o saldo a favor) — el saldo final de una
-  // quincena es el saldo inicial de la siguiente, sin excepción.
+  // Solo se hereda si era negativo (deuda) o si era positivo y no se ha pagado
   const allPrevEntries = await prisma.payrollEntry.findMany({
     where: {
       truckId: { in: truckIds },
@@ -302,13 +301,12 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     if (currentSaldos.has(truckId)) {
       saldoInicial = currentSaldos.get(truckId)!
     } else {
-      // El saldo final de una quincena SIEMPRE es el saldo inicial de la siguiente,
-      // sin importar si quedó marcado como "pagado" — marcarlo pagado es un paso
-      // administrativo de cierre, no una confirmación de que el excedente se
-      // entregó en efectivo. Si de verdad se pagó, eso se refleja como abono
-      // (que ya resta del netAmount), no borrando el arrastre.
       const prev = prevByTruck.get(truckId)
-      saldoInicial = prev ? prev.netAmount : 0
+      saldoInicial = 0
+      if (prev) {
+        if (prev.netAmount < 0)       saldoInicial = prev.netAmount
+        else if (!prev.paidAt)        saldoInicial = prev.netAmount
+      }
     }
 
     // Abono: conservar el valor que ya tenía en este período (Fernando lo ajusta manualmente)
