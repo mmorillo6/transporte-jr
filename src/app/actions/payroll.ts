@@ -215,7 +215,7 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   const ownerLoanApplied = new Set<string>()
 
   // ── Saldo inicial: netAmount del período anterior por camión ──────────────────
-  // Solo se hereda si era negativo (deuda) o si era positivo y no se ha pagado
+  // Siempre se hereda completo — ver nota junto a "saldoInicial = prev ? ..." más abajo.
   const allPrevEntries = await prisma.payrollEntry.findMany({
     where: {
       truckId: { in: truckIds },
@@ -306,12 +306,13 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     if (currentSaldos.has(truckId)) {
       saldoInicial = currentSaldos.get(truckId)!
     } else {
+      // El saldo final de una quincena siempre es el saldo inicial de la
+      // siguiente. Ya no se mira "paidAt" — markPayrollEntryPaid y
+      // markAllPeriodPaid garantizan que si algo quedó en netAmount es
+      // porque de verdad no se pagó (absorben el saldo en abono al marcar
+      // pagado), así que no hay riesgo de resucitar saldos ya saldados.
       const prev = prevByTruck.get(truckId)
-      saldoInicial = 0
-      if (prev) {
-        if (prev.netAmount < 0)       saldoInicial = prev.netAmount
-        else if (!prev.paidAt)        saldoInicial = prev.netAmount
-      }
+      saldoInicial = prev ? prev.netAmount : 0
     }
 
     // Abono: conservar el valor que ya tenía en este período (Fernando lo ajusta manualmente)
@@ -880,9 +881,19 @@ export async function markPayrollEntryPaid(id: string, paymentMethod: string) {
   const entry = await prisma.payrollEntry.findUnique({ where: { id } })
   if (!entry) return { error: 'Entrada no encontrada' }
 
+  // Si quedaba saldo a favor sin pagar, absorberlo en abono y dejar netAmount
+  // en 0 — así "marcado pagado" siempre significa que de verdad no queda nada
+  // pendiente, y el arrastre a la siguiente quincena no pierde el residuo.
+  const positivo = (entry.netAmount ?? 0) > 0
   await prisma.payrollEntry.update({
     where: { id },
-    data: { paidAt: new Date(), paymentMethod },
+    data: {
+      paidAt: new Date(),
+      paymentMethod,
+      ...(positivo
+        ? { abono: { increment: entry.netAmount }, netAmount: 0 }
+        : {}),
+    },
   })
 
   revalidatePath(`/nomina/${entry.periodId}`)
@@ -969,10 +980,18 @@ export async function markAllPeriodPaid(periodId: string, paymentMethod: string)
     return { error: 'No autorizado' }
   }
 
-  await prisma.payrollEntry.updateMany({
-    where: { periodId, paidAt: null },
-    data: { paidAt: new Date(), paymentMethod },
-  })
+  // Igual que markPayrollEntryPaid pero en bloque: a cada entrada con saldo
+  // a favor sin pagar se le absorbe el saldo en abono y queda netAmount en 0,
+  // para que "marcar todos pagado" no borre residuos que en realidad no se
+  // pagaron (ej. redondeos al pagar en efectivo/USDT).
+  await prisma.$executeRaw`
+    UPDATE "PayrollEntry"
+    SET "abono"     = "abono" + GREATEST("netAmount", 0),
+        "netAmount" = CASE WHEN "netAmount" > 0 THEN 0 ELSE "netAmount" END,
+        "paidAt"        = now(),
+        "paymentMethod" = ${paymentMethod}
+    WHERE "periodId" = ${periodId} AND "paidAt" IS NULL
+  `
 
   revalidatePath(`/nomina/${periodId}`)
   return { ok: true }
