@@ -206,12 +206,12 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
           <button
             onClick={() => { setDeletePassword(''); setShowDelete(true) }}
             className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900 hover:bg-red-950 border border-zinc-700 hover:border-red-800 text-zinc-500 hover:text-red-400 rounded-lg text-sm transition-colors"
-            title="Eliminar relación"
+            title="Eliminar período"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
-            <span className="hidden sm:inline">Eliminar relación</span>
+            <span className="hidden sm:inline">Eliminar período</span>
           </button>
         )}
       </div>
@@ -362,7 +362,7 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
             <div className="px-5 py-4 border-b border-zinc-800 flex items-center gap-3">
               <span className="text-red-500 text-xl">⚠</span>
               <div>
-                <h2 className="text-white font-semibold text-base">Eliminar relación</h2>
+                <h2 className="text-white font-semibold text-base">Eliminar período</h2>
                 <p className="text-zinc-500 text-xs mt-0.5">Esta acción no se puede deshacer</p>
               </div>
             </div>
