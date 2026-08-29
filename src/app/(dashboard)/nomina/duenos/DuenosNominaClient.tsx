@@ -452,6 +452,35 @@ export default function DuenosNominaClient({
                                     {truck.netAmount < 0 ? '-' : ''}${fmt(Math.abs(truck.netAmount))}
                                   </span>
                                 </div>
+                                {/* Botón pago NPR (USDT) — mismo mecanismo que el pago Aurumin */}
+                                {payFor?.entryId === truck.payrollEntryId && payFor.currency === 'USDT' ? (
+                                  <div className="flex gap-1 pt-1" onClick={e => e.stopPropagation()}>
+                                    <input
+                                      type="number" min="0" step="0.01"
+                                      value={payAmt}
+                                      onChange={e => setPayAmt(e.target.value)}
+                                      placeholder="Monto $"
+                                      className="flex-1 bg-zinc-700 border border-zinc-600 text-white text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-violet-500 w-0"
+                                      autoFocus
+                                    />
+                                    <button
+                                      disabled={paying.has(truck.payrollEntryId)}
+                                      onClick={() => handlePayment(truck.payrollEntryId, 'USDT')}
+                                      className="bg-violet-500 hover:bg-violet-400 text-zinc-950 text-xs font-bold rounded-lg px-2.5 py-1.5 transition-colors disabled:opacity-50">
+                                      ✓
+                                    </button>
+                                    <button onClick={() => { setPayFor(null); setPayAmt('') }}
+                                      className="bg-zinc-700 hover:bg-zinc-600 text-zinc-400 text-xs rounded-lg px-2 py-1.5 transition-colors">
+                                      ✕
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={e => { e.stopPropagation(); setPayFor({ entryId: truck.payrollEntryId, currency: 'USDT', plate: truck.plate, ownerName: row.owner.name }); setPayAmt(truck.netAmount.toFixed(2)); setConfirmPay(false) }}
+                                    className="w-full text-xs text-violet-400 hover:text-violet-300 border border-violet-500/20 hover:border-violet-500/40 rounded-lg py-1.5 transition-colors mt-1">
+                                    + Registrar pago NPR (USDT)
+                                  </button>
+                                )}
                               </div>
                             )}
 

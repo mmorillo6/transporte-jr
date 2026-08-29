@@ -4,6 +4,7 @@ import { getSession } from '@/lib/session'
 import { prisma } from '@/lib/prisma'
 import NominaActions from './NominaActions'
 import CrearPeriodoBtn from './CrearPeriodoBtn'
+import DeletePeriodButton from './DeletePeriodButton'
 
 async function getPeriods() {
   const periods = await prisma.period.findMany({
@@ -103,12 +104,17 @@ export default async function NominaPage() {
                 {formatShort(activePeriod.startDate)} — {formatShort(activePeriod.endDate)}
               </p>
             </div>
-            <Link
-              href={`/nomina/${activePeriod.id}`}
-              className="text-xs text-amber-400 hover:text-amber-300 border border-amber-500/30 hover:border-amber-400/50 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap"
-            >
-              Abrir período →
-            </Link>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Link
+                href={`/nomina/${activePeriod.id}`}
+                className="text-xs text-amber-400 hover:text-amber-300 border border-amber-500/30 hover:border-amber-400/50 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap"
+              >
+                Abrir período →
+              </Link>
+              {['DUENO', 'ENCARGADO'].includes(session.role) && (
+                <DeletePeriodButton periodId={activePeriod.id} />
+              )}
+            </div>
           </div>
 
           {/* Progress bar */}

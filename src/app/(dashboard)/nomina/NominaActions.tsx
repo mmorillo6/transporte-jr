@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { generatePayroll, closePeriod, reopenPeriod } from '@/app/actions/payroll'
 import { toast } from 'sonner'
+import DeletePeriodButton from './DeletePeriodButton'
 
 export default function NominaActions({
   periodId,
@@ -72,6 +73,8 @@ export default function NominaActions({
           Reabrir
         </button>
       )}
+
+      <DeletePeriodButton periodId={periodId} />
     </div>
   )
 }
