@@ -167,6 +167,8 @@ export default function DuenosNominaClient({
       mechFee: acc.mechFee + row.totals.mechFee,
       adminFee: acc.adminFee + row.totals.adminFee,
       nprFee: acc.nprFee + row.totals.nprFee,
+      // NPR del dueño NPR es ingreso, no gasto — se separa para no inflar "Gastos" (ver memoria)
+      nprGasto: acc.nprGasto + (row.owner.isNPROwner ? 0 : row.totals.nprFee),
       driverWage: acc.driverWage + row.totals.driverWage,
       deductions: acc.deductions + row.totals.deductions,
       saldoInicial: acc.saldoInicial + row.totals.saldoInicial,
@@ -174,7 +176,7 @@ export default function DuenosNominaClient({
       netAmount: acc.netAmount + row.totals.netAmount,
       totalTons: acc.totalTons + row.totals.totalTons,
     }),
-    { auruminGross: 0, lpGross: 0, commFee: 0, mechFee: 0, adminFee: 0, nprFee: 0,
+    { auruminGross: 0, lpGross: 0, commFee: 0, mechFee: 0, adminFee: 0, nprFee: 0, nprGasto: 0,
       driverWage: 0, deductions: 0, saldoInicial: 0, abono: 0, netAmount: 0, totalTons: 0 }
   )
 
@@ -258,7 +260,10 @@ export default function DuenosNominaClient({
           {ownerRows.map(row => {
             const isOpen = openOwner === row.owner.id
             const t = row.totals
-            const totalGastos = t.commFee + t.mechFee + t.adminFee + t.nprFee + t.driverWage + t.deductions
+            // Para el dueño NPR (José) el NPR es INGRESO, no un costo — no se
+            // cuenta dentro de "Gastos" (ver memoria: NPR nunca es gasto para
+            // el dueño NPR, solo para quienes lo pagan).
+            const totalGastos = t.commFee + t.mechFee + t.adminFee + (row.owner.isNPROwner ? 0 : t.nprFee) + t.driverWage + t.deductions
             const hasTireDebt = row.tireDebts.length > 0
             const totalTireDebt = row.tireDebts.reduce((s, d) => s + d.balance, 0)
 
@@ -665,7 +670,7 @@ export default function DuenosNominaClient({
                 <span className="text-amber-400">Aurumin: ${fmt(grandTotals.auruminGross)}</span>
                 {grandTotals.lpGross > 0 && <span className="text-blue-400">LP: ${fmt(grandTotals.lpGross)}</span>}
                 <span className="text-red-400">
-                  Gastos: -${fmt(grandTotals.commFee + grandTotals.mechFee + grandTotals.adminFee + grandTotals.nprFee + grandTotals.driverWage + grandTotals.deductions)}
+                  Gastos: -${fmt(grandTotals.commFee + grandTotals.mechFee + grandTotals.adminFee + grandTotals.nprGasto + grandTotals.driverWage + grandTotals.deductions)}
                 </span>
               </div>
             </div>
