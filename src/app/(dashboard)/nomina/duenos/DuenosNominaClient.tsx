@@ -170,6 +170,9 @@ export default function DuenosNominaClient({
       // NPR del dueño NPR es ingreso, no gasto — se separa para no inflar "Gastos" (ver memoria)
       nprGasto: acc.nprGasto + (row.owner.isNPROwner ? 0 : row.totals.nprFee),
       driverWage: acc.driverWage + row.totals.driverWage,
+      // Nómina chofer de AFILIADOS es solo referencia, nunca se descuenta — se
+      // separa para no inflar "Gastos" (ver memoria: intocable, confirmado varias veces)
+      driverWageGasto: acc.driverWageGasto + (row.owner.type === 'AFILIADO' ? 0 : row.totals.driverWage),
       deductions: acc.deductions + row.totals.deductions,
       saldoInicial: acc.saldoInicial + row.totals.saldoInicial,
       abono: acc.abono + row.totals.abono,
@@ -177,7 +180,7 @@ export default function DuenosNominaClient({
       totalTons: acc.totalTons + row.totals.totalTons,
     }),
     { auruminGross: 0, lpGross: 0, commFee: 0, mechFee: 0, adminFee: 0, nprFee: 0, nprGasto: 0,
-      driverWage: 0, deductions: 0, saldoInicial: 0, abono: 0, netAmount: 0, totalTons: 0 }
+      driverWage: 0, driverWageGasto: 0, deductions: 0, saldoInicial: 0, abono: 0, netAmount: 0, totalTons: 0 }
   )
 
   function handlePeriodChange(id: string) {
@@ -238,7 +241,7 @@ export default function DuenosNominaClient({
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
             <p className="text-zinc-500 text-xs">Total gastos</p>
             <p className="text-red-400 font-bold text-lg mt-1">
-              ${fmt(grandTotals.commFee + grandTotals.mechFee + grandTotals.adminFee + grandTotals.nprFee + grandTotals.driverWage + grandTotals.deductions)}
+              ${fmt(grandTotals.commFee + grandTotals.mechFee + grandTotals.adminFee + grandTotals.nprGasto + grandTotals.driverWageGasto + grandTotals.deductions)}
             </p>
           </div>
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
@@ -263,7 +266,11 @@ export default function DuenosNominaClient({
             // Para el dueño NPR (José) el NPR es INGRESO, no un costo — no se
             // cuenta dentro de "Gastos" (ver memoria: NPR nunca es gasto para
             // el dueño NPR, solo para quienes lo pagan).
-            const totalGastos = t.commFee + t.mechFee + t.adminFee + (row.owner.isNPROwner ? 0 : t.nprFee) + t.driverWage + t.deductions
+            // Para AFILIADOS, la nómina de chofer es solo de referencia — ellos
+            // pagan a su chofer por su cuenta, nunca se les descuenta del saldo
+            // real (ver memoria: intocable, se ha confirmado varias veces).
+            const isAfiliadoRow = row.owner.type === 'AFILIADO'
+            const totalGastos = t.commFee + t.mechFee + t.adminFee + (row.owner.isNPROwner ? 0 : t.nprFee) + (isAfiliadoRow ? 0 : t.driverWage) + t.deductions
             const hasTireDebt = row.tireDebts.length > 0
             const totalTireDebt = row.tireDebts.reduce((s, d) => s + d.balance, 0)
 
@@ -670,7 +677,7 @@ export default function DuenosNominaClient({
                 <span className="text-amber-400">Aurumin: ${fmt(grandTotals.auruminGross)}</span>
                 {grandTotals.lpGross > 0 && <span className="text-blue-400">LP: ${fmt(grandTotals.lpGross)}</span>}
                 <span className="text-red-400">
-                  Gastos: -${fmt(grandTotals.commFee + grandTotals.mechFee + grandTotals.adminFee + grandTotals.nprGasto + grandTotals.driverWage + grandTotals.deductions)}
+                  Gastos: -${fmt(grandTotals.commFee + grandTotals.mechFee + grandTotals.adminFee + grandTotals.nprGasto + grandTotals.driverWageGasto + grandTotals.deductions)}
                 </span>
               </div>
             </div>
