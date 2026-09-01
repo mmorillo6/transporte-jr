@@ -128,17 +128,23 @@ export default function DuenosNominaClient({
     const nprSignAurumin = isNPROwner ? nprAurumin : -nprAurumin
     const nprSignLP      = isNPROwner ? nprLP      : -nprLP
     // Afiliados pagan sus choferes directo — driverWage es informativo, no se descuenta
+    // Si el camión no facturó Aurumin esta quincena pero sí Luis Peña, los gastos
+    // compartidos (gastos op, chofer, mecánica, admin) se descuentan del lado
+    // Luis Peña en vez de Aurumin — "el descuento se le hace a Luis Peña" (ver
+    // memoria: project_reglas_intocables_nomina.md, confirmado 2026-08-31).
+    const costsGoToLP = truck.auruminGross === 0 && truck.lpGross > 0
+    const sharedCosts = truck.commFee + (isAfiliado ? 0 : truck.driverWage) + truck.mechFee + truck.adminFee
     let auruminSaldo = Math.round((
       (truck.saldoInicial ?? 0)
-      + truck.auruminGross - truck.commFee - (isAfiliado ? 0 : truck.driverWage)
-      - truck.mechFee - truck.adminFee + nprSignAurumin - truck.abono
+      + truck.auruminGross - (costsGoToLP ? 0 : sharedCosts)
+      + nprSignAurumin - truck.abono
     ) * 100) / 100
     // LP cubre el déficit de Aurumin cuando ya fue pagado en efectivo
     if (truck.paidAt && auruminSaldo < 0) auruminSaldo = 0
     const lpSaldo = truck.paidAt
       ? 0
-      : Math.round((truck.lpGross + nprSignLP - truck.deductions) * 100) / 100
-    return { auruminSaldo, lpSaldo, nprAurumin, nprLP }
+      : Math.round((truck.lpGross + nprSignLP - truck.deductions - (costsGoToLP ? sharedCosts : 0)) * 100) / 100
+    return { auruminSaldo, lpSaldo, nprAurumin, nprLP, costsGoToLP }
   }
 
   async function handlePayment(entryId: string, currency: 'EFECTIVO' | 'USDT', confirmed = false) {
@@ -354,8 +360,12 @@ export default function DuenosNominaClient({
 
                     {/* Per-truck breakdown */}
                     {row.trucks.map(truck => {
-                      const { auruminSaldo, lpSaldo, nprAurumin, nprLP } = computeTruckSaldos(truck, row.owner.type, row.owner.isNPROwner)
-                      const lpRawSaldo = Math.round((truck.lpGross - nprLP - truck.deductions) * 100) / 100
+                      const { auruminSaldo, lpSaldo, nprAurumin, nprLP, costsGoToLP } = computeTruckSaldos(truck, row.owner.type, row.owner.isNPROwner)
+                      const isAfiliadoTruck = row.owner.type === 'AFILIADO'
+                      const sharedCostsForLP = costsGoToLP
+                        ? truck.commFee + (isAfiliadoTruck ? 0 : truck.driverWage) + truck.mechFee + truck.adminFee
+                        : 0
+                      const lpRawSaldo = Math.round((truck.lpGross - nprLP - truck.deductions - sharedCostsForLP) * 100) / 100
 
                       return (
                         <div key={truck.truckId} className="space-y-3">
@@ -396,14 +406,14 @@ export default function DuenosNominaClient({
                                   />
                                 )}
                                 <FinRow label="Facturación"     value={`$${fmt(truck.auruminGross)}`}   color="text-white" />
-                                {truck.commFee > 0    && <FinRow label="Gastos op."     value={`-$${fmt(truck.commFee)}`}    color="text-red-400" />}
-                                {truck.driverWage > 0 && (
+                                {!costsGoToLP && truck.commFee > 0    && <FinRow label="Gastos op."     value={`-$${fmt(truck.commFee)}`}    color="text-red-400" />}
+                                {!costsGoToLP && truck.driverWage > 0 && (
                                   row.owner.type === 'AFILIADO'
                                     ? <FinRow label="Nóm. chofer (directo)" value={`$${fmt(truck.driverWage)}`} color="text-zinc-500" />
                                     : <FinRow label="Nóm. chofer"           value={`-$${fmt(truck.driverWage)}`} color="text-orange-400" />
                                 )}
-                                {truck.mechFee > 0    && <FinRow label="Nóm. mecánico" value={`-$${fmt(truck.mechFee)}`}    color="text-purple-400" />}
-                                {truck.adminFee > 0   && <FinRow label="Administrativo" value={`-$${fmt(truck.adminFee)}`}  color="text-zinc-400" />}
+                                {!costsGoToLP && truck.mechFee > 0    && <FinRow label="Nóm. mecánico" value={`-$${fmt(truck.mechFee)}`}    color="text-purple-400" />}
+                                {!costsGoToLP && truck.adminFee > 0   && <FinRow label="Administrativo" value={`-$${fmt(truck.adminFee)}`}  color="text-zinc-400" />}
                                 {nprAurumin > 0 && (row.owner.isNPROwner
                                   ? <FinRow label={`${row.owner.nprPercent}% NPR (ingreso)`} value={`+$${fmt(nprAurumin)}`} color="text-emerald-400" />
                                   : <FinRow label={`${row.owner.nprPercent}% NPR`}           value={`-$${fmt(nprAurumin)}`} color="text-red-400" />
@@ -512,6 +522,17 @@ export default function DuenosNominaClient({
                                   ? <FinRow label={`${row.owner.nprPercent}% NPR (ingreso)`} value={`+$${fmt(nprLP)}`} color="text-emerald-400" />
                                   : <FinRow label={`${row.owner.nprPercent}% NPR`}           value={`-$${fmt(nprLP)}`} color="text-red-400" />
                                 )}
+                                {/* Camión sin facturación Aurumin esta quincena — sus gastos
+                                    compartidos se descuentan aquí, contra Luis Peña (ver
+                                    memoria: project_reglas_intocables_nomina.md) */}
+                                {costsGoToLP && truck.commFee > 0    && <FinRow label="Gastos op."     value={`-$${fmt(truck.commFee)}`}    color="text-red-400" />}
+                                {costsGoToLP && truck.driverWage > 0 && (
+                                  isAfiliadoTruck
+                                    ? <FinRow label="Nóm. chofer (directo)" value={`$${fmt(truck.driverWage)}`} color="text-zinc-500" />
+                                    : <FinRow label="Nóm. chofer"           value={`-$${fmt(truck.driverWage)}`} color="text-orange-400" />
+                                )}
+                                {costsGoToLP && truck.mechFee > 0    && <FinRow label="Nóm. mecánico" value={`-$${fmt(truck.mechFee)}`}    color="text-purple-400" />}
+                                {costsGoToLP && truck.adminFee > 0   && <FinRow label="Administrativo" value={`-$${fmt(truck.adminFee)}`}  color="text-zinc-400" />}
                                 {truck.deductions > 0 && <FinRow label="Repuesto/Préstamo" value={`-$${fmt(truck.deductions)}`} color="text-red-400" />}
                                 <div className="border-t border-zinc-700 pt-1.5 flex justify-between items-center">
                                   <span className="text-white text-xs font-semibold">Saldo LP</span>

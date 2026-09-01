@@ -134,13 +134,13 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   })
   const truckMap = new Map(trucks.map(t => [t.id, t]))
 
-  // ── Camiones PROPIO con viajes Aurumin este período ─────────────────────────
-  // Solo se consideran activos para el pool los propios con viajes Aurumin
-  // (excluye camiones que solo trabajaron rutas Luis Peña este período)
-  // Los días internos también cuentan como trabajo Aurumin para mecánica y admin
+  // ── Camiones PROPIO activos este período (Aurumin, Luis Peña o días internos) ──
+  // Mecánica y admin se cobran a todo propio que trabajó en algo esta quincena,
+  // sin importar el cliente — si solo hizo Luis Peña, el descuento se aplica del
+  // lado Luis Peña (ver DuenosNominaClient.tsx). Solo quedan exentos los propios
+  // totalmente inactivos (sin viajes de ningún tipo ni días internos).
   const propiosConAurumin = new Set([
     ...period.trips
-      .filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
       .filter(t => truckMap.get(t.truckId)?.owner.type === 'PROPIO')
       .map(t => t.truckId),
     ...Array.from(diasByTruck.keys())
@@ -473,10 +473,9 @@ export async function getPayrollParams(periodId: string): Promise<PayrollParams 
   })
   const truckMap = new Map(trucks.map(t => [t.id, t]))
 
-  // Calcular active count para admin fee
+  // Calcular active count para admin fee — cualquier actividad cuenta, no solo Aurumin
   const propiosConAurumin = new Set(
     period.trips
-      .filter(t => (t.route as any)?.clientName !== 'LUIS PEÑA')
       .filter(t => truckMap.get(t.truckId)?.owner.type === 'PROPIO')
       .map(t => t.truckId)
   )
