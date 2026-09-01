@@ -379,14 +379,8 @@ export default function DuenosNominaClient({
 
                           {/* Aurumin + LP side-by-side */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {/* Aurumin column — se muestra si hay facturación O cualquier
-                                costo/carry real (gastos, chofer, mecánica, admin, saldo
-                                anterior), no solo cuando facturó. Si no, el camión que no
-                                viajó Aurumin esta quincena pero sí tiene gastos/carry
-                                quedaba con el detalle escondido, aunque el total sí los
-                                incluyera (ver caso Fernando/A11AG8U 2026-08-31). */}
-                            {(truck.auruminGross > 0 || truck.commFee > 0 || truck.driverWage > 0
-                              || truck.mechFee > 0 || truck.adminFee > 0 || (truck.saldoInicial ?? 0) !== 0) && (
+                            {/* Aurumin column */}
+                            {truck.auruminGross > 0 && (
                               <div className="bg-zinc-800/40 rounded-xl p-3 space-y-1.5">
                                 <p className="text-amber-400 text-xs font-bold uppercase tracking-widest">Aurumin</p>
                                 {(truck.saldoInicial ?? 0) !== 0 && (
