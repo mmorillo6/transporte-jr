@@ -274,7 +274,8 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     const diasChoferHoras = diasChoferByTruck.get(truckId) ?? 0
     const driverWageCalc = isLuisRivas
       ? (grossAmount - nprFee) * 0.20
-      : trips.reduce((s, t) => s + (t.route?.driverWage ?? 0), 0) + diasChoferHoras * diasInternosChoferRate
+      // Material estéril: sueldo por viaje editable manualmente (t.viatico), el resto de rutas usa el valor fijo de la ruta
+      : trips.reduce((s, t) => s + (t.route?.name?.startsWith('MATERIAL ESTERIL') ? (t.viatico ?? t.route.driverWage ?? 0) : (t.route?.driverWage ?? 0)), 0) + diasChoferHoras * diasInternosChoferRate
     const driverWage = currentWageOverrides.get(truckId) ?? driverWageCalc
 
     // Mecánica y admin — solo PROPIO con viajes Aurumin (incluye José)

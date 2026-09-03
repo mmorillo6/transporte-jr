@@ -30,6 +30,7 @@ export async function createMaterialEsterilEntries(entries: {
   nViajes:    number
   clientName: 'AURUMIN' | 'LUIS PEÑA'
   periodId:   string
+  driverWage?: number       // sueldo chofer por viaje — editable manualmente, default $20
 }[]) {
   const session = await getSession()
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role))
@@ -42,13 +43,14 @@ export async function createMaterialEsterilEntries(entries: {
 
   const trips = entries.flatMap(e => {
     const route = e.clientName === 'LUIS PEÑA' ? routeLuisPena : routeAurumin
-    // Crear N viajes de $100 cada uno con sueldo $10
+    const wage  = e.driverWage ?? ESTERIL_WAGE
+    // Crear N viajes de $100 cada uno con el sueldo indicado (a criterio de quien registra)
     return Array.from({ length: e.nViajes }, () => ({
       date:     new Date(e.fecha + 'T12:00:00'),
       truckId:  e.truckId,
       routeId:  route.id,
       amount:   ESTERIL_RATE,
-      viatico:  ESTERIL_WAGE,
+      viatico:  wage,
       periodId: e.periodId,
     }))
   })
@@ -80,6 +82,18 @@ export async function deleteMaterialEsterilTrip(tripId: string) {
   if (!session || !['DUENO', 'ENCARGADO'].includes(session.role))
     return { error: 'No autorizado' }
   await prisma.trip.delete({ where: { id: tripId } })
+  revalidatePath('/dias-internos')
+  revalidatePath('/nomina')
+  return { ok: true }
+}
+
+// Corregir el sueldo chofer (viatico) de un viaje de estéril ya registrado — a criterio del dueño/encargado
+export async function updateMaterialEsterilWage(tripId: string, driverWage: number) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role))
+    return { error: 'No autorizado' }
+  if (!Number.isFinite(driverWage) || driverWage < 0) return { error: 'Sueldo inválido' }
+  await prisma.trip.update({ where: { id: tripId }, data: { viatico: driverWage } })
   revalidatePath('/dias-internos')
   revalidatePath('/nomina')
   return { ok: true }

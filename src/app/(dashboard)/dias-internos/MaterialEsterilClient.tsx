@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { createMaterialEsterilEntries, getMaterialEsterilEntries, deleteMaterialEsterilTrip } from '@/app/actions/materialEsteril'
+import { createMaterialEsterilEntries, getMaterialEsterilEntries, deleteMaterialEsterilTrip, updateMaterialEsterilWage } from '@/app/actions/materialEsteril'
 
 type Truck   = { id: string; plate: string; driver: { name: string } | null }
 type Period  = { id: string; startDate: string; endDate: string }
@@ -35,7 +35,10 @@ export default function MaterialEsterilClient({
   const [fecha, setFecha]           = useState(todayStr())
   const [client, setClient]         = useState<'AURUMIN' | 'LUIS PEÑA'>('AURUMIN')
   const [nViajes, setNViajes]       = useState(1)
+  const [wage, setWage]             = useState(20)  // sueldo chofer por viaje — editable a criterio del dueño/encargado
   const [selected, setSelected]     = useState<Record<string, boolean>>({})  // truckId → checked
+  const [editingWage, setEditingWage] = useState<string | null>(null)        // tripId en edición inline
+  const [wageDraft, setWageDraft]     = useState('')
 
   const cargar = useCallback(async () => {
     if (!openPeriod) return
@@ -67,6 +70,7 @@ export default function MaterialEsterilClient({
         nViajes,
         clientName: client,
         periodId:   openPeriod.id,
+        driverWage: wage,
       }))
     )
     setSaving(false)
@@ -82,6 +86,21 @@ export default function MaterialEsterilClient({
   async function handleDelete(tripId: string) {
     if (!confirm('¿Eliminar este viaje?')) return
     await deleteMaterialEsterilTrip(tripId)
+    await cargar()
+    router.refresh()
+  }
+
+  function startEditWage(entry: Entry) {
+    setEditingWage(entry.id)
+    setWageDraft(String(entry.viatico))
+  }
+
+  async function saveEditWage(tripId: string) {
+    const value = parseFloat(wageDraft)
+    if (!Number.isFinite(value) || value < 0) { toast.error('Sueldo inválido'); return }
+    const res = await updateMaterialEsterilWage(tripId, value)
+    setEditingWage(null)
+    if (res.error) { toast.error(res.error); return }
     await cargar()
     router.refresh()
   }
@@ -119,7 +138,7 @@ export default function MaterialEsterilClient({
           <p className="text-amber-400 font-bold text-xl mt-0.5">${totalMonto.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</p>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
-          <p className="text-zinc-500 text-xs">Sueldo choferes ($10/viaje)</p>
+          <p className="text-zinc-500 text-xs">Sueldo choferes (editable)</p>
           <p className="text-orange-400 font-bold text-xl mt-0.5">${totalSueldo.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</p>
         </div>
       </div>
@@ -128,8 +147,8 @@ export default function MaterialEsterilClient({
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4">
         <h3 className="text-white font-semibold text-sm">Registrar viajes de material estéril</h3>
 
-        {/* Fecha, cliente, N viajes */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* Fecha, cliente, N viajes, sueldo chofer */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
             <label className="block text-xs text-zinc-400 mb-1.5">Fecha *</label>
             <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
@@ -147,6 +166,11 @@ export default function MaterialEsterilClient({
             <input type="number" min={1} step={1} value={nViajes} onChange={e => setNViajes(Math.max(1, parseInt(e.target.value) || 1))}
               className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500" />
           </div>
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1.5">Sueldo chofer/viaje *</label>
+            <input type="number" min={0} step={0.5} value={wage} onChange={e => setWage(Math.max(0, parseFloat(e.target.value) || 0))}
+              className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500" />
+          </div>
         </div>
 
         {/* Preview */}
@@ -155,7 +179,7 @@ export default function MaterialEsterilClient({
             <span className="text-amber-400 font-semibold">
               {selectedCount} camión(es) × {nViajes} viaje(s) × $100 = <strong>${(selectedCount * nViajes * 100).toLocaleString('es-VE')}</strong>
             </span>
-            <span className="text-zinc-400 ml-3">· Sueldo choferes: ${(selectedCount * nViajes * 10).toLocaleString('es-VE')}</span>
+            <span className="text-zinc-400 ml-3">· Sueldo choferes: ${(selectedCount * nViajes * wage).toLocaleString('es-VE')} (${wage}/viaje)</span>
           </div>
         )}
 
@@ -228,7 +252,22 @@ export default function MaterialEsterilClient({
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-white font-mono text-sm">${e.amount.toFixed(2)}</span>
-                      <span className="text-orange-400 text-xs">+${e.viatico.toFixed(2)} chofer</span>
+                      {editingWage === e.id ? (
+                        <span className="flex items-center gap-1">
+                          <input
+                            type="number" min={0} step={0.5} autoFocus value={wageDraft}
+                            onChange={ev => setWageDraft(ev.target.value)}
+                            onKeyDown={ev => { if (ev.key === 'Enter') saveEditWage(e.id); if (ev.key === 'Escape') setEditingWage(null) }}
+                            className="w-16 bg-zinc-800 border border-amber-500 text-white rounded-lg px-1.5 py-0.5 text-xs focus:outline-none"
+                          />
+                          <button onClick={() => saveEditWage(e.id)} className="text-emerald-400 hover:text-emerald-300 text-xs px-1">✓</button>
+                          <button onClick={() => setEditingWage(null)} className="text-zinc-500 hover:text-zinc-300 text-xs px-1">✕</button>
+                        </span>
+                      ) : (
+                        <button onClick={() => startEditWage(e)} className="text-orange-400 hover:text-orange-300 text-xs underline decoration-dotted underline-offset-2" title="Editar sueldo chofer">
+                          +${e.viatico.toFixed(2)} chofer
+                        </button>
+                      )}
                       <button onClick={() => handleDelete(e.id)} className="text-zinc-600 hover:text-red-400 transition-colors">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
