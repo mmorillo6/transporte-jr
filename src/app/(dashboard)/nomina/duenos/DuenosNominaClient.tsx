@@ -2,7 +2,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { registerPayment } from '@/app/actions/payroll'
+import { registerPayment, updateCostsSideOverride } from '@/app/actions/payroll'
 
 type TruckRow = {
   truckId: string
@@ -23,6 +23,7 @@ type TruckRow = {
   viaticos: number
   totalTons: number
   paidAt: string | null
+  costsSideOverride: 'AURUMIN' | 'LP' | null
   expenses: { category: string; description: string; amount: number; date: string }[]
 }
 
@@ -114,6 +115,15 @@ export default function DuenosNominaClient({
   } | null>(null)
   const [payAmt, setPayAmt] = useState('')
   const [confirmPay, setConfirmPay] = useState(false)
+  const [savingCostsSide, setSavingCostsSide] = useState<string | null>(null)
+
+  async function handleCostsSideChange(entryId: string, value: string) {
+    const side = value === 'AUTO' ? null : (value as 'AURUMIN' | 'LP')
+    setSavingCostsSide(entryId)
+    await updateCostsSideOverride(entryId, side)
+    setSavingCostsSide(null)
+    router.refresh()
+  }
 
   const LARGE_PAYMENT_THRESHOLD = 500
 
@@ -128,11 +138,16 @@ export default function DuenosNominaClient({
     const nprSignAurumin = isNPROwner ? nprAurumin : -nprAurumin
     const nprSignLP      = isNPROwner ? nprLP      : -nprLP
     // Afiliados pagan sus choferes directo — driverWage es informativo, no se descuenta
-    // Si el camión no facturó Aurumin esta quincena pero sí Luis Peña, los gastos
-    // compartidos (gastos op, chofer, mecánica, admin) se descuentan del lado
-    // Luis Peña en vez de Aurumin — "el descuento se le hace a Luis Peña" (ver
-    // memoria: project_reglas_intocables_nomina.md, confirmado 2026-08-31).
-    const costsGoToLP = truck.auruminGross === 0 && truck.lpGross > 0
+    // Los gastos compartidos de monto fijo (gastos op, chofer, mecánica, admin — NO el NPR,
+    // que ya se reparte proporcional a la facturación de cada lado, ver nprAurumin/nprLP abajo)
+    // se descuentan del lado con MAYOR facturación esa quincena (empate → Aurumin) — así si un
+    // camión trabajó más con Luis Peña, no le cae todo el peso a Aurumin por defecto. Fernando/
+    // dueño puede forzar manualmente el lado con el selector (costsSideOverride). Ver memoria:
+    // project_reglas_intocables_nomina.md, confirmado 2026-09-04. Esto NO cambia el netAmount
+    // real — solo a cuál lado se le atribuye visualmente el descuento.
+    const costsGoToLP = truck.costsSideOverride
+      ? truck.costsSideOverride === 'LP'
+      : truck.lpGross > truck.auruminGross
     const sharedCosts = truck.commFee + (isAfiliado ? 0 : truck.driverWage) + truck.mechFee + truck.adminFee
     let auruminSaldo = Math.round((
       (truck.saldoInicial ?? 0)
@@ -378,13 +393,33 @@ export default function DuenosNominaClient({
                                 <span className="text-emerald-400 text-xs bg-emerald-400/10 px-1.5 py-0.5 rounded-full">✓ Pagado</span>
                               )}
                             </div>
-                            <Link
-                              href={`/nomina/${selectedPeriodId}/truck/${truck.truckId}`}
-                              className="text-xs text-zinc-500 hover:text-amber-400 transition-colors"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              Ver relación →
-                            </Link>
+                            <div className="flex items-center gap-3">
+                              <div onClick={e => e.stopPropagation()} className="flex items-center gap-1.5">
+                                <span className="text-zinc-500 text-[11px]">Gastos a:</span>
+                                <select
+                                  value={truck.costsSideOverride ?? 'AUTO'}
+                                  disabled={savingCostsSide === truck.payrollEntryId}
+                                  onChange={e => handleCostsSideChange(truck.payrollEntryId, e.target.value)}
+                                  className={`text-xs rounded-lg px-2 py-1 border focus:outline-none disabled:opacity-50 ${
+                                    truck.costsSideOverride
+                                      ? 'bg-amber-500/10 border-amber-500/40 text-amber-300 font-semibold'
+                                      : 'bg-zinc-800 border-zinc-700 text-zinc-300'
+                                  }`}
+                                  title="A qué lado se descuentan gastos, chofer, mecánica, admin y NPR"
+                                >
+                                  <option value="AUTO">Automático (mayor facturación)</option>
+                                  <option value="AURUMIN">Forzar Aurumin</option>
+                                  <option value="LP">Forzar Luis Peña</option>
+                                </select>
+                              </div>
+                              <Link
+                                href={`/nomina/${selectedPeriodId}/truck/${truck.truckId}`}
+                                className="text-xs text-zinc-500 hover:text-amber-400 transition-colors"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                Ver relación →
+                              </Link>
+                            </div>
                           </div>
 
                           {/* Aurumin + LP side-by-side */}

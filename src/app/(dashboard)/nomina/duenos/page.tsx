@@ -117,6 +117,7 @@ export default async function DuenosNominaPage({
     viaticos: number
     totalTons: number
     paidAt: string | null
+    costsSideOverride: 'AURUMIN' | 'LP' | null
     expenses: { category: string; description: string; amount: number; date: string }[]
   }
 
@@ -188,6 +189,7 @@ export default async function DuenosNominaPage({
       viaticos: entry.viaticos,
       totalTons: entry.totalTons,
       paidAt: entry.paidAt ? entry.paidAt.toISOString() : null,
+      costsSideOverride: (entry.costsSideOverride as 'AURUMIN' | 'LP' | null) ?? null,
       expenses: truckExps.map(e => ({
         category: e.category,
         description: e.description,

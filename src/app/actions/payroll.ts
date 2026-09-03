@@ -623,6 +623,28 @@ export async function updateDriverWageOverride(entryId: string, override: number
   return { ok: true }
 }
 
+// A qué lado se descuentan los gastos compartidos (gastos op, chofer, mecánica, admin, NPR)
+// cuando el camión trabajó con ambos clientes esa quincena. Por defecto (side=null) es automático:
+// se descuenta del lado con mayor facturación esa quincena (empate → Aurumin). Fernando/dueño puede
+// forzarlo manualmente. Esto SOLO cambia el desglose visual Aurumin/LP — el netAmount real no cambia,
+// por eso no hace falta recalcular nada más.
+export async function updateCostsSideOverride(entryId: string, side: 'AURUMIN' | 'LP' | null) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
+  const entry = await prisma.payrollEntry.findUnique({ where: { id: entryId }, select: { periodId: true } })
+  if (!entry) return { error: 'Entrada no encontrada' }
+
+  await prisma.payrollEntry.update({
+    where: { id: entryId },
+    data: { costsSideOverride: side },
+  })
+
+  revalidatePath(`/nomina/duenos`)
+  revalidatePath(`/nomina/${entry.periodId}`)
+  return { ok: true }
+}
+
 type Disposition = 'CAJA_CHICA' | 'AURUMIN' | 'LUIS_PENA' | 'SIGUIENTE'
 
 // ─── Cerrar período — crea CashEntry para carros negativos ────────────────────

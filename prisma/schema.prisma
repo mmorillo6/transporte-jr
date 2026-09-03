@@ -210,6 +210,7 @@ model PayrollEntry {
   abono              Float     @default(0) // pago recibido esta quincena
   netAmount          Float     @default(0) // saldo final (puede ser negativo)
   driverWageOverride Float?               // sueldo chofer manual (si ≠ null, prevalece sobre el calculado)
+  costsSideOverride  String?              // "AURUMIN" | "LP" — a qué lado se le descuentan los gastos compartidos (si null, automático: al de mayor facturación)
   cashEntryId   String? // CashEntry auto-creado si netAmount < 0
   notes         String?
   paidAt        DateTime?
