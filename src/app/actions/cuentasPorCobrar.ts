@@ -1,8 +1,12 @@
 'use server'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { getSession } from '@/lib/session'
 
 export async function createCuenta(data: FormData) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
   const clientName  = (data.get('clientName') as string)?.trim()
   const concept     = (data.get('concept') as string)?.trim()
   const periodLabel = (data.get('periodLabel') as string)?.trim() || null
@@ -26,6 +30,9 @@ export async function createCuenta(data: FormData) {
 }
 
 export async function updateCuenta(id: string, data: FormData) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
   const clientName  = (data.get('clientName') as string)?.trim()
   const concept     = (data.get('concept') as string)?.trim()
   const periodLabel = (data.get('periodLabel') as string)?.trim() || null
@@ -50,6 +57,9 @@ export async function updateCuenta(id: string, data: FormData) {
 }
 
 export async function addPayment(cxcId: string, data: FormData) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
   const date  = new Date(data.get('date') as string)
   const notes = (data.get('notes') as string)?.trim() || null
 
@@ -105,6 +115,9 @@ export async function addPayment(cxcId: string, data: FormData) {
 }
 
 export async function deleteCuenta(id: string) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
   await prisma.cuentaPorCobrar.delete({ where: { id } })
   revalidatePath('/cuentas-por-cobrar')
 }
@@ -117,6 +130,9 @@ export async function addGlobalPayment(
   notes: string,
   distribution: { cxcId: string; amount: number }[],
 ) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
   const activeItems = distribution.filter(d => d.amount > 0)
   const sum = activeItems.reduce((s, d) => s + d.amount, 0)
   if (Math.abs(sum - totalAmount) > 0.05) return { error: `La distribución suma $${sum.toFixed(2)} pero el total es $${totalAmount.toFixed(2)}` }

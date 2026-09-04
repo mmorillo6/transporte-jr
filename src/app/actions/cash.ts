@@ -1,8 +1,12 @@
 'use server'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { getSession } from '@/lib/session'
 
 export async function createCashEntry(fd: FormData) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
   const type = fd.get('type') as string
   const currency = fd.get('currency') as string
   const amount = parseFloat(fd.get('amount') as string)
@@ -32,6 +36,9 @@ export async function createCashEntry(fd: FormData) {
 }
 
 export async function deleteCashEntry(id: string) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
   await prisma.cashEntry.delete({ where: { id } })
   revalidatePath('/caja')
   return { ok: true }
@@ -50,6 +57,9 @@ export async function getCashBalances() {
 }
 
 export async function registrarApertura(efectivo: number, usdt?: number) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
   const current = await getCashBalances()
   const today = new Date()
   let count = 0
@@ -93,6 +103,9 @@ export async function registrarApertura(efectivo: number, usdt?: number) {
 // ── Préstamos de socios ────────────────────────────────────────────────────────
 
 export async function createSocioLoan(fd: FormData) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
   const creditor = (fd.get('creditor') as string).trim()
   const amount   = parseFloat(fd.get('amount') as string)
   const currency = ((fd.get('currency') as string) || 'EFECTIVO') as 'EFECTIVO' | 'USDT'
@@ -122,6 +135,9 @@ export async function createSocioLoan(fd: FormData) {
 }
 
 export async function markSocioLoanPaid(id: string) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
   await prisma.socioLoan.update({
     where: { id },
     data:  { status: 'PAGADO', paidDate: new Date() },
@@ -131,6 +147,9 @@ export async function markSocioLoanPaid(id: string) {
 }
 
 export async function deleteSocioLoan(id: string) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) return { error: 'No autorizado' }
+
   await prisma.socioLoan.delete({ where: { id } })
   revalidatePath('/caja')
   return { ok: true }

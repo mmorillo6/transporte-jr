@@ -382,17 +382,19 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
       nprSaldoInicial = currentSaldos.get(nprTruck.id)!
     } else {
       // prevByTruck no incluye A15AE9Y cuando no tuvo viajes ni gastos en generaciones anteriores,
-      // así que consultamos directamente el período anterior para obtener el carry correcto
+      // así que consultamos directamente el período anterior para obtener el carry correcto.
+      // Arrastre incondicional — igual que el resto de camiones (ver saldoInicial arriba),
+      // no mirar paidAt: markPayrollEntryPaid/registerPayment ya absorben el saldo en abono
+      // al marcar pagado, así que no hay riesgo de resucitar saldo ya saldado.
       const prevNprEntry = await prisma.payrollEntry.findFirst({
         where: {
           truckId: nprTruck.id,
           period: { endDate: { lt: period.startDate } },
         },
         orderBy: { period: { endDate: 'desc' } },
-        select: { netAmount: true, paidAt: true },
+        select: { netAmount: true },
       })
-      nprSaldoInicial = 0
-      if (prevNprEntry && !prevNprEntry.paidAt) nprSaldoInicial = prevNprEntry.netAmount
+      nprSaldoInicial = prevNprEntry ? prevNprEntry.netAmount : 0
     }
     const nprAbono = currentAbonos.get(nprTruck.id) ?? 0
     const nprNet = Math.round((totalNprCollected - totalNprExpenses + nprSaldoInicial - nprAbono) * 100) / 100
@@ -467,7 +469,16 @@ export async function getPayrollParams(periodId: string): Promise<PayrollParams 
   })
   if (!period) return { error: 'Período no encontrado' }
 
-  const truckIds = [...new Set(period.trips.map(t => t.truckId))]
+  // Días internos del período — cuentan como actividad igual que en generatePayroll,
+  // para que el conteo de "camiones activos" del preview coincida con el real (un camión
+  // que solo hizo días internos, sin viajes, también debe contar como activo aquí).
+  const diasInternosParams = await prisma.diasInternosEntry.findMany({
+    where: { fecha: { gte: period.startDate, lte: period.endDate } },
+    select: { truckId: true },
+  })
+  const diasTruckIds = new Set(diasInternosParams.map(d => d.truckId))
+
+  const truckIds = [...new Set([...period.trips.map(t => t.truckId), ...diasTruckIds])]
   const trucks = await prisma.truck.findMany({
     where: { id: { in: truckIds } },
     include: { driver: { select: { name: true } }, owner: { select: { name: true, type: true } } },
@@ -475,11 +486,14 @@ export async function getPayrollParams(periodId: string): Promise<PayrollParams 
   const truckMap = new Map(trucks.map(t => [t.id, t]))
 
   // Calcular active count para admin fee — cualquier actividad cuenta, no solo Aurumin
-  const propiosConAurumin = new Set(
-    period.trips
+  // (viajes o días internos, igual que propiosConAurumin en generatePayroll)
+  const propiosConAurumin = new Set([
+    ...period.trips
       .filter(t => truckMap.get(t.truckId)?.owner.type === 'PROPIO')
-      .map(t => t.truckId)
-  )
+      .map(t => t.truckId),
+    ...Array.from(diasTruckIds)
+      .filter(tid => truckMap.get(tid)?.owner.type === 'PROPIO'),
+  ])
   const fleetCount      = 0  // no se usa en el cálculo, se mantiene por compatibilidad
   const adminFeeBase    = (period as any).adminFeeBase ?? await getConfigValue('adminFeePerTruck')
   const activeCount     = propiosConAurumin.size
@@ -550,7 +564,6 @@ export async function updatePayrollAbono(entryId: string, abono: number) {
     - (entry.mechanicFee ?? 0)
     - (entry.adminFee ?? 0)
     - entry.deductions
-    + (entry.viaticos ?? 0)
     + (entry.saldoInicial ?? 0)
     - abono
 
@@ -606,7 +619,6 @@ export async function updateDriverWageOverride(entryId: string, override: number
     - (entry.mechanicFee ?? 0)
     - (entry.adminFee ?? 0)
     - entry.deductions
-    + (entry.viaticos ?? 0)
     + (entry.saldoInicial ?? 0)
     - (entry.abono ?? 0)
 
