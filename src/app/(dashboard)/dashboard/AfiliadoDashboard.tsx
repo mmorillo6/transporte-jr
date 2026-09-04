@@ -604,7 +604,16 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
           <div>
             <h2 className="text-white font-semibold text-sm mb-3">Relación del período</h2>
             <div className="space-y-3">
-              {truckBreakdowns.map(tb => (
+              {truckBreakdowns.map(tb => {
+                // Mostrar el bloque Aurumin aunque no haya facturado esta quincena,
+                // siempre que tenga gastos/chofer/saldo anterior reales de ese lado —
+                // mismo criterio que Saldos dueños (DuenosNominaClient.tsx), ver
+                // memoria: project_reglas_intocables_nomina.md. Antes solo miraba
+                // gAurumin > 0, así que una deuda arrastrada sin facturación nueva
+                // quedaba invisible para el afiliado aunque sí se le restaba del total.
+                const showAurumin = tb.gAurumin > 0 || tb.commFee > 0 || tb.driverWage > 0
+                  || tb.mechFee > 0 || tb.adminFee > 0 || tb.saldoInicial !== 0
+                return (
                 <div key={tb.truckId} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
                   {/* Encabezado del camión */}
                   <div className="px-4 py-3 bg-zinc-800/40 border-b border-zinc-800 flex items-center justify-between">
@@ -616,9 +625,9 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                     </span>
                   </div>
 
-                  <div className={`p-4 ${tb.gAurumin > 0 && tb.gLP > 0 ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : ''}`}>
+                  <div className={`p-4 ${showAurumin && tb.gLP > 0 ? 'grid grid-cols-1 sm:grid-cols-2 gap-4' : ''}`}>
                     {/* Aurumin */}
-                    {tb.gAurumin > 0 && (
+                    {showAurumin && (
                       <div>
                         <p className="text-amber-400 text-xs font-bold uppercase tracking-widest mb-3">Aurumin</p>
                         {tb.saldoInicial !== 0 && <Row label="Saldo anterior" value={tb.saldoInicial} />}
@@ -685,7 +694,8 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
                     )}
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
             {/* Total a cobrar */}
             <div className={`mt-3 rounded-2xl px-4 py-3 flex justify-between items-center border ${
