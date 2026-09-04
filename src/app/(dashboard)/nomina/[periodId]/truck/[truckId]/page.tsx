@@ -314,7 +314,13 @@ export default async function TruckRelacionPage({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
             {/* ── Aurumin ── */}
-            {grossAurumin > 0 && (() => {
+            {/* Se muestra aunque no haya facturado esta quincena, siempre que tenga
+                gastos/chofer/mecánica/admin/saldo anterior reales de ese lado — mismo
+                criterio que DuenosNominaClient.tsx y AfiliadoDashboard.tsx, ver memoria:
+                project_reglas_intocables_nomina.md (2026-09-04, 3er lugar con el mismo bug). */}
+            {(grossAurumin > 0 || (e.saldoInicial ?? 0) !== 0 || (e.commissionFee ?? 0) > 0
+              || e.driverWage > 0 || (e.mechanicFee ?? 0) > 0 || (e.adminFee ?? 0) > 0
+            ) && (() => {
               const saldoA = Math.round((
                 (e.saldoInicial ?? 0)
                 + grossAurumin

@@ -99,7 +99,14 @@ export default async function OwnerRelacionPage({
     const nprLP  = Math.round(lpGross * nprPct * 100) / 100
     const saldoA = Math.round(((entry.saldoInicial ?? 0) + gGross - (entry.commissionFee ?? 0) - entry.driverWage - (entry.mechanicFee ?? 0) - (entry.adminFee ?? 0) + (owner.isNPROwner ? nprA : -nprA) - entry.deductions - (entry.abono ?? 0)) * 100) / 100
     const saldoLP= Math.round((lpGross - nprLP) * 100) / 100
-    return { entryId: entry.id, gGross, lpGross, nprA, nprLP, saldoA, saldoLP }
+    return {
+      entryId: entry.id, gGross, lpGross, nprA, nprLP, saldoA, saldoLP,
+      // Se usan para decidir si mostrar el bloque Aurumin aunque no haya facturado
+      // esta quincena — ver showAurumin más abajo.
+      commissionFee: entry.commissionFee ?? 0, driverWage: entry.driverWage,
+      mechanicFee: entry.mechanicFee ?? 0, adminFee: entry.adminFee ?? 0,
+      saldoInicial: entry.saldoInicial ?? 0,
+    }
   })
 
   // Consolidados Aurumin / Luis Peña
@@ -183,8 +190,12 @@ export default async function OwnerRelacionPage({
               <div className="px-6 py-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-                  {/* Aurumin */}
-                  {split.gGross > 0 && (
+                  {/* Aurumin — se muestra aunque no haya facturado esta quincena, siempre
+                      que tenga gastos/chofer/mecánica/admin/saldo anterior reales de ese
+                      lado. Mismo criterio que DuenosNominaClient.tsx/AfiliadoDashboard.tsx,
+                      ver memoria: project_reglas_intocables_nomina.md (2026-09-04). */}
+                  {(split.gGross > 0 || split.saldoInicial !== 0 || split.commissionFee > 0
+                    || split.driverWage > 0 || split.mechanicFee > 0 || split.adminFee > 0) && (
                     <div className="space-y-1.5">
                       <p className="text-amber-400 text-xs font-bold uppercase tracking-widest print:text-amber-600">Aurumin</p>
                       {(entry.saldoInicial ?? 0) !== 0 && (
@@ -259,8 +270,10 @@ export default async function OwnerRelacionPage({
           <h2 className="text-white font-semibold text-sm mb-4 print:text-black">Resumen consolidado</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-            {/* Aurumin consolidado */}
-            {totalGrossA > 0 && (
+            {/* Aurumin consolidado — mismo criterio: se muestra aunque no haya facturación
+                nueva, siempre que tenga gastos/chofer/mecánica/admin/saldo anterior real */}
+            {(totalGrossA > 0 || totalSaldoIni !== 0 || totalGastos > 0
+              || totalChofer > 0 || totalMecanicos > 0 || totalAdmin > 0) && (
               <div className="space-y-1.5">
                 <p className="text-amber-400 text-xs font-bold uppercase tracking-widest print:text-amber-600">Aurumin</p>
                 {totalSaldoIni !== 0 && (
