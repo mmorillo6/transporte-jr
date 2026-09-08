@@ -43,6 +43,7 @@ export default async function DuenosNominaPage({
             },
           },
         },
+        abonos: { orderBy: { date: 'asc' } },
       },
     }),
     prisma.trip.findMany({
@@ -98,6 +99,7 @@ export default async function DuenosNominaPage({
   }
 
   // Group by owner
+  type AbonoRow = { id: string; amount: number; currency: string; date: string }
   type TruckRow = {
     truckId: string
     payrollEntryId: string
@@ -113,6 +115,15 @@ export default async function DuenosNominaPage({
     deductions: number
     saldoInicial: number
     abono: number
+    // Abono desglosado por lado (ver PayrollAbono) — abonoOtro es el remanente
+    // de abonos viejos, registrados antes de que existiera este desglose, que
+    // por compatibilidad se sigue mostrando del lado Aurumin como antes.
+    abonoAurumin: number
+    abonoLP: number
+    abonoNPR: number
+    abonosAurumin: AbonoRow[]
+    abonosLP: AbonoRow[]
+    abonosNPR: AbonoRow[]
     netAmount: number
     viaticos: number
     totalTons: number
@@ -170,6 +181,19 @@ export default async function DuenosNominaPage({
 
     const truckExps = expensesByTruck.get(entry.truckId) ?? []
 
+    const abonos = entry.abonos ?? []
+    const abonosAurumin = abonos.filter(a => a.side === 'AURUMIN')
+    const abonosLP      = abonos.filter(a => a.side === 'LP')
+    const abonosNPR     = abonos.filter(a => a.side === 'NPR')
+    const sumAurumin = abonosAurumin.reduce((s, a) => s + a.amount, 0)
+    const sumLP      = abonosLP.reduce((s, a) => s + a.amount, 0)
+    const sumNPR     = abonosNPR.reduce((s, a) => s + a.amount, 0)
+    // Abonos registrados ANTES de que existiera este desglose (o por el editor
+    // de texto libre en la tabla de nómina general) no tienen fila en
+    // PayrollAbono — ese remanente se sigue atribuyendo a Aurumin, igual que
+    // el comportamiento (con bug) de antes, para no mover números ya cerrados.
+    const orphan = Math.round((entry.abono - sumAurumin - sumLP - sumNPR) * 100) / 100
+
     const truckRow: TruckRow = {
       truckId: entry.truckId,
       payrollEntryId: entry.id,
@@ -185,6 +209,12 @@ export default async function DuenosNominaPage({
       deductions: entry.deductions,
       saldoInicial: entry.saldoInicial,
       abono: entry.abono,
+      abonoAurumin: Math.round((sumAurumin + Math.max(orphan, 0)) * 100) / 100,
+      abonoLP: Math.round(sumLP * 100) / 100,
+      abonoNPR: Math.round(sumNPR * 100) / 100,
+      abonosAurumin: abonosAurumin.map(a => ({ id: a.id, amount: a.amount, currency: a.currency, date: a.date.toISOString() })),
+      abonosLP: abonosLP.map(a => ({ id: a.id, amount: a.amount, currency: a.currency, date: a.date.toISOString() })),
+      abonosNPR: abonosNPR.map(a => ({ id: a.id, amount: a.amount, currency: a.currency, date: a.date.toISOString() })),
       netAmount: entry.netAmount,
       viaticos: entry.viaticos,
       totalTons: entry.totalTons,

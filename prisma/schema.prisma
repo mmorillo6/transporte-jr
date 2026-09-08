@@ -217,6 +217,25 @@ model PayrollEntry {
   paymentMethod String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  abonos        PayrollAbono[]
+}
+
+// Historial de abonos (pagos parciales) de un PayrollEntry — reemplaza el
+// acumulado ciego que vivía solo en PayrollEntry.abono. Cada fila sabe A QUÉ
+// LADO se le atribuye el pago (antes SIEMPRE se restaba del lado Aurumin sin
+// importar quién pagó realmente — bug reportado 2026-09-07). El total sigue
+// espejado en PayrollEntry.abono para no tocar el cálculo de netAmount.
+model PayrollAbono {
+  id          String       @id @default(cuid())
+  entryId     String
+  entry       PayrollEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  side        String       // "AURUMIN" | "LP" | "NPR" — a quién le llegó el pago
+  amount      Float
+  currency    String       // "EFECTIVO" | "USDT"
+  cashEntryId String?      // CashEntry vinculado (se revierte junto con este abono si se elimina)
+  notes       String?
+  date        DateTime     @default(now())
+  createdAt   DateTime     @default(now())
 }
 
 // ─── GASTOS ───────────────────────────────────────────────────────────────────

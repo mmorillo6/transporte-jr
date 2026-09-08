@@ -157,6 +157,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
           include: {
             period: { select: { id: true, startDate: true, endDate: true, status: true } },
             truck: { select: { plate: true } },
+            abonos: true,
           },
         })
       : Promise.resolve([]),
@@ -555,7 +556,15 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
             : Math.round((entry.nprFee ?? 0) * 100) / 100
           const nprL = Math.round(((entry.nprFee ?? 0) - nprA) * 100) / 100
 
-          const saldoL = Math.round((gLP - nprL) * 100) / 100
+          // Abono que realmente le llegó al lado Luis Peña (ver PayrollAbono) —
+          // antes el abono completo quedaba absorbido en saldoA sin importar
+          // quién pagó realmente (bug reportado 2026-09-07, 4to lugar con el
+          // mismo problema, aquí de forma indirecta por ser saldoA derivado).
+          const abonoLP = ((entry as any).abonos ?? [])
+            .filter((a: any) => a.side === 'LP')
+            .reduce((s: number, a: any) => s + a.amount, 0)
+
+          const saldoL = Math.round((gLP - nprL - abonoLP) * 100) / 100
           // saldoA se deriva por resta del netAmount autoritativo — no por re-suma
           // de cada fee — así saldoA + saldoL === entry.netAmount siempre, por construcción.
           const saldoA = Math.round(((entry.netAmount ?? 0) - saldoL) * 100) / 100
@@ -572,7 +581,7 @@ export default async function AfiliadoDashboard({ userId, name }: { userId: stri
             mechFee:    entry.mechanicFee   ?? 0,
             adminFee:   entry.adminFee      ?? 0,
             deductions: entry.deductions    ?? 0,
-            abono:      entry.abono         ?? 0,
+            abono:      Math.round(((entry.abono ?? 0) - abonoLP) * 100) / 100,
             saldoA, saldoL, opExp, viaticos,
           }
         })

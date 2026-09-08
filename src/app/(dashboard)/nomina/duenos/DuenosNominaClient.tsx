@@ -2,7 +2,9 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { registerPayment, updateCostsSideOverride } from '@/app/actions/payroll'
+import { registerPayment, updateCostsSideOverride, deletePayrollAbono } from '@/app/actions/payroll'
+
+type AbonoRow = { id: string; amount: number; currency: string; date: string }
 
 type TruckRow = {
   truckId: string
@@ -19,6 +21,12 @@ type TruckRow = {
   deductions: number
   saldoInicial: number
   abono: number
+  abonoAurumin: number
+  abonoLP: number
+  abonoNPR: number
+  abonosAurumin: AbonoRow[]
+  abonosLP: AbonoRow[]
+  abonosNPR: AbonoRow[]
   netAmount: number
   viaticos: number
   totalTons: number
@@ -116,6 +124,14 @@ export default function DuenosNominaClient({
   const [payAmt, setPayAmt] = useState('')
   const [confirmPay, setConfirmPay] = useState(false)
   const [savingCostsSide, setSavingCostsSide] = useState<string | null>(null)
+  const [deletingAbono, setDeletingAbono] = useState<string | null>(null)
+
+  async function handleDeleteAbono(abonoId: string) {
+    setDeletingAbono(abonoId)
+    const res = await deletePayrollAbono(abonoId)
+    setDeletingAbono(null)
+    if (!res?.error) router.refresh()
+  }
 
   async function handleCostsSideChange(entryId: string, value: string) {
     const side = value === 'AUTO' ? null : (value as 'AURUMIN' | 'LP')
@@ -149,16 +165,19 @@ export default function DuenosNominaClient({
       ? truck.costsSideOverride === 'LP'
       : truck.lpGross > truck.auruminGross
     const sharedCosts = truck.commFee + (isAfiliado ? 0 : truck.driverWage) + truck.mechFee + truck.adminFee
+    // El abono se resta del lado que realmente lo recibió (ver PayrollAbono) —
+    // antes truck.abono se restaba siempre acá aunque hubiera sido un pago en
+    // efectivo hecho a Luis Peña (bug reportado 2026-09-07).
     let auruminSaldo = Math.round((
       (truck.saldoInicial ?? 0)
       + truck.auruminGross - (costsGoToLP ? 0 : sharedCosts)
-      + nprSignAurumin - truck.abono
+      + nprSignAurumin - truck.abonoAurumin
     ) * 100) / 100
     // LP cubre el déficit de Aurumin cuando ya fue pagado en efectivo
     if (truck.paidAt && auruminSaldo < 0) auruminSaldo = 0
     const lpSaldo = truck.paidAt
       ? 0
-      : Math.round((truck.lpGross + nprSignLP - truck.deductions - (costsGoToLP ? sharedCosts : 0)) * 100) / 100
+      : Math.round((truck.lpGross + nprSignLP - truck.deductions - (costsGoToLP ? sharedCosts : 0) - truck.abonoLP) * 100) / 100
     return { auruminSaldo, lpSaldo, nprAurumin, nprLP, costsGoToLP }
   }
 
@@ -380,7 +399,7 @@ export default function DuenosNominaClient({
                       const sharedCostsForLP = costsGoToLP
                         ? truck.commFee + (isAfiliadoTruck ? 0 : truck.driverWage) + truck.mechFee + truck.adminFee
                         : 0
-                      const lpRawSaldo = Math.round((truck.lpGross - nprLP - truck.deductions - sharedCostsForLP) * 100) / 100
+                      const lpRawSaldo = Math.round((truck.lpGross - nprLP - truck.deductions - sharedCostsForLP - truck.abonoLP) * 100) / 100
 
                       return (
                         <div key={truck.truckId} className="space-y-3">
@@ -453,7 +472,8 @@ export default function DuenosNominaClient({
                                   ? <FinRow label={`${row.owner.nprPercent}% NPR (ingreso)`} value={`+$${fmt(nprAurumin)}`} color="text-emerald-400" />
                                   : <FinRow label={`${row.owner.nprPercent}% NPR`}           value={`-$${fmt(nprAurumin)}`} color="text-red-400" />
                                 )}
-                                {truck.abono > 0      && <FinRow label="Abono recibido" value={`-$${fmt(truck.abono)}`}    color="text-emerald-400" />}
+                                {truck.abonoAurumin > 0 && <FinRow label="Abono recibido" value={`-$${fmt(truck.abonoAurumin)}`} color="text-emerald-400" />}
+                                <AbonoHistory abonos={truck.abonosAurumin} deletingId={deletingAbono} onDelete={handleDeleteAbono} />
                                 <div className="border-t border-zinc-700 pt-1.5 flex justify-between items-center">
                                   <span className="text-white text-xs font-semibold">Saldo Aurumin</span>
                                   <span className={`font-mono font-bold text-sm ${auruminSaldo < 0 ? 'text-red-400' : 'text-amber-400'}`}>
@@ -506,9 +526,10 @@ export default function DuenosNominaClient({
                                 {truck.commFee > 0 && (
                                   <FinRow label="Gastos NPR"  value={`-$${fmt(truck.commFee)}`}  color="text-red-400" />
                                 )}
-                                {truck.abono > 0 && (
-                                  <FinRow label="Abono"       value={`-$${fmt(truck.abono)}`}    color="text-emerald-400" />
+                                {truck.abonoNPR > 0 && (
+                                  <FinRow label="Abono"       value={`-$${fmt(truck.abonoNPR)}`}    color="text-emerald-400" />
                                 )}
+                                <AbonoHistory abonos={truck.abonosNPR} deletingId={deletingAbono} onDelete={handleDeleteAbono} />
                                 <div className="border-t border-zinc-700 pt-1.5 flex justify-between items-center">
                                   <span className="text-white text-xs font-semibold">Saldo NPR</span>
                                   <span className={`font-mono font-bold text-sm ${truck.netAmount < 0 ? 'text-red-400' : 'text-violet-400'}`}>
@@ -569,6 +590,8 @@ export default function DuenosNominaClient({
                                 {costsGoToLP && truck.mechFee > 0    && <FinRow label="Nóm. mecánico" value={`-$${fmt(truck.mechFee)}`}    color="text-purple-400" />}
                                 {costsGoToLP && truck.adminFee > 0   && <FinRow label="Administrativo" value={`-$${fmt(truck.adminFee)}`}  color="text-zinc-400" />}
                                 {truck.deductions > 0 && <FinRow label="Repuesto/Préstamo" value={`-$${fmt(truck.deductions)}`} color="text-red-400" />}
+                                {truck.abonoLP > 0 && <FinRow label="Abono recibido" value={`-$${fmt(truck.abonoLP)}`} color="text-emerald-400" />}
+                                <AbonoHistory abonos={truck.abonosLP} deletingId={deletingAbono} onDelete={handleDeleteAbono} />
                                 <div className="border-t border-zinc-700 pt-1.5 flex justify-between items-center">
                                   <span className="text-white text-xs font-semibold">Saldo LP</span>
                                   {truck.paidAt ? (
@@ -806,6 +829,39 @@ function FinRow({ label, value, color }: { label: string; value: string; color: 
     <div className="flex items-center justify-between text-xs">
       <span className="text-zinc-400">{label}</span>
       <span className={`font-mono font-medium ${color}`}>{value}</span>
+    </div>
+  )
+}
+
+// Historial de abonos de un lado (Aurumin/LP/NPR) con opción de borrar uno
+// puntual — así un duplicado o un monto mal cargado se corrige eliminando
+// esa línea, sin tener que "cuadrar a mano" un acumulado ciego.
+function AbonoHistory({
+  abonos, deletingId, onDelete,
+}: {
+  abonos: { id: string; amount: number; currency: string; date: string }[]
+  deletingId: string | null
+  onDelete: (id: string) => void
+}) {
+  if (abonos.length === 0) return null
+  return (
+    <div className="space-y-0.5 pl-2 border-l border-zinc-700/60">
+      {abonos.map(a => (
+        <div key={a.id} className="flex items-center justify-between text-[11px] text-zinc-500">
+          <span>{fmtDate(a.date)} · {a.currency === 'USDT' ? 'USDT' : 'Efectivo'}</span>
+          <span className="flex items-center gap-1.5">
+            <span className="font-mono text-emerald-500/80">${fmt(a.amount)}</span>
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(a.id) }}
+              disabled={deletingId === a.id}
+              title="Eliminar este abono"
+              className="text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
+            >
+              ✕
+            </button>
+          </span>
+        </div>
+      ))}
     </div>
   )
 }

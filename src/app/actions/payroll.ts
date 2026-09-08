@@ -952,29 +952,42 @@ export async function registerPayment(
   const entry = await prisma.payrollEntry.findUnique({
     where: { id: entryId },
     include: {
-      truck: { select: { plate: true, owner: { select: { name: true } } } },
+      truck: { select: { plate: true, owner: { select: { name: true, isNPROwner: true } } } },
     },
   })
   if (!entry) return { error: 'Entrada no encontrada' }
 
   const newNetAmount = Math.round(((entry.netAmount ?? 0) - amount) * 100) / 100
   const fullyPaid   = newNetAmount <= 0
+  const roundedAmount = Math.round(amount * 100) / 100
 
-  await prisma.cashEntry.create({
+  // A qué lado le llegó realmente el pago. Antes esto no se guardaba en ningún
+  // lado y el desglose visual Aurumin/LP asumía SIEMPRE Aurumin, sin importar
+  // quién pagó — bug reportado 2026-09-07 (abonos de Luis Peña restándose del
+  // saldo Aurumin). La fila especial de NPR (A15AE9Y, sin facturación propia)
+  // es de un solo lado, así que ahí no aplica la distinción.
+  const isNprRow = entry.truck.owner.isNPROwner && entry.grossAmount === 0 && entry.nprFee > 0
+  const side: 'AURUMIN' | 'LP' | 'NPR' = isNprRow ? 'NPR' : (currency === 'USDT' ? 'AURUMIN' : 'LP')
+
+  const cashEntry = await prisma.cashEntry.create({
     data: {
       type:    'EGRESO',
       currency,
-      amount:  Math.round(amount * 100) / 100,
+      amount:  roundedAmount,
       concept: `Pago nómina — ${entry.truck.plate} (${entry.truck.owner.name})`,
       source:  'NOMINA',
       truckId: entry.truckId,
     },
   })
 
+  await prisma.payrollAbono.create({
+    data: { entryId, side, amount: roundedAmount, currency, cashEntryId: cashEntry.id },
+  })
+
   await prisma.payrollEntry.update({
     where: { id: entryId },
     data: {
-      abono:     { increment: Math.round(amount * 100) / 100 },
+      abono:     { increment: roundedAmount },
       netAmount: newNetAmount,
       ...(fullyPaid ? { paidAt: new Date(), paymentMethod: currency } : {}),
     },
@@ -984,6 +997,86 @@ export async function registerPayment(
   revalidatePath(`/nomina/${entry.periodId}`)
   revalidatePath('/caja')
   return { ok: true, fullyPaid }
+}
+
+// ─── Eliminar un abono puntual (corrige duplicados o montos mal registrados) ──
+// Revierte su efecto en PayrollEntry (abono, netAmount, paidAt) y borra el
+// CashEntry vinculado para que caja tampoco quede con el movimiento fantasma.
+export async function deletePayrollAbono(abonoId: string) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {
+    return { error: 'No autorizado' }
+  }
+
+  const abono = await prisma.payrollAbono.findUnique({ where: { id: abonoId } })
+  if (!abono) return { error: 'Abono no encontrado' }
+
+  const entry = await prisma.payrollEntry.findUnique({ where: { id: abono.entryId } })
+  if (!entry) return { error: 'Entrada no encontrada' }
+
+  const restoredNetAmount = Math.round(((entry.netAmount ?? 0) + abono.amount) * 100) / 100
+  const stillFullyPaid    = restoredNetAmount <= 0
+
+  await prisma.payrollEntry.update({
+    where: { id: entry.id },
+    data: {
+      abono:     Math.round(((entry.abono ?? 0) - abono.amount) * 100) / 100,
+      netAmount: restoredNetAmount,
+      // Si al revertir este abono el saldo vuelve a quedar pendiente, se
+      // reabre (paidAt null) — si ya venía pagado por otra vía, se respeta.
+      ...(entry.paidAt && !stillFullyPaid ? { paidAt: null, paymentMethod: null } : {}),
+    },
+  })
+
+  if (abono.cashEntryId) {
+    await prisma.cashEntry.delete({ where: { id: abono.cashEntryId } }).catch(() => {})
+  }
+  await prisma.payrollAbono.delete({ where: { id: abonoId } })
+
+  revalidatePath('/nomina/duenos')
+  revalidatePath(`/nomina/${entry.periodId}`)
+  revalidatePath('/caja')
+  return { ok: true }
+}
+
+// ─── Corregir el monto de un abono puntual (ej. ajuste de centavos) ───────────
+export async function updatePayrollAbonoAmount(abonoId: string, newAmount: number) {
+  const session = await getSession()
+  if (!session || !['DUENO', 'ENCARGADO'].includes(session.role)) {
+    return { error: 'No autorizado' }
+  }
+  if (newAmount <= 0) return { error: 'Monto inválido' }
+
+  const abono = await prisma.payrollAbono.findUnique({ where: { id: abonoId } })
+  if (!abono) return { error: 'Abono no encontrado' }
+
+  const entry = await prisma.payrollEntry.findUnique({ where: { id: abono.entryId } })
+  if (!entry) return { error: 'Entrada no encontrada' }
+
+  const roundedNew = Math.round(newAmount * 100) / 100
+  const diff       = Math.round((roundedNew - abono.amount) * 100) / 100
+  const newNetAmount = Math.round(((entry.netAmount ?? 0) - diff) * 100) / 100
+  const fullyPaid     = newNetAmount <= 0
+
+  await prisma.payrollEntry.update({
+    where: { id: entry.id },
+    data: {
+      abono:     Math.round(((entry.abono ?? 0) + diff) * 100) / 100,
+      netAmount: newNetAmount,
+      ...(fullyPaid && !entry.paidAt ? { paidAt: new Date(), paymentMethod: abono.currency } : {}),
+      ...(!fullyPaid && entry.paidAt ? { paidAt: null, paymentMethod: null } : {}),
+    },
+  })
+
+  if (abono.cashEntryId) {
+    await prisma.cashEntry.update({ where: { id: abono.cashEntryId }, data: { amount: roundedNew } }).catch(() => {})
+  }
+  await prisma.payrollAbono.update({ where: { id: abonoId }, data: { amount: roundedNew } })
+
+  revalidatePath('/nomina/duenos')
+  revalidatePath(`/nomina/${entry.periodId}`)
+  revalidatePath('/caja')
+  return { ok: true }
 }
 
 // ─── Registrar abono Aurumin (pago parcial contra saldo acumulado) ────────────
