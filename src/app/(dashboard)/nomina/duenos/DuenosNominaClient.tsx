@@ -843,7 +843,11 @@ function AbonoHistory({
   deletingId: string | null
   onDelete: (id: string) => void
 }) {
-  if (abonos.length === 0) return null
+  // Con un solo pago, la línea de "Abono recibido" ya lo muestra completo —
+  // repetirlo acá abajo se veía como un duplicado (confundió a la usuaria,
+  // 2026-09-09). El historial solo aporta cuando hay 2+ pagos para comparar
+  // y poder borrar el que sobra.
+  if (abonos.length <= 1) return null
   return (
     <div className="space-y-0.5 pl-2 border-l border-zinc-700/60">
       {abonos.map(a => (
