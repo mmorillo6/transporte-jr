@@ -15,6 +15,8 @@ type TruckRow = {
   lpGross: number
   commFee: number
   mechFee: number
+  mechFeePool: number
+  mechFeeExtra: number
   adminFee: number
   nprFee: number
   driverWage: number
@@ -466,7 +468,7 @@ export default function DuenosNominaClient({
                                     ? <FinRow label="Nóm. chofer (directo)" value={`$${fmt(truck.driverWage)}`} color="text-zinc-500" />
                                     : <FinRow label="Nóm. chofer"           value={`-$${fmt(truck.driverWage)}`} color="text-orange-400" />
                                 )}
-                                {!costsGoToLP && truck.mechFee > 0    && <FinRow label="Nóm. mecánico" value={`-$${fmt(truck.mechFee)}`}    color="text-purple-400" />}
+                                {!costsGoToLP && truck.mechFee > 0    && <MechanicFeeRows pool={truck.mechFeePool} extra={truck.mechFeeExtra} />}
                                 {!costsGoToLP && truck.adminFee > 0   && <FinRow label="Administrativo" value={`-$${fmt(truck.adminFee)}`}  color="text-zinc-400" />}
                                 {nprAurumin > 0 && (row.owner.isNPROwner
                                   ? <FinRow label={`${row.owner.nprPercent}% NPR (ingreso)`} value={`+$${fmt(nprAurumin)}`} color="text-emerald-400" />
@@ -587,7 +589,7 @@ export default function DuenosNominaClient({
                                     ? <FinRow label="Nóm. chofer (directo)" value={`$${fmt(truck.driverWage)}`} color="text-zinc-500" />
                                     : <FinRow label="Nóm. chofer"           value={`-$${fmt(truck.driverWage)}`} color="text-orange-400" />
                                 )}
-                                {costsGoToLP && truck.mechFee > 0    && <FinRow label="Nóm. mecánico" value={`-$${fmt(truck.mechFee)}`}    color="text-purple-400" />}
+                                {costsGoToLP && truck.mechFee > 0    && <MechanicFeeRows pool={truck.mechFeePool} extra={truck.mechFeeExtra} />}
                                 {costsGoToLP && truck.adminFee > 0   && <FinRow label="Administrativo" value={`-$${fmt(truck.adminFee)}`}  color="text-zinc-400" />}
                                 {truck.deductions > 0 && <FinRow label="Repuesto/Préstamo" value={`-$${fmt(truck.deductions)}`} color="text-red-400" />}
                                 {truck.abonoLP > 0 && <FinRow label="Abono recibido" value={`-$${fmt(truck.abonoLP)}`} color="text-emerald-400" />}
@@ -822,6 +824,22 @@ export default function DuenosNominaClient({
     )}
     </>
   )
+}
+
+// Separa el pool de mecánicos (sueldo repartido entre camiones activos) de una
+// reparación puntual de ESE camión — antes iban sumados en una sola línea
+// "Nóm. mecánico" y confundió a Fernando (2026-09-21), que pensó que el sueldo
+// del pool estaba mal cuando en realidad incluía también una reparación suya.
+function MechanicFeeRows({ pool, extra }: { pool: number; extra: number }) {
+  if (extra > 0) {
+    return (
+      <>
+        {pool > 0 && <FinRow label="Nóm. mecánico" value={`-$${fmt(pool)}`} color="text-purple-400" />}
+        <FinRow label="Mecánica (reparación)" value={`-$${fmt(extra)}`} color="text-purple-400" />
+      </>
+    )
+  }
+  return pool > 0 ? <FinRow label="Nóm. mecánico" value={`-$${fmt(pool)}`} color="text-purple-400" /> : null
 }
 
 function FinRow({ label, value, color }: { label: string; value: string; color: string }) {

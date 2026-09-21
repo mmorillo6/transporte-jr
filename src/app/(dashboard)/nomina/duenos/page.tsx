@@ -31,7 +31,7 @@ export default async function DuenosNominaPage({
   const selectedPeriod = periods.find(p => p.id === selectedId)
   if (!selectedPeriod) notFound()
 
-  const [payrollEntries, trips, expenses, tireDebts, diasInternosEntries] = await Promise.all([
+  const [payrollEntries, trips, expenses, tireDebts, diasInternosEntries, mechanicWorks] = await Promise.all([
     prisma.payrollEntry.findMany({
       where: { periodId: selectedId },
       include: {
@@ -64,7 +64,27 @@ export default async function DuenosNominaPage({
       where: { fecha: { gte: selectedPeriod.startDate, lte: selectedPeriod.endDate } },
       select: { truckId: true, totalHoras: true },
     }),
+    prisma.mechanicWork.findMany({
+      where: { date: { gte: selectedPeriod.startDate, lte: selectedPeriod.endDate } },
+      select: { truckId: true, cost: true },
+    }),
   ])
+
+  // Nóm. mecánico desglosado — el pool repartido ($X ÷ camiones activos) vs. una
+  // reparación puntual de ese camión (MechanicWork o Expense MECANICA). Antes se
+  // mostraban sumados bajo una sola línea "Nóm. mecánico" y confundió a Fernando
+  // (2026-09-21): pensó que el sueldo del pool estaba mal cuando en realidad el
+  // número correcto incluía también una reparación de su camión. mechExtraByTruck
+  // se resta del mechanicFee ya correcto (nunca se recalcula desde cero) para que
+  // pool+extra siempre sumen exacto lo que ya se le resta al camión.
+  const mechExtraByTruck = new Map<string, number>()
+  for (const w of mechanicWorks) {
+    mechExtraByTruck.set(w.truckId, (mechExtraByTruck.get(w.truckId) ?? 0) + w.cost)
+  }
+  for (const exp of expenses) {
+    if (!exp.truckId || exp.category !== 'MECANICA') continue
+    mechExtraByTruck.set(exp.truckId, (mechExtraByTruck.get(exp.truckId) ?? 0) + exp.amount)
+  }
 
   // Días internos por camión ($20/h, siempre Aurumin)
   const diasByTruck = new Map<string, number>()
@@ -109,6 +129,10 @@ export default async function DuenosNominaPage({
     lpGross: number
     commFee: number
     mechFee: number
+    // Desglose de mechFee — ver mechExtraByTruck arriba. mechFeeExtra es el
+    // gasto puntual de ESTE camión; mechFeePool es el resto (pool ÷ camiones activos).
+    mechFeePool: number
+    mechFeeExtra: number
     adminFee: number
     nprFee: number
     driverWage: number
@@ -203,6 +227,8 @@ export default async function DuenosNominaPage({
       lpGross,
       commFee: entry.commissionFee,
       mechFee: entry.mechanicFee,
+      mechFeeExtra: Math.round((mechExtraByTruck.get(entry.truckId) ?? 0) * 100) / 100,
+      mechFeePool: Math.round((entry.mechanicFee - (mechExtraByTruck.get(entry.truckId) ?? 0)) * 100) / 100,
       adminFee: entry.adminFee,
       nprFee: entry.nprFee,
       driverWage: entry.driverWage,
