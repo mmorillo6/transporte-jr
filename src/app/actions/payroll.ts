@@ -750,19 +750,40 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
   )
 
   const cxcCreadas: string[] = []
+  const cxcActualizadas: string[] = []
   for (const [clientName, gross] of [['AURUMIN', grossAurumin], ['LUIS PEÑA', grossLuisPena]] as const) {
     if (gross <= 0) continue
+    const roundedGross = Math.round(gross * 100) / 100
     const existing = await prisma.cuentaPorCobrar.findFirst({ where: { clientName, periodLabel } })
-    if (existing) continue
+    if (existing) {
+      // Reabrir el período y agregar/corregir un viaje (ej. rezagado de romana)
+      // cambia la facturación real DESPUÉS de que esta cuenta ya se creó — antes
+      // se dejaba intacta para siempre y el ajuste se perdía silenciosamente
+      // (caso real: viaje de Leo agregado 2026-09-21, CxC quedó corta $87.50).
+      // Ahora se corrige el total al recerrar, preservando lo ya abonado.
+      if (Math.abs(roundedGross - existing.totalAmount) >= 0.01) {
+        const newBalance = Math.max(0, Math.round((roundedGross - existing.amountPaid) * 100) / 100)
+        await prisma.cuentaPorCobrar.update({
+          where: { id: existing.id },
+          data: {
+            totalAmount: roundedGross,
+            balance:     newBalance,
+            status:      newBalance <= 0 ? 'PAID' : existing.amountPaid > 0 ? 'PARTIAL' : 'PENDING',
+          },
+        })
+        cxcActualizadas.push(clientName)
+      }
+      continue
+    }
     await prisma.cuentaPorCobrar.create({
       data: {
         clientName,
         concept:     `Facturación ${periodLabel}`,
         periodLabel,
         date:        period.endDate,
-        totalAmount: gross,
+        totalAmount: roundedGross,
         amountPaid:  0,
-        balance:     gross,
+        balance:     roundedGross,
         status:      'PENDING',
       },
     })
@@ -788,7 +809,7 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
   // termine, sin retrasar la respuesta de closePeriod.
   after(() => notifyPeriodReady(periodId).catch(e => console.error('Auto-notify failed:', e)))
 
-  return { ok: true, prestamos, cxcCreadas }
+  return { ok: true, prestamos, cxcCreadas, cxcActualizadas }
 }
 
 // ─── Checklist de cierre — datos frescos desde BD ────────────────────────────
