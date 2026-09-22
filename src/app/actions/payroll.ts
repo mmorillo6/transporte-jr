@@ -755,39 +755,70 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
     if (gross <= 0) continue
     const roundedGross = Math.round(gross * 100) / 100
     const existing = await prisma.cuentaPorCobrar.findFirst({ where: { clientName, periodLabel } })
+
+    // Arrastre: saldo pendiente de cuentas ANTERIORES no pagadas del mismo
+    // cliente (misma lógica que ya usa la Relación formal en previewRelacion/
+    // acumulado) — así la cuenta de esta quincena queda con el total real que
+    // hay que cobrar, sin tener que sumar mentalmente varias filas.
+    const pendientesAnteriores = await prisma.cuentaPorCobrar.findMany({
+      where: {
+        clientName,
+        status: { not: 'PAID' },
+        date:   { lt: period.endDate },
+        ...(existing ? { id: { not: existing.id } } : {}),
+      },
+    })
+    const arrastre = pendientesAnteriores.reduce((s, c) => s + c.balance, 0)
+    const totalConArrastre = Math.round((roundedGross + arrastre) * 100) / 100
+
     if (existing) {
       // Reabrir el período y agregar/corregir un viaje (ej. rezagado de romana)
       // cambia la facturación real DESPUÉS de que esta cuenta ya se creó — antes
       // se dejaba intacta para siempre y el ajuste se perdía silenciosamente
-      // (caso real: viaje de Leo agregado 2026-09-21, CxC quedó corta $87.50).
-      // Ahora se corrige el total al recerrar, preservando lo ya abonado.
-      if (Math.abs(roundedGross - existing.totalAmount) >= 0.01) {
-        const newBalance = Math.max(0, Math.round((roundedGross - existing.amountPaid) * 100) / 100)
+      // (caso real: viaje de Leo agregado 2026-09-21, CxC quedó corta $87.50,
+      // y encima no arrastraba el pendiente de la quincena anterior).
+      if (Math.abs(totalConArrastre - existing.totalAmount) >= 0.01) {
+        const newBalance = Math.max(0, Math.round((totalConArrastre - existing.amountPaid) * 100) / 100)
         await prisma.cuentaPorCobrar.update({
           where: { id: existing.id },
           data: {
-            totalAmount: roundedGross,
+            totalAmount: totalConArrastre,
             balance:     newBalance,
             status:      newBalance <= 0 ? 'PAID' : existing.amountPaid > 0 ? 'PARTIAL' : 'PENDING',
           },
         })
         cxcActualizadas.push(clientName)
       }
-      continue
+    } else {
+      await prisma.cuentaPorCobrar.create({
+        data: {
+          clientName,
+          concept:     `Facturación ${periodLabel}`,
+          periodLabel,
+          date:        period.endDate,
+          totalAmount: totalConArrastre,
+          amountPaid:  0,
+          balance:     totalConArrastre,
+          status:      'PENDING',
+        },
+      })
+      cxcCreadas.push(clientName)
     }
-    await prisma.cuentaPorCobrar.create({
-      data: {
-        clientName,
-        concept:     `Facturación ${periodLabel}`,
-        periodLabel,
-        date:        period.endDate,
-        totalAmount: roundedGross,
-        amountPaid:  0,
-        balance:     roundedGross,
-        status:      'PENDING',
-      },
-    })
-    cxcCreadas.push(clientName)
+
+    // Consolidar las cuentas anteriores que se sumaron acá — quedan en $0 y
+    // marcadas pagadas, con nota de a dónde se trasladó su saldo, para que
+    // "Total por cobrar" no las siga contando aparte (doble conteo).
+    for (const p of pendientesAnteriores) {
+      await prisma.cuentaPorCobrar.update({
+        where: { id: p.id },
+        data: {
+          amountPaid: p.totalAmount,
+          balance:    0,
+          status:     'PAID',
+          notes:      `${p.notes ? p.notes + ' | ' : ''}Saldo trasladado a ${periodLabel}`,
+        },
+      })
+    }
   }
 
   await prisma.period.update({
