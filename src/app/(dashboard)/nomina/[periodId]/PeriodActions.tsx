@@ -85,12 +85,22 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
     const res = await closePeriod(periodId, dispositions)
     if ('error' in res && res.error) toast.error(res.error)
     else {
-      const r = res as { ok: boolean; prestamos: number; cxcCreadas: string[]; cxcActualizadas?: string[] }
+      const r = res as {
+        ok: boolean; prestamos: number; cxcCreadas: string[]; cxcActualizadas?: string[]
+        prestamosDesactualizados?: { plate: string; ownerName: string; prestado: number; deficitActual: number }[]
+      }
       const parts: string[] = ['Período cerrado']
       if (r.prestamos > 0) parts.push(`${r.prestamos} préstamo${r.prestamos !== 1 ? 's' : ''} CC`)
       if (r.cxcCreadas?.length > 0) parts.push(`CxC creada: ${r.cxcCreadas.join(', ')}`)
       if ((r.cxcActualizadas?.length ?? 0) > 0) parts.push(`CxC actualizada: ${r.cxcActualizadas!.join(', ')}`)
       toast.success(parts.join(' — '))
+      // No se toca ningún monto automáticamente — solo se avisa para que se
+      // revise a mano si el préstamo de caja chica sigue teniendo sentido.
+      for (const p of r.prestamosDesactualizados ?? []) {
+        toast.warning(
+          `⚠ ${p.plate} (${p.ownerName}): se prestaron $${p.prestado.toFixed(2)} de caja chica pero el déficit real ahora es $${p.deficitActual.toFixed(2)} — revisar`
+        )
+      }
       router.refresh()
     }
     setClosing(false)
@@ -116,7 +126,11 @@ export default function PeriodActions({ periodId, periodStatus, role, checklistD
     setReopening(true)
     const res = await reopenPeriod(periodId)
     if (res.error) toast.error(res.error)
-    else { toast.success('Período reabierto'); router.refresh() }
+    else {
+      toast.success('Período reabierto')
+      if (res.warning) toast.warning(res.warning)
+      router.refresh()
+    }
     setReopening(false)
   }
 

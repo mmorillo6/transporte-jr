@@ -40,8 +40,11 @@ export async function createExpense(formData: FormData) {
   const startDate = new Date(Date.UTC(year, month, startDay, 0, 0, 0))
   const endDate   = new Date(Date.UTC(year, month, endDay,   23, 59, 59))
 
+  // Busca por FECHA sin filtrar por status — mismo fix que trips.ts: antes
+  // solo buscaba períodos OPEN, así que un gasto de una fecha ya cerrada
+  // creaba un período nuevo duplicado en vez de reusar el que ya existe.
   let period = await prisma.period.findFirst({
-    where: { startDate: { lte: date }, endDate: { gte: date }, status: 'OPEN' },
+    where: { startDate: { lte: date }, endDate: { gte: date } },
   })
   if (!period) {
     period = await prisma.period.create({ data: { startDate, endDate, status: 'OPEN' } })

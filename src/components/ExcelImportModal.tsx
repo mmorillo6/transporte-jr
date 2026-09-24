@@ -2,7 +2,8 @@
 import { useState, useRef } from 'react'
 import { importTripsFromExcel } from '@/app/actions/trips'
 
-type Result = { created: number; skipped: number; errors: string[]; total: number }
+type ClosedPeriodWarning = { ticketNo: string; date: string; periodLabel: string }
+type Result = { created: number; skipped: number; errors: string[]; total: number; closedPeriodWarnings?: ClosedPeriodWarning[] }
 type Mismatch = { ticketNo: string; date: string; plate: string; driverInFile: string; assignedDriver: string }
 type Warning = { warning: true; existingCount: number; totalCount: number; pct: number; dateRange: string; mismatches?: Mismatch[] }
 
@@ -213,6 +214,19 @@ export default function ExcelImportModal({ onClose }: { onClose: () => void }) {
                 <p className="text-zinc-400 text-xs font-medium mb-2">Filas con errores:</p>
                 {result.errors.map((e, i) => (
                   <p key={i} className="text-amber-400 text-xs py-0.5">{e}</p>
+                ))}
+              </div>
+            )}
+
+            {(result.closedPeriodWarnings?.length ?? 0) > 0 && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 max-h-40 overflow-y-auto">
+                <p className="text-amber-300 text-xs font-medium mb-2">
+                  ⚠ {result.closedPeriodWarnings!.length} viaje{result.closedPeriodWarnings!.length !== 1 ? 's' : ''} cayó en un período YA CERRADO — reabrilo para que se sume a la nómina:
+                </p>
+                {result.closedPeriodWarnings!.map((w, i) => (
+                  <p key={i} className="text-amber-400 text-xs py-0.5">
+                    Ticket {w.ticketNo} — {new Date(w.date).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' })} → período {w.periodLabel}
+                  </p>
                 ))}
               </div>
             )}

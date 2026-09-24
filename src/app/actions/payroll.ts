@@ -731,6 +731,38 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
     prestamos++
   }
 
+  // Préstamos de caja chica que quedaron desactualizados: el camión ya tenía
+  // un "Préstamo CC" de un cierre anterior (por eso queda afuera del filtro
+  // de arriba), pero al reabrir y corregir un viaje/gasto el déficit real
+  // cambió (o se resolvió) — no se toca el monto prestado automáticamente
+  // (es plata que ya salió de caja de verdad), solo se avisa para que un
+  // humano decida si hay que ajustar el préstamo o devolver la diferencia.
+  const prestamosDesactualizados: { plate: string; ownerName: string; prestado: number; deficitActual: number }[] = []
+  const conPrestamoPrevio = entries.filter(e => e.cashEntryId)
+  if (conPrestamoPrevio.length > 0) {
+    const cashEntryIds = conPrestamoPrevio.map(e => e.cashEntryId!)
+    const cashEntriesById = new Map(
+      (await prisma.cashEntry.findMany({ where: { id: { in: cashEntryIds } } })).map(c => [c.id, c])
+    )
+    for (const entry of conPrestamoPrevio) {
+      const cashEntry = cashEntriesById.get(entry.cashEntryId!)
+      if (!cashEntry) continue
+      const deficitActual = entry.netAmount < 0 ? Math.round(Math.abs(entry.netAmount) * 100) / 100 : 0
+      if (Math.abs(deficitActual - cashEntry.amount) >= 0.01) {
+        const truck = await prisma.truck.findUnique({
+          where: { id: entry.truckId },
+          select: { plate: true, owner: { select: { name: true } } },
+        })
+        prestamosDesactualizados.push({
+          plate: truck?.plate ?? entry.truckId,
+          ownerName: truck?.owner?.name ?? '',
+          prestado: cashEntry.amount,
+          deficitActual,
+        })
+      }
+    }
+  }
+
   // Auto-crear CxC por cliente (descontando déficits absorbidos)
   const fmtD = (d: Date) =>
     new Date(d).toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', timeZone: 'UTC' })
@@ -840,7 +872,7 @@ export async function closePeriod(periodId: string, dispositions?: Record<string
   // termine, sin retrasar la respuesta de closePeriod.
   after(() => notifyPeriodReady(periodId).catch(e => console.error('Auto-notify failed:', e)))
 
-  return { ok: true, prestamos, cxcCreadas, cxcActualizadas }
+  return { ok: true, prestamos, cxcCreadas, cxcActualizadas, prestamosDesactualizados }
 }
 
 // ─── Checklist de cierre — datos frescos desde BD ────────────────────────────
@@ -938,6 +970,15 @@ export async function reopenPeriod(periodId: string) {
     return { error: 'No autorizado' }
   }
 
+  // No se bloquea (reabrir una quincena vieja para corregir algo mientras la
+  // actual sigue abierta es un flujo real y válido), pero si queda más de un
+  // período abierto a la vez se avisa — todas las pantallas ya muestran "el
+  // período abierto" ordenando por fecha más reciente, así que no se rompe
+  // nada, pero es una señal de que hay que cerrar la vieja de nuevo pronto.
+  const otroAbierto = await prisma.period.findFirst({
+    where: { status: 'OPEN', id: { not: periodId } },
+  })
+
   const period = await prisma.period.update({
     where: { id: periodId },
     data: { status: 'OPEN' },
@@ -954,7 +995,12 @@ export async function reopenPeriod(periodId: string) {
     console.error('notify reopenPeriod:', (e as Error).message)
   }
 
-  return { ok: true }
+  return {
+    ok: true,
+    warning: otroAbierto
+      ? `Ojo: quedaron 2 períodos abiertos a la vez (este y ${fmt(otroAbierto.startDate)}–${fmt(otroAbierto.endDate)}). Cerrá este de nuevo cuando termines la corrección.`
+      : null,
+  }
 }
 
 // ─── Marcar un camión como pagado ────────────────────────────────────────────

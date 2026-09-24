@@ -36,7 +36,9 @@ export default function NominaActions({
 
   async function handleReopen() {
     setLoading(true)
-    await reopenPeriod(periodId)
+    const res = await reopenPeriod(periodId)
+    if (res.error) toast.error(res.error)
+    else if (res.warning) toast.warning(res.warning)
     router.refresh()
     setLoading(false)
   }

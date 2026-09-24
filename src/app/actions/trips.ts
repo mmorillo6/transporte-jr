@@ -17,11 +17,17 @@ async function getOrCreateActivePeriod(date: Date) {
   const startDate = new Date(Date.UTC(year, month, startDay, 0, 0, 0))
   const endDate   = new Date(Date.UTC(year, month, endDay,   23, 59, 59))
 
+  // Busca por FECHA, sin filtrar por status — antes solo buscaba períodos
+  // OPEN, así que si la quincena real de esa fecha ya estaba cerrada (ej. se
+  // importa desde romana un viaje rezagado sin reabrir primero), no la
+  // encontraba y creaba un período NUEVO duplicado con las mismas fechas,
+  // dejando el viaje huérfano en un período fantasma que nunca entra a la
+  // nómina real. Ahora reutiliza el período que ya exista para esa fecha,
+  // esté abierto o cerrado — solo crea uno nuevo si de verdad no existe.
   let period = await prisma.period.findFirst({
     where: {
       startDate: { lte: date },
       endDate: { gte: date },
-      status: 'OPEN',
     },
   })
 
@@ -320,6 +326,12 @@ export async function importTripsFromExcel(formData: FormData) {
 
   let created = 0
   let skipped = 0
+  // Viajes rezagados cuya fecha cae en un período que ya está cerrado — se
+  // guardan bien (ver fix de getOrCreateActivePeriod), pero no van a
+  // reflejarse en la nómina hasta que alguien reabra ese período a propósito.
+  // Antes esto pasaba desapercibido porque el sistema creaba un período
+  // fantasma nuevo en vez de avisar.
+  const closedPeriodWarnings: { ticketNo: string; date: string; periodLabel: string }[] = []
   const errors: string[] = []
 
   const sheetName = workbook.SheetNames[0]
@@ -382,6 +394,15 @@ export async function importTripsFromExcel(formData: FormData) {
       const viatico = await calcViatico(route, truck.id, date)
       const period  = await getOrCreateActivePeriod(date)
 
+      if (period.status !== 'OPEN') {
+        const fmtP = (d: Date) => d.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' })
+        closedPeriodWarnings.push({
+          ticketNo,
+          date: date.toISOString(),
+          periodLabel: `${fmtP(period.startDate)} al ${fmtP(period.endDate)}`,
+        })
+      }
+
       await prisma.trip.create({
         data: {
           date,
@@ -405,5 +426,5 @@ export async function importTripsFromExcel(formData: FormData) {
   revalidatePath('/viajes')
   revalidatePath('/dashboard')
 
-  return { created, skipped, errors, total: rows.length - 10 }
+  return { created, skipped, errors, total: rows.length - 10, closedPeriodWarnings }
 }
