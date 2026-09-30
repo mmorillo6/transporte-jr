@@ -1078,9 +1078,21 @@ export async function registerPayment(
     },
   })
 
-  await prisma.payrollAbono.create({
-    data: { entryId, side, amount: roundedAmount, currency, cashEntryId: cashEntry.id },
-  })
+  // Diagnóstico 2026-09-30: en producción esta fila no se está creando para
+  // ningún pago real desde que se agregó (2026-09-07), aunque el resto de la
+  // función sí corre bien (abono/netAmount quedan correctos) y no aparece
+  // ningún error en los logs — probado en vivo con Fernando. Se envuelve en
+  // try/catch para que, si de verdad está lanzando un error en producción que
+  // no se estaba viendo, quede registrado explícitamente sin arriesgar el
+  // pago real (que es lo importante) si vuelve a fallar.
+  try {
+    const created = await prisma.payrollAbono.create({
+      data: { entryId, side, amount: roundedAmount, currency, cashEntryId: cashEntry.id },
+    })
+    console.log(`[registerPayment] PayrollAbono creado ok: id=${created.id} entryId=${entryId} side=${side} amount=${roundedAmount}`)
+  } catch (e) {
+    console.error(`[registerPayment] FALLÓ payrollAbono.create — entryId=${entryId} side=${side} amount=${roundedAmount} cashEntryId=${cashEntry.id}:`, e)
+  }
 
   await prisma.payrollEntry.update({
     where: { id: entryId },
