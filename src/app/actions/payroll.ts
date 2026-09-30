@@ -1067,40 +1067,39 @@ export async function registerPayment(
   const isNprRow = entry.truck.owner.isNPROwner && entry.grossAmount === 0 && entry.nprFee > 0
   const side: 'AURUMIN' | 'LP' | 'NPR' = isNprRow ? 'NPR' : (currency === 'USDT' ? 'AURUMIN' : 'LP')
 
-  const cashEntry = await prisma.cashEntry.create({
-    data: {
-      type:    'EGRESO',
-      currency,
-      amount:  roundedAmount,
-      concept: `Pago nómina — ${entry.truck.plate} (${entry.truck.owner.name})`,
-      source:  'NOMINA',
-      truckId: entry.truckId,
-    },
-  })
+  // Diagnóstico 2026-09-30 (confirmado en vivo con Fernando): con estas 3
+  // escrituras sueltas (cada una en su propio round-trip), Prisma reportaba
+  // "creado ok" para el PayrollAbono — con id incluido — pero la fila nunca
+  // llegaba a la base de datos real. cashEntry y payrollEntry sí persistían
+  // siempre. Envolver las 3 en una sola transacción ($transaction) fuerza que
+  // compartan una única conexión con BEGIN/COMMIT real, que es la forma
+  // correcta de garantizar esto contra el pooler de la base de datos — de
+  // paso las vuelve atómicas (antes, si algo fallaba a mitad de camino, podía
+  // quedar el CashEntry creado sin su PayrollEntry actualizado).
+  await prisma.$transaction(async tx => {
+    const cashEntry = await tx.cashEntry.create({
+      data: {
+        type:    'EGRESO',
+        currency,
+        amount:  roundedAmount,
+        concept: `Pago nómina — ${entry.truck.plate} (${entry.truck.owner.name})`,
+        source:  'NOMINA',
+        truckId: entry.truckId,
+      },
+    })
 
-  // Diagnóstico 2026-09-30: en producción esta fila no se está creando para
-  // ningún pago real desde que se agregó (2026-09-07), aunque el resto de la
-  // función sí corre bien (abono/netAmount quedan correctos) y no aparece
-  // ningún error en los logs — probado en vivo con Fernando. Se envuelve en
-  // try/catch para que, si de verdad está lanzando un error en producción que
-  // no se estaba viendo, quede registrado explícitamente sin arriesgar el
-  // pago real (que es lo importante) si vuelve a fallar.
-  try {
-    const created = await prisma.payrollAbono.create({
+    await tx.payrollAbono.create({
       data: { entryId, side, amount: roundedAmount, currency, cashEntryId: cashEntry.id },
     })
-    console.log(`[registerPayment] PayrollAbono creado ok: id=${created.id} entryId=${entryId} side=${side} amount=${roundedAmount}`)
-  } catch (e) {
-    console.error(`[registerPayment] FALLÓ payrollAbono.create — entryId=${entryId} side=${side} amount=${roundedAmount} cashEntryId=${cashEntry.id}:`, e)
-  }
 
-  await prisma.payrollEntry.update({
-    where: { id: entryId },
-    data: {
-      abono:     { increment: roundedAmount },
-      netAmount: newNetAmount,
-      ...(fullyPaid ? { paidAt: new Date(), paymentMethod: currency } : {}),
-    },
+    await tx.payrollEntry.update({
+      where: { id: entryId },
+      data: {
+        abono:     { increment: roundedAmount },
+        netAmount: newNetAmount,
+        ...(fullyPaid ? { paidAt: new Date(), paymentMethod: currency } : {}),
+      },
+    })
   })
 
   revalidatePath('/nomina/duenos')
