@@ -483,12 +483,13 @@ export async function crearRutaDesdeRomana(data: {
   hasViatico: boolean
   viaticoSingle: number
   viaticoDouble: number
+  clientName: 'AURUMIN' | 'LUIS PEÑA'
 }) {
   const route = await prisma.route.create({
     data: { ...data, active: true },
   })
   revalidatePath('/rutas')
-  return { id: route.id, name: route.name, rate: route.rate, rateType: route.rateType }
+  return { id: route.id, name: route.name, rate: route.rate, rateType: route.rateType, clientName: route.clientName }
 }
 
 export async function confirmarImport(trips: RomanaTrip[], openPeriodId?: string) {

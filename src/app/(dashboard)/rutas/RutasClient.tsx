@@ -16,6 +16,7 @@ type Route = {
   viaticoDouble: number
   bidirectional: boolean
   active: boolean
+  clientName: string
   _count: { trips: number }
 }
 
@@ -103,6 +104,16 @@ export default function RutasClient({
                   <option value="PER_HOUR">Por hora</option>
                 </select>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1.5">Cliente *</label>
+              <select name="clientName" required defaultValue={editing?.clientName ?? 'AURUMIN'}
+                className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500">
+                <option value="AURUMIN">Aurumin</option>
+                <option value="LUIS PEÑA">Luis Peña</option>
+              </select>
+              <p className="text-zinc-600 text-xs mt-1">A qué cliente le pertenece esta mina (define a quién se le factura y a quién le cuentan los viajes)</p>
             </div>
 
             <div className="grid grid-cols-4 gap-4">

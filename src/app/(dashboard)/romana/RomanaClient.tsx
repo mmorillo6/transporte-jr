@@ -186,6 +186,7 @@ export default function RomanaClient({ openPeriodId, systemConfig = [], owners =
     rate: string; driverWage: string; fuelLitersPerTrip: string
     bidirectional: boolean; hasViatico: boolean
     viaticoSingle: string; viaticoDouble: string
+    clientName: 'AURUMIN' | 'LUIS PEÑA'
     saving: boolean; error: string
   }
   const [rutaForms, setRutaForms] = useState<Record<string, RutaForm>>({})
@@ -200,6 +201,7 @@ export default function RomanaClient({ openPeriodId, systemConfig = [], owners =
         rate: '', driverWage: '', fuelLitersPerTrip: '',
         bidirectional: false, hasViatico: false,
         viaticoSingle: '', viaticoDouble: '',
+        clientName: 'AURUMIN',
         saving: false, error: '',
       },
     }))
@@ -224,8 +226,9 @@ export default function RomanaClient({ openPeriodId, systemConfig = [], owners =
         hasViatico:        f.hasViatico,
         viaticoSingle:     parseFloat(f.viaticoSingle) || 0,
         viaticoDouble:     parseFloat(f.viaticoDouble) || 0,
+        clientName:        f.clientName,
       })
-      setNewRoutes(prev => [...prev, { ...route, clientName: 'AURUM' }])
+      setNewRoutes(prev => [...prev, route])
       setProveedorClassifications(prev => ({ ...prev, [proveedor]: route.id }))
       updateForm(proveedor, { saving: false })
     } catch (e: unknown) {
@@ -1035,6 +1038,17 @@ export default function RomanaClient({ openPeriodId, systemConfig = [], owners =
                                 onChange={e => updateForm(up.name, { name: e.target.value })}
                                 className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
                               />
+                            </div>
+
+                            <div>
+                              <label className="text-zinc-500 text-xs block mb-1">Cliente</label>
+                              <select
+                                value={f.clientName}
+                                onChange={e => updateForm(up.name, { clientName: e.target.value as 'AURUMIN' | 'LUIS PEÑA' })}
+                                className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
+                                <option value="AURUMIN">Aurumin</option>
+                                <option value="LUIS PEÑA">Luis Peña</option>
+                              </select>
                             </div>
 
                             <div className="grid grid-cols-2 gap-2.5">

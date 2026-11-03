@@ -93,14 +93,16 @@ export async function createRoute(formData: FormData) {
   const driverWage = parseFloat(formData.get('driverWage') as string) || 0
   const fuelLitersPerTrip = parseFloat(formData.get('fuelLitersPerTrip') as string) || 0
   const bidirectional = formData.get('bidirectional') === 'true'
+  const clientName = formData.get('clientName') as string
 
   if (!name || !rateType || isNaN(rate)) return { error: 'Nombre, tipo y tarifa son requeridos' }
+  if (!['AURUMIN', 'LUIS PEÑA'].includes(clientName)) return { error: 'Selecciona a qué cliente pertenece la mina' }
 
   const existing = await prisma.route.findUnique({ where: { name } })
   if (existing) return { error: `La ruta "${name}" ya existe` }
 
   await prisma.route.create({
-    data: { name, rateType: rateType as any, rate, driverWage, fuelLitersPerTrip, hasViatico, viaticoSingle, viaticoDouble, bidirectional, active: true },
+    data: { name, rateType: rateType as any, rate, driverWage, fuelLitersPerTrip, hasViatico, viaticoSingle, viaticoDouble, bidirectional, clientName, active: true },
   })
 
   revalidatePath('/rutas')
@@ -121,10 +123,13 @@ export async function updateRoute(id: string, formData: FormData) {
   const fuelLitersPerTrip = parseFloat(formData.get('fuelLitersPerTrip') as string) || 0
   const bidirectional = formData.get('bidirectional') === 'true'
   const active = formData.get('active') === 'true'
+  const clientName = formData.get('clientName') as string
+
+  if (!['AURUMIN', 'LUIS PEÑA'].includes(clientName)) return { error: 'Selecciona a qué cliente pertenece la mina' }
 
   await prisma.route.update({
     where: { id },
-    data: { name, rateType: rateType as any, rate, driverWage, fuelLitersPerTrip, hasViatico, viaticoSingle, viaticoDouble, bidirectional, active },
+    data: { name, rateType: rateType as any, rate, driverWage, fuelLitersPerTrip, hasViatico, viaticoSingle, viaticoDouble, bidirectional, clientName, active },
   })
 
   revalidatePath('/rutas')
