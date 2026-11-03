@@ -246,8 +246,49 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
   const currentCashEntryIds  = new Map(currentEntries.filter(e => e.cashEntryId  !== null).map(e => [e.truckId, e.cashEntryId!]))
   const currentPaidAts       = new Map(currentEntries.filter(e => e.paidAt       !== null).map(e => [e.truckId, e.paidAt!]))
 
+  // El total del abono ya se preserva arriba (currentAbonos), pero el desglose de a qué
+  // LADO llegó cada pago (PayrollAbono.side: AURUMIN/LP/NPR) vivía colgado de la entry
+  // vieja con onDelete: Cascade — al borrar esa entry para regenerar, esas filas
+  // desaparecían con ella y la etiqueta se perdía (quedaba todo el abono "huérfano",
+  // atribuido por default a Aurumin en pantalla). Se guarda aquí por truckId para
+  // recrearlas después, colgadas de la entry nueva — mismos side/amount/currency/
+  // cashEntryId/notes/date, sin tocar ningún número.
+  const currentAbonoRows = await prisma.payrollAbono.findMany({
+    where: { entry: { periodId } },
+    include: { entry: { select: { truckId: true } } },
+  })
+  const abonoRowsByTruck = new Map<string, typeof currentAbonoRows>()
+  for (const a of currentAbonoRows) {
+    const tId = a.entry.truckId
+    abonoRowsByTruck.set(tId, [...(abonoRowsByTruck.get(tId) ?? []), a])
+  }
+
   // ── Eliminar entradas existentes para regenerar ───────────────────────────────
   await prisma.payrollEntry.deleteMany({ where: { periodId } })
+
+  // Recrea, colgadas de la entry nueva, las filas PayrollAbono que tenía ese camión
+  // antes de borrar (ver abonoRowsByTruck arriba) — mismos valores, solo cambia el entryId.
+  // Recibe el mismo `tx` de la transacción que crea la entry: igual que en
+  // registerPayment, escribir entry + sus abonos como llamadas sueltas (fuera de
+  // una transacción real) hacía que Prisma reportara éxito sin persistir contra
+  // el pooler de la base — aquí aplica el mismo riesgo, así que se evita igual.
+  async function restoreAbonoRows(tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0], truckId: string, newEntryId: string) {
+    const rows = abonoRowsByTruck.get(truckId)
+    if (!rows || rows.length === 0) return
+    for (const r of rows) {
+      await tx.payrollAbono.create({
+        data: {
+          entryId:     newEntryId,
+          side:        r.side,
+          amount:      r.amount,
+          currency:    r.currency,
+          cashEntryId: r.cashEntryId,
+          notes:       r.notes,
+          date:        r.date,
+        },
+      })
+    }
+  }
 
   const created = []
 
@@ -331,28 +372,32 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
       + saldoInicial
       - abono
 
-    const entry = await prisma.payrollEntry.create({
-      data: {
-        periodId,
-        truckId,
-        totalTons:    Math.round(totalTons    * 1000) / 1000,
-        grossAmount:  Math.round(grossAmount  * 100)  / 100,
-        viaticos:     Math.round(viaticos     * 100)  / 100,
-        driverWage:   Math.round(driverWage   * 100)  / 100,
-        commissionFee: Math.round(gastosOp    * 100)  / 100,  // gastosOp reutiliza commissionFee
-        nprFee:       Math.round(nprFee       * 100)  / 100,
-        mechanicFee:  Math.round(mechanicFee  * 100)  / 100,
-        adminFee:     Math.round(adminFee     * 100)  / 100,
-        deductions:   Math.round(loanDeductions * 100) / 100,
-        saldoInicial: Math.round(saldoInicial * 100)  / 100,
-        abono:        Math.round(abono        * 100)  / 100,
-        netAmount:          Math.round(netAmount    * 100)  / 100,
-        driverWageOverride: currentWageOverrides.has(truckId)
-          ? Math.round(currentWageOverrides.get(truckId)! * 100) / 100
-          : null,
-        cashEntryId: currentCashEntryIds.get(truckId) ?? null,
-        paidAt:      currentPaidAts.get(truckId) ?? null,
-      },
+    const entry = await prisma.$transaction(async tx => {
+      const newEntry = await tx.payrollEntry.create({
+        data: {
+          periodId,
+          truckId,
+          totalTons:    Math.round(totalTons    * 1000) / 1000,
+          grossAmount:  Math.round(grossAmount  * 100)  / 100,
+          viaticos:     Math.round(viaticos     * 100)  / 100,
+          driverWage:   Math.round(driverWage   * 100)  / 100,
+          commissionFee: Math.round(gastosOp    * 100)  / 100,  // gastosOp reutiliza commissionFee
+          nprFee:       Math.round(nprFee       * 100)  / 100,
+          mechanicFee:  Math.round(mechanicFee  * 100)  / 100,
+          adminFee:     Math.round(adminFee     * 100)  / 100,
+          deductions:   Math.round(loanDeductions * 100) / 100,
+          saldoInicial: Math.round(saldoInicial * 100)  / 100,
+          abono:        Math.round(abono        * 100)  / 100,
+          netAmount:          Math.round(netAmount    * 100)  / 100,
+          driverWageOverride: currentWageOverrides.has(truckId)
+            ? Math.round(currentWageOverrides.get(truckId)! * 100) / 100
+            : null,
+          cashEntryId: currentCashEntryIds.get(truckId) ?? null,
+          paidAt:      currentPaidAts.get(truckId) ?? null,
+        },
+      })
+      await restoreAbonoRows(tx, truckId, newEntry.id)
+      return newEntry
     })
     created.push(entry)
   }
@@ -399,23 +444,27 @@ export async function generatePayroll(periodId: string, options: PayrollOptions 
     const nprAbono = currentAbonos.get(nprTruck.id) ?? 0
     const nprNet = Math.round((totalNprCollected - totalNprExpenses + nprSaldoInicial - nprAbono) * 100) / 100
 
-    const nprEntry = await prisma.payrollEntry.create({
-      data: {
-        periodId,
-        truckId:      nprTruck.id,
-        totalTons:    0,
-        grossAmount:  0,
-        viaticos:     0,
-        driverWage:   0,
-        commissionFee: Math.round(totalNprExpenses * 100) / 100,
-        nprFee:       Math.round(totalNprCollected * 100) / 100,
-        mechanicFee:  0,
-        adminFee:     0,
-        deductions:   0,
-        saldoInicial: Math.round(nprSaldoInicial * 100) / 100,
-        abono:        Math.round(nprAbono * 100) / 100,
-        netAmount:    nprNet,
-      },
+    const nprEntry = await prisma.$transaction(async tx => {
+      const newEntry = await tx.payrollEntry.create({
+        data: {
+          periodId,
+          truckId:      nprTruck.id,
+          totalTons:    0,
+          grossAmount:  0,
+          viaticos:     0,
+          driverWage:   0,
+          commissionFee: Math.round(totalNprExpenses * 100) / 100,
+          nprFee:       Math.round(totalNprCollected * 100) / 100,
+          mechanicFee:  0,
+          adminFee:     0,
+          deductions:   0,
+          saldoInicial: Math.round(nprSaldoInicial * 100) / 100,
+          abono:        Math.round(nprAbono * 100) / 100,
+          netAmount:    nprNet,
+        },
+      })
+      await restoreAbonoRows(tx, nprTruck.id, newEntry.id)
+      return newEntry
     })
     created.push(nprEntry)
   }
