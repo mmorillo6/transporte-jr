@@ -180,11 +180,7 @@ export default function DuenosNominaClient({
     const lpSaldo = truck.paidAt
       ? 0
       : Math.round((truck.lpGross + nprSignLP - truck.deductions - (costsGoToLP ? sharedCosts : 0) - truck.abonoLP) * 100) / 100
-    // El abono NPR (A15AE9Y) no pertenece al lado Aurumin ni al LP, así que no entra en
-    // esos dos saldos — pero sí baja lo que se le debe al dueño. Se resta solo acá, en el
-    // total del camión: restarlo de auruminSaldo descuadraría el bloque "Aurumin" en pantalla.
-    const saldoTotal = Math.round((auruminSaldo + lpSaldo - truck.abonoNPR) * 100) / 100
-    return { auruminSaldo, lpSaldo, saldoTotal, nprAurumin, nprLP, costsGoToLP }
+    return { auruminSaldo, lpSaldo, nprAurumin, nprLP, costsGoToLP }
   }
 
   async function handlePayment(entryId: string, currency: 'EFECTIVO' | 'USDT', confirmed = false) {
@@ -349,9 +345,8 @@ export default function DuenosNominaClient({
 
                   {/* Bottom: financial summary, always left-aligned */}
                   {(() => {
-                    const ownerSaldo = row.trucks.reduce((sum, tr) => {
-                      return sum + computeTruckSaldos(tr, row.owner.type, row.owner.isNPROwner).saldoTotal
-                    }, 0)
+                    // Total del dueño = saldos guardados de sus camiones (lo mismo que se arrastra).
+                    const ownerSaldo = Math.round(row.totals.netAmount * 100) / 100
                     const allLpPaid = row.trucks.filter(tr => tr.lpGross > 0).every(tr => tr.paidAt)
                     return (
                       <div className="flex items-center gap-4 text-xs flex-wrap pl-4">
@@ -681,9 +676,7 @@ export default function DuenosNominaClient({
 
                     {/* Owner total */}
                     {(() => {
-                      const ownerSaldo = row.trucks.reduce((sum, tr) => {
-                        return sum + computeTruckSaldos(tr, row.owner.type, row.owner.isNPROwner).saldoTotal
-                      }, 0)
+                      const ownerSaldo = Math.round(row.totals.netAmount * 100) / 100
                       return (
                         <div className="bg-zinc-800/60 rounded-xl px-4 py-3 flex items-center justify-between">
                           <div className="space-y-0.5">
