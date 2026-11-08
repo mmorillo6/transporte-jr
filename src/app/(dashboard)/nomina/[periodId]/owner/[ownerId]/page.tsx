@@ -84,6 +84,10 @@ export default async function OwnerRelacionPage({
     return { aurumin: Math.round((aurumin + Math.max(orphan, 0)) * 100) / 100, lp: Math.round(lp * 100) / 100, npr: Math.round(npr * 100) / 100 }
   }
 
+  // Afiliados pagan sus choferes directo — driverWage es informativo, no se descuenta
+  // (regla intocable, ver project_reglas_intocables_nomina.md).
+  const isAfiliado = owner.type === 'AFILIADO'
+
   // Totales consolidados
   const totalGastos    = e.reduce((s: number, x: any) => s + (x.commissionFee ?? 0), 0)
   const totalChofer    = e.reduce((s: number, x: any) => s + x.driverWage, 0)
@@ -93,6 +97,7 @@ export default async function OwnerRelacionPage({
   const totalSaldoIni  = e.reduce((s: number, x: any) => s + (x.saldoInicial ?? 0), 0)
   const totalAbonoAurumin = e.reduce((s: number, x: any) => s + splitAbono(x).aurumin, 0)
   const totalAbonoLP      = e.reduce((s: number, x: any) => s + splitAbono(x).lp, 0)
+  const totalAbonoNPR     = e.reduce((s: number, x: any) => s + splitAbono(x).npr, 0)
   const totalNet       = e.reduce((s: number, x: any) => s + x.netAmount, 0)
   const totalTireDebt  = tireDebts.reduce((s, d) => s + d.balance, 0)
 
@@ -103,22 +108,31 @@ export default async function OwnerRelacionPage({
     gastosByTruck.set(key, [...(gastosByTruck.get(key) ?? []), exp])
   }
 
-  // Splits Aurumin / Luis Peña por camión
-  const nprPct = (owner.nprPercent ?? 10) / 100
+  // Splits Aurumin / Luis Peña por camión.
+  // Solo pantalla: el NPR sale del nprFee guardado (no se recalcula con el % del
+  // dueño, que omitía el NPR recaudado de A15AE9Y para José), repartido según la
+  // facturación de cada lado como en DuenosNominaClient. Si quedara alguna
+  // diferencia con el netAmount guardado (ajustes manuales viejos), se muestra
+  // como "Ajuste manual" para que los bloques sumen lo mismo que "Total a cobrar".
   const truckSplits = e.map((entry: any) => {
     const trips  = entry.truck.trips as any[]
     const gTrips = trips.filter((t: any) => t.route?.clientName !== 'LUIS PEÑA')
     const lpTrips= trips.filter((t: any) => t.route?.clientName === 'LUIS PEÑA')
     const gGross = gTrips.reduce( (s: number, t: any) => s + t.amount, 0)
     const lpGross= lpTrips.reduce((s: number, t: any) => s + t.amount, 0)
-    const nprA   = Math.round(gGross  * nprPct * 100) / 100
-    const nprLP  = Math.round(lpGross * nprPct * 100) / 100
+    const nprFee = entry.nprFee ?? 0
+    const gross  = gGross + lpGross
+    const nprA   = gross > 0 ? Math.round(nprFee * (gGross / gross) * 100) / 100 : nprFee
+    const nprLP  = Math.round((nprFee - nprA) * 100) / 100
     const abonoSplit = splitAbono(entry)
-    const saldoA = Math.round(((entry.saldoInicial ?? 0) + gGross - (entry.commissionFee ?? 0) - entry.driverWage - (entry.mechanicFee ?? 0) - (entry.adminFee ?? 0) + (owner.isNPROwner ? nprA : -nprA) - entry.deductions - abonoSplit.aurumin) * 100) / 100
-    const saldoLP= Math.round((lpGross - nprLP - abonoSplit.lp) * 100) / 100
+    const chofer = isAfiliado ? 0 : entry.driverWage
+    const saldoABase = Math.round(((entry.saldoInicial ?? 0) + gGross - (entry.commissionFee ?? 0) - chofer - (entry.mechanicFee ?? 0) - (entry.adminFee ?? 0) + (owner.isNPROwner ? nprA : -nprA) - entry.deductions - abonoSplit.aurumin - abonoSplit.npr) * 100) / 100
+    const saldoLP= Math.round((lpGross + (owner.isNPROwner ? nprLP : -nprLP) - abonoSplit.lp) * 100) / 100
+    const ajuste = Math.round((entry.netAmount - saldoABase - saldoLP) * 100) / 100
+    const saldoA = Math.round((saldoABase + ajuste) * 100) / 100
     return {
-      entryId: entry.id, gGross, lpGross, nprA, nprLP, saldoA, saldoLP,
-      abonoAurumin: abonoSplit.aurumin, abonoLP: abonoSplit.lp,
+      entryId: entry.id, gGross, lpGross, nprA, nprLP, saldoA, saldoLP, ajuste,
+      abonoAurumin: abonoSplit.aurumin, abonoLP: abonoSplit.lp, abonoNPR: abonoSplit.npr,
       // Se usan para decidir si mostrar el bloque Aurumin aunque no haya facturado
       // esta quincena — ver showAurumin más abajo.
       commissionFee: entry.commissionFee ?? 0, driverWage: entry.driverWage,
@@ -130,10 +144,13 @@ export default async function OwnerRelacionPage({
   // Consolidados Aurumin / Luis Peña
   const totalGrossA  = truckSplits.reduce((s, x) => s + x.gGross,  0)
   const totalGrossLP = truckSplits.reduce((s, x) => s + x.lpGross, 0)
-  const totalNprA    = Math.round(totalGrossA  * nprPct * 100) / 100
-  const totalNprLP   = Math.round(totalGrossLP * nprPct * 100) / 100
-  const consSaldoA   = Math.round((totalSaldoIni + totalGrossA - totalGastos - totalChofer - totalMecanicos - totalAdmin + (owner.isNPROwner ? totalNprA : -totalNprA) - totalDeductions - totalAbonoAurumin) * 100) / 100
-  const consSaldoLP  = Math.round((totalGrossLP - totalNprLP - totalAbonoLP) * 100) / 100
+  const totalNprA    = Math.round(truckSplits.reduce((s, x) => s + x.nprA,  0) * 100) / 100
+  const totalNprLP   = Math.round(truckSplits.reduce((s, x) => s + x.nprLP, 0) * 100) / 100
+  const totalAjuste  = Math.round(truckSplits.reduce((s, x) => s + x.ajuste, 0) * 100) / 100
+  const consSaldoA   = Math.round(truckSplits.reduce((s, x) => s + x.saldoA,  0) * 100) / 100
+  const consSaldoLP  = Math.round(truckSplits.reduce((s, x) => s + x.saldoLP, 0) * 100) / 100
+  const choferLabel  = isAfiliado ? 'Nómina chofer (la paga el dueño)' : 'Nómina chofer'
+  const choferColor  = isAfiliado ? 'text-zinc-500 print:text-zinc-500' : 'text-orange-400 print:text-orange-700'
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -213,7 +230,8 @@ export default async function OwnerRelacionPage({
                       lado. Mismo criterio que DuenosNominaClient.tsx/AfiliadoDashboard.tsx,
                       ver memoria: project_reglas_intocables_nomina.md (2026-09-04). */}
                   {(split.gGross > 0 || split.saldoInicial !== 0 || split.commissionFee > 0
-                    || split.driverWage > 0 || split.mechanicFee > 0 || split.adminFee > 0) && (
+                    || split.driverWage > 0 || split.mechanicFee > 0 || split.adminFee > 0
+                    || split.nprA > 0 || split.abonoNPR > 0 || split.ajuste !== 0) && (
                     <div className="space-y-1.5">
                       <p className="text-amber-400 text-xs font-bold uppercase tracking-widest print:text-amber-600">Aurumin</p>
                       {(entry.saldoInicial ?? 0) !== 0 && (
@@ -225,12 +243,14 @@ export default async function OwnerRelacionPage({
                       )}
                       <FinRow label="Facturación"       value={`$${fmt(split.gGross)}`}              color="text-white print:text-black" />
                       {(entry.commissionFee ?? 0) > 0 && <FinRow label="Gastos operativos"  value={`-$${fmt(entry.commissionFee)}`}    color="text-red-400 print:text-red-700" />}
-                      {entry.driverWage > 0           && <FinRow label="Nómina chofer"       value={`-$${fmt(entry.driverWage)}`}       color="text-orange-400 print:text-orange-700" />}
+                      {entry.driverWage > 0           && <FinRow label={choferLabel}         value={`${isAfiliado ? '' : '-'}$${fmt(entry.driverWage)}`} color={choferColor} />}
                       {(entry.mechanicFee ?? 0) > 0   && <FinRow label="Nómina mecánicos"    value={`-$${fmt(entry.mechanicFee)}`}      color="text-purple-400 print:text-purple-700" />}
                       {(entry.adminFee ?? 0) > 0      && <FinRow label="Administrativo"      value={`-$${fmt(entry.adminFee)}`}         color="text-zinc-400 print:text-zinc-600" />}
                       {split.nprA > 0                 && <FinRow label={`${owner.nprPercent ?? 10}% NPR`} value={`${owner.isNPROwner ? '+' : '-'}$${fmt(split.nprA)}`} color={owner.isNPROwner ? 'text-emerald-400 print:text-emerald-700' : 'text-red-400 print:text-red-700'} />}
                       {entry.deductions > 0           && <FinRow label="Otras deducciones"   value={`-$${fmt(entry.deductions)}`}       color="text-red-400 print:text-red-700" />}
                       {split.abonoAurumin > 0         && <FinRow label="Abono recibido"      value={`-$${fmt(split.abonoAurumin)}`}     color="text-emerald-400 print:text-emerald-700" />}
+                      {split.abonoNPR > 0             && <FinRow label="Abono NPR"           value={`-$${fmt(split.abonoNPR)}`}         color="text-emerald-400 print:text-emerald-700" />}
+                      {split.ajuste !== 0             && <FinRow label="Ajuste manual"       value={`${split.ajuste < 0 ? '-' : '+'}$${fmt(Math.abs(split.ajuste))}`} color="text-zinc-400 print:text-zinc-600" />}
                       <div className="border-t border-zinc-700 print:border-zinc-300 pt-1.5 flex justify-between text-sm">
                         <span className="text-white font-bold print:text-black">Saldo final</span>
                         <span className={`font-mono font-bold ${split.saldoA < 0 ? 'text-red-400 print:text-red-700' : 'text-amber-400 print:text-amber-600'}`}>
@@ -293,7 +313,8 @@ export default async function OwnerRelacionPage({
             {/* Aurumin consolidado — mismo criterio: se muestra aunque no haya facturación
                 nueva, siempre que tenga gastos/chofer/mecánica/admin/saldo anterior real */}
             {(totalGrossA > 0 || totalSaldoIni !== 0 || totalGastos > 0
-              || totalChofer > 0 || totalMecanicos > 0 || totalAdmin > 0) && (
+              || totalChofer > 0 || totalMecanicos > 0 || totalAdmin > 0
+              || totalNprA > 0 || totalAbonoNPR > 0 || totalAjuste !== 0) && (
               <div className="space-y-1.5">
                 <p className="text-amber-400 text-xs font-bold uppercase tracking-widest print:text-amber-600">Aurumin</p>
                 {totalSaldoIni !== 0 && (
@@ -305,12 +326,14 @@ export default async function OwnerRelacionPage({
                 )}
                 <FinRow label="Facturación"       value={`$${fmt(totalGrossA)}`}          color="text-white print:text-black" />
                 {totalGastos > 0    && <FinRow label="Gastos operativos"  value={`-$${fmt(totalGastos)}`}    color="text-red-400 print:text-red-700" />}
-                {totalChofer > 0    && <FinRow label="Nómina choferes"    value={`-$${fmt(totalChofer)}`}    color="text-orange-400 print:text-orange-700" />}
+                {totalChofer > 0    && <FinRow label={isAfiliado ? 'Nómina choferes (la paga el dueño)' : 'Nómina choferes'} value={`${isAfiliado ? '' : '-'}$${fmt(totalChofer)}`} color={choferColor} />}
                 {totalMecanicos > 0 && <FinRow label="Nómina mecánicos"   value={`-$${fmt(totalMecanicos)}`} color="text-purple-400 print:text-purple-700" />}
                 {totalAdmin > 0     && <FinRow label="Administrativo"     value={`-$${fmt(totalAdmin)}`}     color="text-zinc-400 print:text-zinc-600" />}
                 {totalNprA > 0      && <FinRow label={`${owner.nprPercent ?? 10}% NPR`} value={`${owner.isNPROwner ? '+' : '-'}$${fmt(totalNprA)}`} color={owner.isNPROwner ? 'text-emerald-400 print:text-emerald-700' : 'text-red-400 print:text-red-700'} />}
                 {totalDeductions > 0&& <FinRow label="Otras deducciones"  value={`-$${fmt(totalDeductions)}`} color="text-red-400 print:text-red-700" />}
                 {totalAbonoAurumin > 0 && <FinRow label="Abono recibido"  value={`-$${fmt(totalAbonoAurumin)}`} color="text-emerald-400 print:text-emerald-700" />}
+                {totalAbonoNPR > 0  && <FinRow label="Abono NPR"          value={`-$${fmt(totalAbonoNPR)}`}  color="text-emerald-400 print:text-emerald-700" />}
+                {totalAjuste !== 0  && <FinRow label="Ajuste manual"      value={`${totalAjuste < 0 ? '-' : '+'}$${fmt(Math.abs(totalAjuste))}`} color="text-zinc-400 print:text-zinc-600" />}
                 <div className="border-t border-zinc-700 print:border-zinc-300 pt-2 mt-1 flex justify-between">
                   <span className="text-white font-bold print:text-black">Saldo final</span>
                   <span className={`text-base font-bold font-mono ${consSaldoA < 0 ? 'text-red-400 print:text-red-700' : 'text-amber-400 print:text-amber-600'}`}>
